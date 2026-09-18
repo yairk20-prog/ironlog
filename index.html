@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>IRONLOG · אימון</title>
+<meta name="description" content="אפליקציית כושר ותזונה אישית — מנוע אימונים PPL עם עומס פרוגרסיבי">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="IRONLOG">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div id="boot" class="boot">
+  <div class="boot-mark">IRONLOG</div>
+  <div class="boot-bar"><i></i></div>
+</div>
+
+<header id="topbar" class="topbar" hidden>
+  <button class="topbar-back" id="topbarBack" aria-label="חזרה" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+  </button>
+  <div class="topbar-titles">
+    <h1 id="topbarTitle">היום</h1>
+    <p id="topbarSub"></p>
+  </div>
+  <div class="topbar-slot" id="topbarSlot"></div>
+</header>
+
+<main id="view" class="view" hidden></main>
+
+<nav id="tabbar" class="tabbar" hidden>
+  <button class="tab" data-route="home" aria-label="היום">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
+    <span>היום</span>
+  </button>
+  <button class="tab" data-route="plan" aria-label="תוכנית">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h10"/></svg>
+    <span>תוכנית</span>
+  </button>
+  <button class="tab" data-route="nutrition" aria-label="תזונה">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v7a3 3 0 0 0 6 0V3M9 10v11"/><path d="M18 3c-1.5 2-2 4-2 6s.7 3 2 3 2-1 2-3-.5-4-2-6zM18 12v9"/></svg>
+    <span>תזונה</span>
+  </button>
+  <button class="tab" data-route="history" aria-label="היסטוריה">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V9M10 18V5M16 18v-6M22 18H2"/></svg>
+    <span>היסטוריה</span>
+  </button>
+  <button class="tab" data-route="more" aria-label="עוד">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>
+    <span>עוד</span>
+  </button>
+</nav>
+
+<!-- Rest timer dock -->
+<div id="timerDock" class="timer-dock" hidden>
+  <button class="timer-x" id="timerSkip" aria-label="דלג על מנוחה">✕</button>
+  <div class="timer-read">
+    <strong id="timerRead">00:00</strong>
+    <small id="timerLabel">מנוחה</small>
+  </div>
+  <div class="timer-acts">
+    <button class="chip" data-add="30">+30ש׳</button>
+    <button class="chip" data-add="60">+60ש׳</button>
+  </div>
+  <div class="timer-track"><i id="timerFill"></i></div>
+</div>
+
+<div id="sheet" class="sheet" hidden>
+  <div class="sheet-scrim" data-close></div>
+  <section class="sheet-panel" role="dialog" aria-modal="true">
+    <button class="sheet-grab" data-close aria-label="סגור"></button>
+    <header class="sheet-head"><h2 id="sheetTitle"></h2></header>
+    <div class="sheet-body" id="sheetBody"></div>
+  </section>
+</div>
+
+<div id="toaster" class="toaster" aria-live="polite"></div>
+<div id="prBurst" class="pr-burst" hidden><span>שיא אישי!</span></div>
+
+<script type="module" src="js/app.js"></script>
+<noscript><p style="padding:24px;color:#fff">האפליקציה דורשת JavaScript.</p></noscript>
+</body>
+</html>
