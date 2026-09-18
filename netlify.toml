@@ -1,6 +1,13 @@
 [build]
   publish = "."
 
+# The AI coach's key lives in an environment variable on the server, never in
+# the bundle. Set ANTHROPIC_API_KEY in Netlify to switch the hosted coach on;
+# leave it unset and the app falls back to each user's own key.
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
 # The service worker must never be served stale, or updates never reach users.
 [[headers]]
   for = "/sw.js"
@@ -38,6 +45,12 @@
   [headers.values]
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Must come before the SPA fallback, or the catch-all swallows the API.
+[[redirects]]
+  from = "/api/coach"
+  to = "/.netlify/functions/coach"
+  status = 200
 
 # Single-page app: every path falls back to the shell.
 [[redirects]]

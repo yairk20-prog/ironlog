@@ -1,5 +1,5 @@
 /* IRONLOG service worker — offline-first shell cache */
-const VERSION = 'ironlog-v3.0.0';
+const VERSION = 'ironlog-v3.1.0';
 const IMG_INDEX = './img/ex/index.json';
 const SHELL = [
   './',
@@ -96,6 +96,10 @@ self.addEventListener('fetch', (e) => {
 
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+
+  /* The API is live state, not a shell asset: caching the coach's discovery
+     reply would freeze the app on whatever the server said the first time. */
+  if (url.pathname.startsWith('/api/')) return;
 
   // Navigation: network-first with cached shell fallback (keeps app usable offline).
   if (req.mode === 'navigate') {

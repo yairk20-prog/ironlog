@@ -1,16 +1,41 @@
 /* ==========================================================================
    ai.js — optional Claude API layer.
    Everything here is additive: the app is fully usable with no key at all.
-   The key is stored only in this device's IndexedDB and sent directly to
-   api.anthropic.com from the browser.
+
+   Two ways the coach can be powered, checked in this order:
+     1. A hosted proxy at /api/coach, when whoever deployed the site set an
+        API key on the server. Nothing is asked of the visitor, and the key
+        never reaches the browser.
+     2. The user's own key, kept only in this device's IndexedDB and sent
+        straight to api.anthropic.com.
+   A bundled key is deliberately not an option: anything shipped to the
+   browser can be read out of it.
    ========================================================================== */
 
 import * as db from './db.js';
 
-const ENDPOINT = 'https://api.anthropic.com/v1/messages';
+const DIRECT = 'https://api.anthropic.com/v1/messages';
+const PROXY = '/api/coach';
 const MODEL = 'claude-sonnet-4-5';
 
+/** Cached answer to "does this deployment host a coach?" — asked once. */
+let hostedPromise = null;
+
+export function hosted() {
+  if (hostedPromise) return hostedPromise;
+  if (location.protocol === 'file:') return (hostedPromise = Promise.resolve(false));
+  hostedPromise = fetch(PROXY, { method: 'GET' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => !!j?.available)
+    .catch(() => false);
+  return hostedPromise;
+}
+
+/** Re-ask on the next call — used after settings change. */
+export const forgetHosted = () => { hostedPromise = null; };
+
 export async function hasKey() {
+  if (await hosted()) return true;
   const k = await db.setting('apiKey', '');
   return !!(k && k.length > 10);
 }
@@ -18,31 +43,60 @@ export async function hasKey() {
 export const getKey = () => db.setting('apiKey', '');
 export const setKey = (k) => db.setSetting('apiKey', (k || '').trim());
 
-async function call(messages, { system, maxTokens = 1200, temperature = 0.2 } = {}) {
-  const key = await getKey();
-  if (!key) throw new Error('לא הוגדר מפתח API בהגדרות');
-
-  const res = await fetch(ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: maxTokens,
-      temperature,
-      ...(system ? { system } : {}),
-      messages
-    })
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`שגיאת API ${res.status}: ${body.slice(0, 160)}`);
+/** Stable per-install id so the server can meter usage without accounts. */
+async function deviceId() {
+  let id = await db.setting('deviceId', '');
+  if (!id) {
+    id = db.uid('dev');
+    await db.setSetting('deviceId', id);
   }
+  return id;
+}
+
+async function call(messages, { system, maxTokens = 1200, temperature = 0.2 } = {}) {
+  const body = {
+    model: MODEL,
+    max_tokens: maxTokens,
+    temperature,
+    ...(system ? { system } : {}),
+    messages
+  };
+
+  let res;
+  if (await hosted()) {
+    res = await fetch(PROXY, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...body, device: await deviceId() })
+    });
+    if (res.status === 503) {
+      /* The key was removed after we asked; fall through to a personal one. */
+      hostedPromise = Promise.resolve(false);
+      return call(messages, { system, maxTokens, temperature });
+    }
+    if (!res.ok) {
+      const msg = await res.json().then((j) => j.error).catch(() => '');
+      throw new Error(msg || `שגיאת AI ${res.status}`);
+    }
+  } else {
+    const key = await getKey();
+    if (!key) throw new Error('לא הוגדר מפתח API בהגדרות');
+    res = await fetch(DIRECT, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`שגיאת API ${res.status}: ${text.slice(0, 160)}`);
+    }
+  }
+
   const data = await res.json();
   return (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
 }

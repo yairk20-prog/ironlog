@@ -91,13 +91,30 @@ export async function render(ctx) {
   /* ---- AI ---- */
   wrap.appendChild(el('div', { class: 'section-title', text: 'מאמן AI וניתוח תזונה' }));
   const currentKey = await ai.getKey();
+  const hostedCoach = await ai.hosted();
   const keyInput = el('input', {
     type: 'password',
     placeholder: 'sk-ant-…',
     value: currentKey || '',
     autocomplete: 'off'
   });
-  wrap.appendChild(el('div', { class: 'card stack' }, [
+
+  /* When the deployment hosts a key, nothing is asked of the user — the field
+     stays available only as an override for a personal key. */
+  if (hostedCoach) {
+    wrap.appendChild(el('div', { class: 'card stack' }, [
+      el('div', { class: 'row', style: { gap: '9px' } }, [
+        icon(ICONS.check, 18),
+        el('b', { text: 'המאמן פעיל — אין צורך במפתח' })
+      ]),
+      el('p', {
+        class: 'tiny dim', style: { margin: 0, lineHeight: '1.55' },
+        text: 'האתר הזה מריץ את המאמן דרך שרת משלו, כך שהצ׳אט וניתוח התמונות עובדים לכל מי שנכנס. יש מכסת הודעות יומית כדי למנוע שימוש לרעה.'
+      })
+    ]));
+  }
+
+  if (!hostedCoach) wrap.appendChild(el('div', { class: 'card stack' }, [
     el('p', {
       class: 'tiny dim', style: { margin: 0, lineHeight: '1.55' },
       text: 'מפתח Claude API מפעיל את הצ׳אט עם המאמן ואת ניתוח תמונות האוכל. המפתח נשמר רק במכשיר הזה ונשלח ישירות ל-api.anthropic.com. כל שאר האפליקציה עובדת בלעדיו.'
