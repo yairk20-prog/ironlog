@@ -29,6 +29,18 @@ async function runWholeWorkout(page, weight, reps) {
   }
 }
 
+
+/** First run shows the questionnaire; accept the defaults and move on. */
+async function skipOnboarding(page) {
+  const onb = page.locator('.onb');
+  if (!(await onb.count())) return;
+  for (let i = 0; i < 12; i++) {
+    if (!(await page.locator('.onb').count())) return;
+    await page.locator('.onb-foot .btn.primary').click();
+    await page.waitForTimeout(320);
+  }
+}
+
 async function main() {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({
@@ -40,6 +52,8 @@ async function main() {
 
   await page.goto(BASE, { waitUntil: 'networkidle' });
   await page.waitForSelector('#view:not([hidden])');
+  await page.waitForTimeout(600);
+  await skipOnboarding(page);
   await page.waitForTimeout(400);
 
   /* ---------- session 1: bench at 60×10 (top of the 6–10 range) ---------- */
@@ -83,7 +97,7 @@ async function main() {
   /* ---------- session 2: start Push A again from the plan tab ---------- */
   await page.locator('.tab[data-route="plan"]').click();
   await page.waitForTimeout(600);
-  await page.locator('.ex-row', { hasText: 'דחיפה A' }).first().click();
+  await page.locator('.day-card', { hasText: 'דחיפה A' }).first().click();
   await page.waitForTimeout(500);
   await page.locator('#sheetBody .btn', { hasText: 'התחל את האימון הזה' }).click();
   await page.waitForTimeout(1000);

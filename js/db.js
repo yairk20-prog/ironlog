@@ -6,7 +6,7 @@
    ========================================================================== */
 
 const DB_NAME = 'ironlog';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 /** @type {IDBDatabase|null} */
 let _db = null;
@@ -41,6 +41,10 @@ export function open() {
       }
       if (!db.objectStoreNames.contains('settings')) {
         db.createObjectStore('settings', { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains('body_logs')) {
+        const s = db.createObjectStore('body_logs', { keyPath: 'id' });
+        s.createIndex('date', 'date');
       }
       if (e.oldVersion < 1 && tx) { /* fresh install */ }
     };
@@ -123,7 +127,7 @@ export function uid(prefix = '') {
 
 /* ---------- backup / restore ---------- */
 
-const EXPORTED = ['workouts', 'set_logs', 'exercise_notes', 'nutrition_logs', 'settings'];
+const EXPORTED = ['workouts', 'set_logs', 'exercise_notes', 'nutrition_logs', 'body_logs', 'settings'];
 
 /** Never leaves the device in a backup file. */
 const SECRET_SETTINGS = new Set(['apiKey']);

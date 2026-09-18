@@ -18,6 +18,9 @@ import { render as renderNutrition } from './screen-nutrition.js';
 import { render as renderMore } from './screen-more.js';
 import { render as renderCoach } from './screen-coach.js';
 import { render as renderPosture } from './screen-posture.js';
+import { render as renderSummary } from './screen-summary.js';
+import { render as renderLibrary } from './screen-library.js';
+import { render as renderBody } from './screen-body.js';
 
 const ROUTES = {
   home: { render: renderHome, title: 'היום' },
@@ -28,7 +31,10 @@ const ROUTES = {
   workout: { render: renderWorkout, cleanup: cleanupWorkout, title: 'אימון', chrome: false },
   settings: { render: renderSettings, title: 'הגדרות', back: 'more' },
   coach: { render: renderCoach, title: 'מאמן אישי', back: 'more' },
-  posture: { render: renderPosture, title: 'יציבה', back: 'more' }
+  posture: { render: renderPosture, title: 'יציבה', back: 'more' },
+  summary: { render: renderSummary, title: 'סיכום אימון', back: 'home' },
+  library: { render: renderLibrary, title: 'ספריית תרגילים', back: 'more' },
+  body: { render: renderBody, title: 'מדידות גוף', back: 'more' }
 };
 
 /** Shared context handed to every screen. */
@@ -162,6 +168,15 @@ async function boot() {
   const boot = $('#boot');
   boot.classList.add('gone');
   setTimeout(() => boot.remove(), 320);
+
+  /* First run: build the plan from a short questionnaire before anything else. */
+  if (!ctx.settings.onboarded) {
+    const { runOnboarding, applyAnswers } = await import('./onboarding.js');
+    const answers = await runOnboarding();
+    await applyAnswers(ctx, answers);
+    await db.setSetting('rotationCursor', 0);
+    await mount('home');
+  }
 
   /* Offline caching only where it can actually work: a real origin we own,
      not a file:// open and not an embedded preview frame. */

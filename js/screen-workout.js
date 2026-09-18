@@ -582,7 +582,12 @@ async function finishFlow(ctx) {
   if (!ok) return;
 
   await finishWorkout(W);
+  await db.setSetting('lastFinishedWorkout', W.id);
   timer.stop();
   celebratePR('אימון הושלם 💪');
-  setTimeout(() => ctx.go('home'), 600);
+
+  /* fire-and-forget: never make the user wait on the network to finish a set */
+  import('./gdrive.js').then((g) => g.autoSync()).catch(() => {});
+
+  setTimeout(() => ctx.go('summary'), 700);
 }

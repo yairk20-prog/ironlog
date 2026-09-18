@@ -7,6 +7,7 @@ import { el, icon, ICONS, toast, openSheet, confirmSheet } from './ui.js';
 import { GOALS, ROTATIONS, DEFAULTS } from './programs.js';
 import { proteinTarget } from './logic.js';
 import * as ai from './ai.js';
+import * as gdrive from './gdrive.js';
 
 export async function render(ctx) {
   const s = ctx.settings;
@@ -83,6 +84,10 @@ export async function render(ctx) {
     toggle('הצע סטי חימום לתרגילים כבדים', s.warmupOn !== false, (v) => ctx.saveSetting('warmupOn', v))
   ]));
 
+  /* ---- Google account ---- */
+  wrap.appendChild(el('div', { class: 'section-title', text: 'חשבון Google וסנכרון' }));
+  wrap.appendChild(await accountCard(ctx));
+
   /* ---- AI ---- */
   wrap.appendChild(el('div', { class: 'section-title', text: 'מאמן AI וניתוח תזונה' }));
   const currentKey = await ai.getKey();
@@ -149,6 +154,132 @@ export async function render(ctx) {
   }));
 
   return wrap;
+}
+
+/* ---------- Google account ---------- */
+
+async function accountCard(ctx) {
+  const card = el('div', { class: 'card stack' });
+  const account = await gdrive.currentAccount();
+  const ready = await gdrive.configured();
+  const last = await gdrive.lastSync();
+
+  if (account) {
+    card.appendChild(el('div', { class: 'acct' }, [
+      el('div', { class: 'acct-avatar' }, [
+        account.picture
+          ? el('img', { src: account.picture, alt: '', referrerpolicy: 'no-referrer' })
+          : icon(ICONS.user, 22)
+      ]),
+      el('div', { class: 'grow' }, [
+        el('b', { style: { display: 'block', fontSize: '14.5px' }, text: account.name || 'מחובר' }),
+        el('small', { class: 'dim', text: account.email || '' })
+      ]),
+      el('span', { class: 'badge ok', text: 'מחובר' })
+    ]));
+
+    card.appendChild(el('div', { class: 'tiny dim', text: last
+      ? `סונכרן לאחרונה: ${new Date(last.at).toLocaleString('he-IL')} (${last.dir === 'up' ? 'העלאה' : 'הורדה'})`
+      : 'עוד לא סונכרן' }));
+
+    card.appendChild(el('div', { class: 'row', style: { gap: '8px' } }, [
+      el('button', {
+        class: 'btn sm grow primary',
+        onclick: (e) => busy(e, 'מעלה…', async () => {
+          const r = await gdrive.syncUp();
+          toast(`הגיבוי הועלה (${Math.round(r.bytes / 1024)}KB)`, 'ok');
+          ctx.reload();
+        })
+      }, [icon(ICONS.upload, 16), 'העלה לענן']),
+      el('button', {
+        class: 'btn sm grow',
+        onclick: (e) => busy(e, 'מוריד…', async () => {
+          if (!await confirmSheet('לשחזר מהענן?', 'הנתונים מהענן ימוזגו לנתונים שבמכשיר הזה.', 'שחזר', false)) return;
+          const r = await gdrive.syncDown();
+          toast(`שוחזרו ${r.count} רשומות`, 'ok');
+          setTimeout(() => location.reload(), 800);
+        })
+      }, [icon(ICONS.download, 16), 'הורד מהענן'])
+    ]));
+
+    card.appendChild(toggle('סנכרון אוטומטי בסיום אימון', ctx.settings.autoSync === true, (v) => ctx.saveSetting('autoSync', v)));
+
+    card.appendChild(el('button', {
+      class: 'btn sm full ghost danger', text: 'התנתק',
+      onclick: async () => { await gdrive.signOut(); toast('התנתקת'); ctx.reload(); }
+    }));
+    return card;
+  }
+
+  card.appendChild(el('p', {
+    class: 'tiny dim', style: { margin: 0, lineHeight: '1.55' },
+    text: 'התחברות עם Google מסנכרנת את האימונים בין המכשירים. הגיבוי נשמר בתיקייה מוסתרת של האפליקציה ב-Drive שלך — לא גלויה בקבצים שלך, ואף אחד חוץ מהאפליקציה לא יכול לקרוא אותה. אין שרת באמצע.'
+  }));
+
+  if (ready) {
+    card.appendChild(el('button', {
+      class: 'btn primary full',
+      onclick: (e) => busy(e, 'מתחבר…', async () => {
+        const p = await gdrive.signIn();
+        toast(`שלום ${p.name || p.email}`, 'ok');
+        ctx.reload();
+      })
+    }, [icon(ICONS.google, 18), 'התחבר עם Google']));
+  } else {
+    card.appendChild(el('div', {
+      class: 'tiny', style: { color: 'var(--warn)' },
+      text: 'כדי להפעיל את זה צריך Client ID משלך מ-Google Cloud Console (חינם). זה לוקח כ-3 דקות.'
+    }));
+  }
+
+  const idInput = el('input', {
+    type: 'text', placeholder: '…apps.googleusercontent.com', autocomplete: 'off',
+    value: await gdrive.getClientId()
+  });
+  card.appendChild(el('label', { class: 'field-label', text: 'Google OAuth Client ID' }));
+  card.appendChild(idInput);
+  card.appendChild(el('div', { class: 'row', style: { gap: '8px' } }, [
+    el('button', {
+      class: 'btn sm grow', text: 'שמור',
+      onclick: async () => { await gdrive.setClientId(idInput.value); toast('נשמר', 'ok'); ctx.reload(); }
+    }),
+    el('button', {
+      class: 'btn sm grow ghost', text: 'איך משיגים?',
+      onclick: () => openSheet('חיבור חשבון Google', () => el('div', { class: 'stack' }, [
+        el('p', { class: 'tiny dim', style: { margin: 0 }, text: 'פעם אחת בלבד, והאפליקציה מסנכרנת בין כל המכשירים שלך:' }),
+        ...[
+          'היכנס ל-console.cloud.google.com וצור פרויקט חדש.',
+          'ב-"APIs & Services" → "Library" הפעל את Google Drive API.',
+          'ב-"OAuth consent screen" בחר External, מלא שם ואימייל, והוסף את עצמך תחת Test users.',
+          'ב-"Credentials" → "Create credentials" → "OAuth client ID" → Web application.',
+          'תחת Authorized JavaScript origins הוסף את כתובת האתר שלך (למשל https://ironlog.netlify.app).',
+          'העתק את ה-Client ID והדבק אותו כאן.'
+        ].map((t, i) => el('div', { class: 'ex-row' }, [
+          el('div', { class: 'ex-ord', text: String(i + 1) }),
+          el('div', { class: 'grow tiny', text: t })
+        ])),
+        el('p', { class: 'tiny dim', style: { margin: 0 }, text: 'הרשאת הגישה היא ל-appDataFolder בלבד — תיקייה פרטית של האפליקציה. אין לאפליקציה גישה לשאר הקבצים ב-Drive שלך.' })
+      ]))
+    })
+  ]));
+
+  return card;
+}
+
+/** Run an async action with the button showing progress and errors. */
+async function busy(e, label, fn) {
+  const btn = e.currentTarget;
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = label;
+  try {
+    await fn();
+  } catch (err) {
+    toast(err.message, 'bad');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
 }
 
 /* ---------- field helpers ---------- */

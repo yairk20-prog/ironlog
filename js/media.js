@@ -9,6 +9,9 @@ import { el, icon, ICONS } from './ui.js';
 import { WITH_IMAGES, TWO_FRAMES } from './ex-images.js';
 import { muscleMap, musclesFor } from './anatomy.js';
 import { getExercise, CATEGORIES, MUSCLES, ytUrl } from './exercises.js';
+import { lineChart } from './chart.js';
+import * as db from './db.js';
+import { oneRM, round2 } from './logic.js';
 
 const BASE = 'img/ex';
 
@@ -102,6 +105,17 @@ export function exerciseDetail(id) {
     ]));
   }
 
+  /* progress, filled in once the history query returns */
+  const progress = el('div', { class: 'card stack' }, [
+    el('div', { class: 'card-head' }, [
+      el('h3', { text: 'התקדמות' }),
+      el('span', { class: 'badge', text: '1RM משוער' })
+    ]),
+    el('div', { class: 'tiny dim', text: 'טוען…' })
+  ]);
+  box.appendChild(progress);
+  fillProgress(id, progress);
+
   const { primary, secondary } = musclesFor(ex);
   box.appendChild(el('div', { class: 'card' }, [
     muscleMap(primary, secondary, { width: 210 }),
@@ -137,4 +151,59 @@ export function exerciseDetail(id) {
   }));
 
   return box;
+}
+
+/**
+ * Best estimated 1RM per session, oldest first — the honest way to show
+ * progress when both weight and reps move around between sessions.
+ */
+async function fillProgress(exerciseId, card) {
+  const body = card.lastChild;
+  try {
+    const rows = await db.byIndex('set_logs', 'exercise_id', IDBKeyRange.only(exerciseId));
+    const perWorkout = new Map();
+    for (const r of rows) {
+      if (r.is_warmup || !r.weight_kg || !r.reps) continue;
+      const e = oneRM(r.weight_kg, r.reps);
+      const cur = perWorkout.get(r.workout_id);
+      if (!cur || e > cur.y) perWorkout.set(r.workout_id, { y: e, t: r.timestamp });
+    }
+
+    const points = Array.from(perWorkout.values())
+      .sort((a, b) => a.t - b.t)
+      .slice(-12)
+      .map((p) => ({
+        y: round2(p.y),
+        label: new Date(p.t).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })
+      }));
+
+    body.remove();
+
+    if (points.length < 2) {
+      card.appendChild(el('div', {
+        class: 'tiny dim',
+        text: points.length
+          ? 'עוד אימון אחד והגרף יתחיל להראות מגמה.'
+          : 'אין עדיין נתונים לתרגיל הזה.'
+      }));
+      return;
+    }
+
+    const chart = lineChart(points, { unit: 'ק״ג' });
+    if (chart) card.appendChild(chart);
+
+    const first = points[0].y;
+    const last = points[points.length - 1].y;
+    const diff = round2(last - first);
+    const pct = first ? Math.round((diff / first) * 100) : 0;
+    card.appendChild(el('div', { class: 'row between tiny' }, [
+      el('span', { class: 'dim', text: `${points.length} אימונים אחרונים` }),
+      el('b', {
+        style: { color: diff >= 0 ? 'var(--ok)' : 'var(--bad)' },
+        text: `${diff >= 0 ? '+' : ''}${diff} ק״ג (${pct >= 0 ? '+' : ''}${pct}%)`
+      })
+    ]));
+  } catch (err) {
+    body.textContent = 'לא ניתן לטעון היסטוריה';
+  }
 }

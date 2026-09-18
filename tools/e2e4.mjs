@@ -7,6 +7,18 @@ const shot = (p, n) => p.screenshot({ path: `/home/claude/gym/tools/shots4/${n}.
 const errors = [];
 const failedImages = [];
 
+
+/** First run shows the questionnaire; accept the defaults and move on. */
+async function skipOnboarding(page) {
+  const onb = page.locator('.onb');
+  if (!(await onb.count())) return;
+  for (let i = 0; i < 12; i++) {
+    if (!(await page.locator('.onb').count())) return;
+    await page.locator('.onb-foot .btn.primary').click();
+    await page.waitForTimeout(320);
+  }
+}
+
 async function main() {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({
@@ -19,6 +31,8 @@ async function main() {
 
   await page.goto(BASE, { waitUntil: 'networkidle' });
   await page.waitForSelector('#view:not([hidden])');
+  await page.waitForTimeout(600);
+  await skipOnboarding(page);
   await page.waitForTimeout(900);
   await shot(page, '01-home-hero');
   const heroBg = await page.locator('.hero-bg').count();
@@ -73,7 +87,7 @@ async function main() {
   await page.waitForTimeout(600);
   await page.locator('.tab[data-route="plan"]').click();
   await page.waitForTimeout(600);
-  await page.locator('.ex-row', { hasText: 'משיכה A' }).first().click();
+  await page.locator('.day-card', { hasText: 'משיכה A' }).first().click();
   await page.waitForTimeout(700);
   await shot(page, '05-plan-thumbs');
   const planThumbs = await page.locator('#sheetBody .ex-thumb').count();

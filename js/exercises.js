@@ -149,9 +149,32 @@ export const EXERCISES = [
   { id: 'hamstring_stretch', name: 'מתיחת מיתר הברך', muscle: 'hamstrings', cat: 'Bodyweight', pattern: 'mobility', rest: 30, compound: false, yt: 'hamstring stretch standing' }
 ];
 
-/* ---------- lookups ---------- */
-
 const BY_ID = new Map(EXERCISES.map((e) => [e.id, e]));
+
+/**
+ * Movements to route around when the user reports a sensitive joint.
+ * These are programming defaults, not medical advice — every one of them can
+ * still be chosen by hand from the library.
+ */
+export const LIMIT_BLOCKS = {
+  shoulder: ['bb_ohp', 'db_shoulder_press', 'dips', 'db_fly', 'bb_incline'],
+  knee: ['bb_squat', 'front_squat', 'walking_lunge', 'bulgarian_split', 'step_up', 'hack_squat'],
+  back: ['deadlift', 'bb_row', 'rdl', 'tbar_row', 'bb_squat'],
+  wrist: ['bb_curl', 'skullcrusher', 'front_squat', 'pushup', 'close_grip_bench']
+};
+
+/** True when this exercise is allowed under the user's equipment and limits. */
+export function isAllowed(id, { equipment = null, limits = [] } = {}) {
+  const ex = BY_ID.get(id);
+  if (!ex) return false;
+  if (equipment && equipment.length && !equipment.includes(ex.cat)) return false;
+  for (const l of limits) {
+    if (LIMIT_BLOCKS[l]?.includes(id)) return false;
+  }
+  return true;
+}
+
+/* ---------- lookups ---------- */
 
 export const getExercise = (id) => BY_ID.get(id) || null;
 

@@ -6,7 +6,7 @@
 
 import * as db from './db.js';
 import { TEMPLATES, ROTATIONS, repRange, restFor } from './programs.js';
-import { getExercise } from './exercises.js';
+import { getExercise, isAllowed, substitutes, sameMuscle } from './exercises.js';
 import { nextTarget, oneRM, volume, todayISO } from './logic.js';
 
 /* ---------- active workout ---------- */
@@ -33,6 +33,32 @@ export async function advanceRotation(by = 1) {
 }
 
 /**
+ * Swap an exercise the user cannot or should not do for the closest one they
+ * can: same movement pattern first, then same muscle. Falls back to the
+ * original rather than dropping the slot, so a session is never short.
+ */
+export function resolveExercise(id, settings, taken = new Set()) {
+  const filter = { equipment: settings.equipment, limits: settings.limits || [] };
+  if (isAllowed(id, filter)) return id;
+
+  const ok = (o) => isAllowed(o.id, filter);
+  const fresh = (o) => ok(o) && !taken.has(o.id);
+
+  return substitutes(id).find(fresh)?.id
+    ?? sameMuscle(id).find(fresh)?.id
+    ?? substitutes(id).find(ok)?.id
+    ?? sameMuscle(id).find(ok)?.id
+    ?? id;
+}
+
+/** Working-set count adjusted for training age. */
+function setsFor(base, settings) {
+  if (settings.experience === 'beginner') return Math.max(2, base - 1);
+  if (settings.experience === 'advanced') return Math.min(6, base + 1);
+  return base;
+}
+
+/**
  * Build a workout from a template, resolving each slot's target from the
  * previous session of that exercise (progressive overload).
  */
@@ -41,20 +67,28 @@ export async function createFromTemplate(templateId, settings) {
   if (!tpl) throw new Error('תבנית לא נמצאה');
 
   const slots = [];
-  for (const slot of tpl.slots) {
-    const ex = getExercise(slot.ex);
+  const taken = new Set(tpl.slots.map((x) => x.ex));
+  for (const raw of tpl.slots) {
+    const exId = resolveExercise(raw.ex, settings, taken);
+    /* A swap that lands on something already in the session adds nothing —
+       five distinct exercises beat six with one repeated. */
+    if (exId !== raw.ex && slots.some((x) => x.ex === exId)) continue;
+    taken.add(exId);
+    const slot = { ...raw, ex: exId };
+    const ex = getExercise(exId);
     if (!ex) continue;
     const prev = await lastSessionSets(slot.ex);
     const target = nextTarget({ lastSets: prev, exercise: ex, goal: settings.goal, settings });
     const range = repRange(settings.goal, ex);
+    const swapped = exId !== raw.ex;
     slots.push({
       ex: slot.ex,
-      sets: slot.s,
+      sets: slot.seconds ? slot.s : setsFor(slot.s, settings),
       seconds: slot.seconds || null,
       targetWeight: target.weight,
       targetReps: slot.seconds ? 0 : (target.reps || range.min),
       action: target.action,
-      note: target.note,
+      note: swapped ? `הוחלף אוטומטית לפי הציוד והמגבלות שלך · ${target.note}` : target.note,
       rest: restFor(settings.goal, ex),
       done: false
     });

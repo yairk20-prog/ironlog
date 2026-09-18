@@ -8,6 +8,7 @@ import { buildICS, downloadICS } from './calendar.js';
 import { streak, recentWorkouts } from './session.js';
 import { todayISO } from './logic.js';
 import { ROTATIONS } from './programs.js';
+import { EXERCISES } from './exercises.js';
 
 export async function render(ctx) {
   ctx.setTitle('עוד');
@@ -52,10 +53,13 @@ export async function render(ctx) {
 
   /* ---- links ---- */
   wrap.appendChild(el('div', { class: 'section-title', text: 'מודולים' }));
+  wrap.appendChild(link('📚', 'ספריית תרגילים', `${EXERCISES.length} תרגילים עם תמונות, חיפוש וסינון`, () => ctx.go('library')));
+  wrap.appendChild(link('⚖️', 'מדידות גוף', 'משקל עם ממוצע נע, היקפים ותמונות התקדמות', () => ctx.go('body')));
+  wrap.appendChild(link('🏆', 'סיכום האימון האחרון', 'נפח, שיאים ומפת שרירים', () => ctx.go('summary')));
   wrap.appendChild(link('🤖', 'מאמן אישי AI', 'שאל, שנה אימון, קבל סקירה שבועית', () => ctx.go('coach')));
   wrap.appendChild(link('🧍', 'יציבה וניידות', 'הערכה עצמית ופרוטוקולים מתקנים', () => ctx.go('posture')));
   wrap.appendChild(link('📅', 'סנכרון ליומן', 'ייצוא התוכנית כקובץ ICS עם תזכורות', () => calendarSheet(ctx)));
-  wrap.appendChild(link('⚙️', 'הגדרות', 'מטרה, ציוד, גיבוי ונתונים', () => ctx.go('settings')));
+  wrap.appendChild(link('⚙️', 'הגדרות', 'מטרה, ציוד, חשבון Google וגיבוי', () => ctx.go('settings')));
 
   /* ---- install hint ---- */
   if (!window.matchMedia('(display-mode: standalone)').matches) {

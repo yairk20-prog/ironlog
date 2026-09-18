@@ -15,7 +15,10 @@ import {
 
 export async function render(ctx) {
   const { settings } = ctx;
-  ctx.setTitle('היום', new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' }));
+  ctx.setTitle(
+    settings.userName ? `היי ${settings.userName}` : 'היום',
+    new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })
+  );
 
   const wrap = el('div', { class: 'stack' });
 
@@ -40,6 +43,13 @@ export async function render(ctx) {
     stat(String(stk), 'רצף ימים'),
     stat(String(week.length), 'אימונים השבוע'),
     stat(weekVolume >= 1000 ? `${(weekVolume / 1000).toFixed(1)}ט׳` : String(Math.round(weekVolume)), 'נפח שבועי')
+  ]));
+
+  /* ---- quick actions ---- */
+  wrap.appendChild(el('div', { class: 'row', style: { gap: '8px' } }, [
+    el('button', { class: 'btn sm grow', onclick: () => ctx.go('library') }, [icon(ICONS.library, 16), 'ספריית תרגילים']),
+    el('button', { class: 'btn sm grow', onclick: () => ctx.go('body') }, [icon(ICONS.scale, 16), 'מדידות']),
+    el('button', { class: 'btn sm grow', onclick: () => ctx.go('nutrition') }, [icon(ICONS.flame, 16), 'תזונה'])
   ]));
 
   /* ---- week strip ---- */
@@ -88,7 +98,6 @@ function heroResume(ctx, active) {
     el('button', {
       class: 'btn ghost full danger',
       style: { marginTop: '8px' },
-      text: 'בטל אימון',
       onclick: async () => {
         if (await confirmSheet('לבטל את האימון?', 'כל הסטים שנרשמו באימון הזה יימחקו.', 'בטל אימון')) {
           await abandonWorkout(active);
@@ -96,7 +105,7 @@ function heroResume(ctx, active) {
           ctx.reload();
         }
       }
-    })
+    }, [icon(ICONS.trash, 16), 'בטל אימון'])
   ]);
 }
 
@@ -127,18 +136,16 @@ function heroRest(ctx, up) {
       el('button', {
         class: 'btn full',
         style: { flex: '1' },
-        text: 'סשן יציבה',
         onclick: async () => {
           await createFromTemplate('posture', ctx.settings);
           ctx.go('workout');
         }
-      }),
+      }, [icon(ICONS.spark, 17), 'סשן יציבה']),
       el('button', {
         class: 'btn full primary',
         style: { flex: '1' },
-        text: 'דלג ליום הבא',
         onclick: async () => { await advanceRotation(1); ctx.reload(); }
-      })
+      }, [icon(ICONS.chevron, 17), 'דלג ליום הבא'])
     ])
   ]);
 }

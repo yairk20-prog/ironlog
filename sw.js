@@ -1,5 +1,5 @@
 /* IRONLOG service worker — offline-first shell cache */
-const VERSION = 'ironlog-v1.3.0';
+const VERSION = 'ironlog-v2.0.0';
 const IMG_INDEX = './img/ex/index.json';
 const SHELL = [
   './',
@@ -21,6 +21,9 @@ const SHELL = [
   './js/anatomy.js',
   './js/media.js',
   './js/ex-images.js',
+  './js/chart.js',
+  './js/onboarding.js',
+  './js/gdrive.js',
   './js/screen-home.js',
   './js/screen-workout.js',
   './js/screen-plan.js',
@@ -30,6 +33,9 @@ const SHELL = [
   './js/screen-more.js',
   './js/screen-coach.js',
   './js/screen-posture.js',
+  './js/screen-summary.js',
+  './js/screen-library.js',
+  './js/screen-body.js',
   './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png'

@@ -6,6 +6,18 @@ const BASE = 'http://localhost:8777/index.html';
 const shot = (p, n) => p.screenshot({ path: `/home/claude/gym/tools/shots2/${n}.png`, fullPage: false });
 const errors = [];
 
+
+/** First run shows the questionnaire; accept the defaults and move on. */
+async function skipOnboarding(page) {
+  const onb = page.locator('.onb');
+  if (!(await onb.count())) return;
+  for (let i = 0; i < 12; i++) {
+    if (!(await page.locator('.onb').count())) return;
+    await page.locator('.onb-foot .btn.primary').click();
+    await page.waitForTimeout(320);
+  }
+}
+
 async function main() {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({
@@ -18,6 +30,8 @@ async function main() {
 
   await page.goto(BASE, { waitUntil: 'networkidle' });
   await page.waitForSelector('#view:not([hidden])', { timeout: 8000 });
+  await page.waitForTimeout(600);
+  await skipOnboarding(page);
   await page.waitForTimeout(400);
 
   /* ---- unit checks inside the page ---- */
