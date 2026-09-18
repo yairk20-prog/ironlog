@@ -36,7 +36,7 @@ const placeholder = () => el('div', { class: 'ex-thumb', style: { display: 'grid
  * Cross-fading two-frame demo. Returns {node, stop} — callers must call stop()
  * when the card is replaced, or the interval keeps running off-screen.
  */
-export function demo(id, { interval = 1100, tag = 'הדגמת תנועה' } = {}) {
+export function demo(id, { interval = 1100, tag = 'הדגמת תנועה', expandable = true } = {}) {
   if (!hasImages(id)) return { node: null, stop: () => {} };
 
   const box = el('div', { class: 'ex-media' });
@@ -50,6 +50,18 @@ export function demo(id, { interval = 1100, tag = 'הדגמת תנועה' } = {}
   }));
   imgs.forEach((i) => box.appendChild(i));
   box.appendChild(el('div', { class: 'ex-media-tag', text: tag }));
+
+  /* One tap opens the full player — the demo in the card stays a preview. */
+  if (expandable) {
+    box.appendChild(el('button', {
+      class: 'ex-media-play', 'aria-label': 'פתח נגן הדגמה',
+      onclick: async (e) => {
+        e.stopPropagation();
+        const { openPlayer } = await import('./player.js');
+        openPlayer(id);
+      }
+    }, [icon(ICONS.expand, 18), el('span', { text: 'נגן' })]));
+  }
 
   let at = 0;
   let timer = null;
@@ -146,9 +158,13 @@ export function exerciseDetail(id) {
     box.appendChild(el('div', { class: 'prev-hint' }, [icon(ICONS.info, 15), el('span', { text: ex.cue })]));
   }
 
-  box.appendChild(el('a', {
-    class: 'btn full', href: ytUrl(ex), target: '_blank', rel: 'noopener', text: '▶ צפה בהדגמת וידאו'
-  }));
+  box.appendChild(el('button', {
+    class: 'btn primary full',
+    onclick: async () => {
+      const { openPlayer } = await import('./player.js');
+      openPlayer(id);
+    }
+  }, [icon(ICONS.play, 18, 'solid'), el('span', { text: 'פתח נגן הדגמה' })]));
 
   return box;
 }

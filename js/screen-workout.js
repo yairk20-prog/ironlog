@@ -10,7 +10,7 @@ import {
   confirmSheet, celebratePR, emptyState
 } from './ui.js';
 import * as timer from './timer.js';
-import { getExercise, substitutes, sameMuscle, CATEGORIES, ytUrl, search } from './exercises.js';
+import { getExercise, substitutes, sameMuscle, CATEGORIES, search } from './exercises.js';
 import { repRange, restFor, GOALS } from './programs.js';
 import {
   platesFor, warmupSets, PLATE_COLORS, oneRM, fmtW, fmtDuration,
@@ -175,18 +175,19 @@ function paintExercise() {
   /* tools */
   const tools = el('div', { class: 'tool-row' });
   if (ex.bar) tools.appendChild(chip(ICONS.plate, 'פלטות', () => platesSheet(s, ex)));
-  tools.appendChild(chip(ICONS.flame, s.warmups?.length ? 'חימום ✓' : 'חימום', () => toggleWarmup(s, ex)));
+  tools.appendChild(chip(ICONS.flame, s.warmups?.length ? 'חימום פעיל' : 'חימום', () => toggleWarmup(s, ex)));
   tools.appendChild(chip(ICONS.swap, 'החלף תרגיל', () => swapSheet(s, ex)));
   tools.appendChild(chip(ICONS.note, 'הערת כיוונון', () => noteSheet(ex)));
   tools.appendChild(chip(ICONS.timer, 'מנוחה', () => restSheet(s, ex)));
-  tools.appendChild(el('button', { class: 'chip', text: '🫀 שרירים', onclick: () => detailSheet(ex) }));
-  tools.appendChild(el('a', {
-    class: 'chip', href: ytUrl(ex), target: '_blank', rel: 'noopener', text: '▶ וידאו'
+  tools.appendChild(chip(ICONS.muscle, 'שרירים', () => detailSheet(ex)));
+  tools.appendChild(chipSolid(ICONS.play, 'הדגמה', async () => {
+    const { openPlayer } = await import('./player.js');
+    openPlayer(s.ex);
   }));
   pane.appendChild(tools);
 
   if (ex.cue) {
-    pane.appendChild(el('div', { class: 'tiny dim', style: { padding: '0 4px' }, text: `💡 ${ex.cue}` }));
+    pane.appendChild(el('div', { class: 'prev-hint' }, [icon(ICONS.info, 15), el('span', { text: ex.cue })]));
   }
 
   /* sets */
@@ -216,6 +217,9 @@ function paintExercise() {
 
 const chip = (iconPath, label, onclick) =>
   el('button', { class: 'chip', onclick }, [icon(iconPath, 15), label]);
+
+const chipSolid = (iconPath, label, onclick) =>
+  el('button', { class: 'chip', onclick }, [icon(iconPath, 14, 'solid'), label]);
 
 async function fillPrevHint(exId, box) {
   const prev = await lastSessionSets(exId, W.id);
@@ -584,7 +588,7 @@ async function finishFlow(ctx) {
   await finishWorkout(W);
   await db.setSetting('lastFinishedWorkout', W.id);
   timer.stop();
-  celebratePR('אימון הושלם 💪');
+  celebratePR('אימון הושלם');
 
   /* fire-and-forget: never make the user wait on the network to finish a set */
   import('./gdrive.js').then((g) => g.autoSync()).catch(() => {});

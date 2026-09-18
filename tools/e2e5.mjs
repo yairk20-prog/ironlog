@@ -6,6 +6,12 @@ const BASE = 'http://localhost:8777/index.html';
 const shot = (p, n) => p.screenshot({ path: `/home/claude/gym/tools/shots5/${n}.png` });
 const errors = [];
 
+async function skipLogin(page) {
+  const btn = page.locator('.login .btn', { hasText: 'המשך בלי חשבון' });
+  try { await btn.waitFor({ timeout: 6000 }); await btn.click(); await page.waitForTimeout(350); }
+  catch { /* already past the login screen */ }
+}
+
 async function main() {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({
@@ -18,6 +24,7 @@ async function main() {
   await page.goto(BASE, { waitUntil: 'networkidle' });
 
   /* ---------- onboarding ---------- */
+  await skipLogin(page);
   await page.waitForSelector('.onb', { timeout: 8000 });
   await page.waitForTimeout(500);
   await shot(page, '01-onb-welcome');

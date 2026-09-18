@@ -188,8 +188,21 @@ export async function getNote(exerciseId) {
   return row?.text || '';
 }
 
-export const setNote = (exerciseId, text) =>
-  db.put('exercise_notes', { exercise_id: exerciseId, text, updated_at: Date.now() });
+/* Merge, never replace: the same row also holds the exercise's saved video. */
+export async function setNote(exerciseId, text) {
+  const row = (await db.get('exercise_notes', exerciseId)) || { exercise_id: exerciseId };
+  return db.put('exercise_notes', { ...row, text, updated_at: Date.now() });
+}
+
+export async function getVideo(exerciseId) {
+  const row = await db.get('exercise_notes', exerciseId);
+  return row?.video || '';
+}
+
+export async function setVideo(exerciseId, video) {
+  const row = (await db.get('exercise_notes', exerciseId)) || { exercise_id: exerciseId };
+  return db.put('exercise_notes', { ...row, video, updated_at: Date.now() });
+}
 
 /* ---------- history / stats ---------- */
 

@@ -1,5 +1,5 @@
 /* IRONLOG service worker — offline-first shell cache */
-const VERSION = 'ironlog-v2.0.1';
+const VERSION = 'ironlog-v3.0.0';
 const IMG_INDEX = './img/ex/index.json';
 const SHELL = [
   './',
@@ -24,6 +24,9 @@ const SHELL = [
   './js/chart.js',
   './js/onboarding.js',
   './js/gdrive.js',
+  './js/player.js',
+  './js/login.js',
+  './js/body-paths.js',
   './js/screen-home.js',
   './js/screen-workout.js',
   './js/screen-plan.js',

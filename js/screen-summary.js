@@ -27,7 +27,7 @@ export async function render(ctx) {
   const wrap = el('div', { class: 'stack' });
 
   wrap.appendChild(el('div', { class: 'summary-hero' }, [
-    el('div', { class: 's-mark', text: prs.length ? '🏆' : '💪' }),
+    el('div', { class: 's-mark' }, [icon(prs.length ? ICONS.target : ICONS.dumbbell, 30)]),
     el('h2', { text: prs.length ? `${prs.length} שיאים חדשים` : 'אימון הושלם' }),
     el('p', { text: `${w.name} · ${new Date(w.finished_at || Date.now()).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}` })
   ]));

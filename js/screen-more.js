@@ -23,7 +23,7 @@ export async function render(ctx) {
 
   wrap.appendChild(el('div', { class: 'card stack' }, [
     el('div', { class: 'card-head' }, [
-      el('h3', { text: '🔥 רצף' }),
+      el('h3', {}, [icon(ICONS.flame, 17), ' רצף']),
       el('span', { class: 'badge accent', text: `שיא: ${Math.max(best, stk)} ימים` })
     ]),
     el('div', { class: 'row between' }, [
@@ -53,19 +53,19 @@ export async function render(ctx) {
 
   /* ---- links ---- */
   wrap.appendChild(el('div', { class: 'section-title', text: 'מודולים' }));
-  wrap.appendChild(link('📚', 'ספריית תרגילים', `${EXERCISES.length} תרגילים עם תמונות, חיפוש וסינון`, () => ctx.go('library')));
-  wrap.appendChild(link('⚖️', 'מדידות גוף', 'משקל עם ממוצע נע, היקפים ותמונות התקדמות', () => ctx.go('body')));
-  wrap.appendChild(link('🏆', 'סיכום האימון האחרון', 'נפח, שיאים ומפת שרירים', () => ctx.go('summary')));
-  wrap.appendChild(link('🤖', 'מאמן אישי AI', 'שאל, שנה אימון, קבל סקירה שבועית', () => ctx.go('coach')));
-  wrap.appendChild(link('🧍', 'יציבה וניידות', 'הערכה עצמית ופרוטוקולים מתקנים', () => ctx.go('posture')));
-  wrap.appendChild(link('📅', 'סנכרון ליומן', 'ייצוא התוכנית כקובץ ICS עם תזכורות', () => calendarSheet(ctx)));
-  wrap.appendChild(link('⚙️', 'הגדרות', 'מטרה, ציוד, חשבון Google וגיבוי', () => ctx.go('settings')));
+  wrap.appendChild(link(ICONS.library, 'ספריית תרגילים', `${EXERCISES.length} תרגילים עם תמונות, חיפוש וסינון`, () => ctx.go('library')));
+  wrap.appendChild(link(ICONS.scale, 'מדידות גוף', 'משקל עם ממוצע נע, היקפים ותמונות התקדמות', () => ctx.go('body')));
+  wrap.appendChild(link(ICONS.target, 'סיכום האימון האחרון', 'נפח, שיאים ומפת שרירים', () => ctx.go('summary')));
+  wrap.appendChild(link(ICONS.spark, 'מאמן אישי AI', 'שאל, שנה אימון, קבל סקירה שבועית', () => ctx.go('coach')));
+  wrap.appendChild(link(ICONS.user, 'יציבה וניידות', 'הערכה עצמית ופרוטוקולים מתקנים', () => ctx.go('posture')));
+  wrap.appendChild(link(ICONS.calendar, 'סנכרון ליומן', 'ייצוא התוכנית כקובץ ICS עם תזכורות', () => calendarSheet(ctx)));
+  wrap.appendChild(link(ICONS.sync, 'הגדרות', 'מטרה, ציוד, חשבון Google וגיבוי', () => ctx.go('settings')));
 
   /* ---- install hint ---- */
   if (!window.matchMedia('(display-mode: standalone)').matches) {
     wrap.appendChild(el('div', { class: 'card stack' }, [
       el('h3', { style: { margin: 0, fontSize: '15px' }, text: 'התקנה למסך הבית' }),
-      el('p', { class: 'tiny dim', style: { margin: 0 }, text: 'אנדרואיד: תפריט ⋮ → "התקן אפליקציה". אייפון: שיתוף → "הוסף למסך הבית". אחרי ההתקנה האפליקציה נפתחת במסך מלא ועובדת גם בלי רשת.' })
+      el('p', { class: 'tiny dim', style: { margin: 0 }, text: 'אנדרואיד: תפריט הדפדפן ואז "התקן אפליקציה". אייפון: שיתוף ואז "הוסף למסך הבית". אחרי ההתקנה האפליקציה נפתחת במסך מלא ועובדת גם בלי רשת.' })
     ]));
   }
 
@@ -77,8 +77,8 @@ export async function render(ctx) {
   return wrap;
 }
 
-const link = (emoji, title, sub, onclick) => el('button', { class: 'list-link', onclick }, [
-  el('div', { class: 'ex-ord', text: emoji }),
+const link = (iconPath, title, sub, onclick) => el('button', { class: 'list-link', onclick }, [
+  el('div', { class: 'ex-ord' }, [icon(iconPath, 20)]),
   el('div', { class: 'grow' }, [el('b', { text: title }), el('small', { text: sub })]),
   icon(ICONS.chevron, 18)
 ]);
@@ -96,11 +96,10 @@ function calendarSheet(ctx) {
     box.appendChild(el('div', {}, [el('label', { class: 'field-label', text: 'משך (דקות)' }), dur]));
     box.appendChild(el('div', {}, [el('label', { class: 'field-label', text: 'כמה שבועות קדימה' }), weeks]));
 
-    const carbBtn = el('button', { class: 'chip on', text: '✓ תזכורת פחמימה שעה לפני' });
+    const carbBtn = el('button', { class: 'chip on', text: 'תזכורת פחמימה שעה לפני' });
     carbBtn.addEventListener('click', () => {
       carb = !carb;
       carbBtn.classList.toggle('on', carb);
-      carbBtn.textContent = `${carb ? '✓' : ''} תזכורת פחמימה שעה לפני`;
     });
     box.appendChild(carbBtn);
 

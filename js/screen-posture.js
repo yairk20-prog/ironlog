@@ -47,7 +47,7 @@ export async function render(ctx) {
       style: recommended ? { borderColor: 'var(--accent)' } : {},
       onclick: () => protocolSheet(ctx, p, !!active)
     }, [
-      el('div', { class: 'ex-ord', text: p.id === 'apt' ? '🦴' : p.id === 'fhp' ? '🧍' : '🤸' }),
+      el('div', { class: 'ex-ord' }, [icon(p.id === 'apt' ? ICONS.ruler : p.id === 'fhp' ? ICONS.user : ICONS.muscle, 18)]),
       el('div', { class: 'grow' }, [
         el('b', { text: p.name }),
         el('small', { text: `${p.short} · ${estimatedMinutes(p.id, false)} דקות${recommended ? ' · מומלץ לך' : ''}` })

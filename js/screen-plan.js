@@ -31,11 +31,11 @@ export async function render(ctx) {
     el('p', { class: 'tiny dim', style: { margin: '0 0 10px' }, text: 'פספסת אימון? הזז את כל הסבב יום קדימה או אחורה בלי לשבור את הרצף ההיסטורי.' }),
     el('div', { class: 'row', style: { gap: '8px' } }, [
       el('button', {
-        class: 'btn sm grow', text: '← יום אחורה',
+        class: 'btn sm grow', text: 'יום אחורה',
         onclick: async () => { await advanceRotation(-1); toast('הלו״ז הוזז אחורה'); ctx.reload(); }
       }),
       el('button', {
-        class: 'btn sm grow', text: 'יום קדימה →',
+        class: 'btn sm grow', text: 'יום קדימה',
         onclick: async () => { await advanceRotation(1); toast('הלו״ז הוזז קדימה'); ctx.reload(); }
       })
     ])
@@ -47,7 +47,7 @@ export async function render(ctx) {
     const isNext = i === up.cursor % rot.days.length;
     if (key === 'rest') {
       wrap.appendChild(el('div', { class: `day-card rest${isNext ? ' next' : ''}` }, [
-        el('div', { class: 'day-card-img', text: '😴' }),
+        el('div', { class: 'day-card-img rest-img' }, [icon(ICONS.timer, 30)]),
         el('div', { class: 'day-card-body' }, [
           el('span', { class: 'day-card-tag', style: { color: 'var(--text-3)' }, text: 'מנוחה' }),
           el('h3', { text: 'יום מנוחה' }),

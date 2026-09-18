@@ -194,7 +194,7 @@ function mealSheet(ctx, day) {
     box.appendChild(el('button', { class: 'btn primary full', text: 'הוסף ליום', onclick: save }));
     box.appendChild(el('button', {
       class: 'btn full',
-      text: '✨ דיוק בעזרת AI',
+      text: 'דיוק בעזרת AI',
       onclick: async (e) => {
         if (!(await ai.hasKey())) { toast('הגדר מפתח API בהגדרות', 'bad'); return; }
         const btn = e.currentTarget;
@@ -207,7 +207,7 @@ function mealSheet(ctx, day) {
         } catch (err) {
           toast(err.message, 'bad');
         } finally {
-          btn.disabled = false; btn.textContent = '✨ דיוק בעזרת AI';
+          btn.disabled = false; btn.textContent = 'דיוק בעזרת AI';
         }
       }
     }));

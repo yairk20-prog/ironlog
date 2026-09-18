@@ -174,8 +174,15 @@ async function boot() {
      and image pre-cache should not wait behind it. */
   registerServiceWorker();
 
-  /* First run: build the plan from a short questionnaire before anything else. */
+  /* First run: sign in (or decline), then build the plan from the questionnaire. */
   if (!ctx.settings.onboarded) {
+    const { runLogin, loginSettled } = await import('./login.js');
+    if (!(await loginSettled())) {
+      const { mode, account } = await runLogin();
+      ctx.settings.authMode = mode;
+      if (account) ctx.settings.googleAccount = account;
+    }
+
     const { runOnboarding, applyAnswers } = await import('./onboarding.js');
     const answers = await runOnboarding();
     await applyAnswers(ctx, answers);

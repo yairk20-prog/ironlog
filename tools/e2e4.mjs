@@ -9,6 +9,12 @@ const failedImages = [];
 
 
 /** First run shows the questionnaire; accept the defaults and move on. */
+async function skipLogin(page) {
+  const btn = page.locator('.login .btn', { hasText: 'המשך בלי חשבון' });
+  try { await btn.waitFor({ timeout: 6000 }); await btn.click(); await page.waitForTimeout(350); }
+  catch { /* already past the login screen */ }
+}
+
 async function skipOnboarding(page) {
   const onb = page.locator('.onb');
   if (!(await onb.count())) return;
@@ -32,6 +38,7 @@ async function main() {
   await page.goto(BASE, { waitUntil: 'networkidle' });
   await page.waitForSelector('#view:not([hidden])');
   await page.waitForTimeout(600);
+  await skipLogin(page);
   await skipOnboarding(page);
   await page.waitForTimeout(900);
   await shot(page, '01-home-hero');

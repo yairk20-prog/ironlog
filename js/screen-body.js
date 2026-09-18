@@ -10,12 +10,12 @@ import { lineChart } from './chart.js';
 import { movingAverage, todayISO, round2, hebDate } from './logic.js';
 
 const SITES = [
-  { id: 'waist', name: 'מותן', emoji: '📏' },
-  { id: 'chest', name: 'חזה', emoji: '🫁' },
-  { id: 'arm', name: 'זרוע', emoji: '💪' },
-  { id: 'thigh', name: 'ירך', emoji: '🦵' },
-  { id: 'hips', name: 'ירכיים', emoji: '🍑' },
-  { id: 'neck', name: 'צוואר', emoji: '🧣' }
+  { id: 'waist', name: 'מותן' },
+  { id: 'chest', name: 'חזה' },
+  { id: 'arm', name: 'זרוע' },
+  { id: 'thigh', name: 'ירך' },
+  { id: 'hips', name: 'ירכיים' },
+  { id: 'neck', name: 'צוואר' }
 ];
 
 export async function render(ctx) {
@@ -93,7 +93,7 @@ export async function render(ctx) {
         const then = before?.sites?.[s.id];
         const d = then ? round2(now - then) : null;
         return el('div', { class: 'meas-cell' }, [
-          el('small', { text: `${s.emoji} ${s.name}` }),
+          el('small', { text: `${s.name}` }),
           el('b', { class: 'num', text: String(round2(now)) }),
           d !== null && d !== 0
             ? el('span', { class: `delta ${d > 0 ? 'up' : 'down'}`, text: `${d > 0 ? '+' : ''}${d}` })
@@ -132,7 +132,7 @@ export async function render(ctx) {
   wrap.appendChild(el('div', { class: 'section-title', text: 'כל המדידות' }));
   [...entries].reverse().slice(0, 20).forEach((e) => {
     wrap.appendChild(el('div', { class: 'ex-row' }, [
-      el('div', { class: 'ex-ord', text: '⚖️' }),
+      el('div', { class: 'ex-ord' }, [icon(ICONS.scale, 18)]),
       el('div', { class: 'grow' }, [
         el('div', { class: 'ex-name', text: e.weight ? `${round2(e.weight)} ק״ג` : 'מדידת היקפים' }),
         el('div', { class: 'ex-meta', text: hebDate(e.date) })
@@ -180,7 +180,7 @@ function logSheet(ctx) {
       const input = el('input', { type: 'number', inputmode: 'decimal', step: '0.5', placeholder: '—' });
       siteInputs[s.id] = input;
       grid.appendChild(el('div', { class: 'num-field' }, [
-        el('label', { text: `${s.emoji} ${s.name}` }),
+        el('label', { text: `${s.name}` }),
         input
       ]));
     });

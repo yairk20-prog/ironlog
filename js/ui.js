@@ -28,9 +28,10 @@ export const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel
 
 export const clear = (node) => { while (node.firstChild) node.removeChild(node.firstChild); return node; };
 
-export function icon(path, size = 22) {
+export function icon(path, size = 22, cls = '') {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
+  if (cls) svg.setAttribute('class', cls);
   svg.setAttribute('width', size);
   svg.setAttribute('height', size);
   svg.setAttribute('aria-hidden', 'true');
@@ -46,6 +47,10 @@ export const ICONS = {
   swap: '<path d="M4 8h13l-3-3M20 16H7l3 3"/>',
   note: '<path d="M5 4h11l4 4v12H5z"/><path d="M15 4v5h5"/>',
   play: '<path d="M7 4l12 8-12 8z"/>',
+  pause: '<path d="M8 4h3v16H8zM13 4h3v16h-3z"/>',
+  close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  muscle: '<path d="M4 15c2-1 3-3 4-5s3-3 5-3 4 1 5 3 2 4 2 6a3 3 0 0 1-3 3H8a4 4 0 0 1-4-4z"/><path d="M9 10c1.5 1 3 1.5 5 1.5"/>',
+  expand: '<path d="M4 9V4h5M20 15v5h-5M15 4h5v5M9 20H4v-5"/>',
   timer: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/>',
   plate: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>',
   flame: '<path d="M12 3s5 4 5 9a5 5 0 0 1-10 0c0-2 1-3 1-3s1 2 2 2 2-8 2-8z"/>',
