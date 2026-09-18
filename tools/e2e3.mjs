@@ -47,6 +47,22 @@ async function skipOnboarding(page) {
   }
 }
 
+/* The workout screen's occasional actions moved behind one overflow sheet. */
+async function openTool(page, label) {
+  await page.locator('.linkish', { hasText: 'עוד אפשרויות' }).click();
+  await page.waitForTimeout(350);
+  await page.locator('.sheet .list-link', { hasText: label }).click();
+  await page.waitForTimeout(400);
+}
+
+/* Finishing lives in the top bar now, not at the bottom of the card. */
+async function finishWorkout(page) {
+  await page.locator('#topbarSlot .btn', { hasText: 'סיים' }).click();
+  await page.waitForTimeout(450);
+  await page.locator('#sheetBody .btn', { hasText: 'סיים ושמור' }).click();
+  await page.waitForTimeout(900);
+}
+
 async function main() {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({
@@ -70,7 +86,7 @@ async function main() {
   const firstTarget = await page.locator('.target-box .t-val').first().textContent();
 
   // plate calculator on the barbell lift
-  await page.locator('.chip', { hasText: 'פלטות' }).first().click();
+  await openTool(page, 'מחשבון פלטות');
   await page.waitForTimeout(400);
   await page.locator('#sheetBody input').first().fill('100');
   await page.waitForTimeout(400);
@@ -81,13 +97,13 @@ async function main() {
 
   // warm-up ramp
   await page.locator('.set-field input').first().fill('60');
-  await page.locator('.chip', { hasText: 'חימום' }).first().click();
+  await openTool(page, 'חימום');
   await page.waitForTimeout(500);
   const warmupRows = await page.locator('.set.warmup').count();
   await shot(page, 'warmup-rows');
 
   // tuning note
-  await page.locator('.chip', { hasText: 'הערת כיוונון' }).first().click();
+  await openTool(page, 'הערת כיוונון');
   await page.waitForTimeout(400);
   await page.locator('#sheetBody textarea').fill('כיסא על חור 4');
   await page.locator('#sheetBody .btn', { hasText: 'שמור' }).click();
@@ -96,9 +112,7 @@ async function main() {
   await runWholeWorkout(page, 60, 10);
   await shot(page, 'session1-end');
 
-  await page.locator('.btn', { hasText: 'סיום ושמירת האימון' }).click();
-  await page.waitForTimeout(400);
-  await page.locator('#sheetBody .btn', { hasText: 'סיים ושמור' }).click();
+  await finishWorkout(page);
   await page.waitForTimeout(1600);
 
   /* ---------- session 2: start Push A again from the plan tab ---------- */
@@ -111,7 +125,16 @@ async function main() {
 
   const secondTarget = await page.locator('.target-box .t-val').first().textContent();
   const prevHint = await page.locator('.prev-hint').first().textContent();
-  const noteChip = await page.locator('.chip', { hasText: 'הערת כיוונון' }).count();
+  /* The saved tuning note must survive into the next session; it now lives
+     one level down, in the overflow sheet. */
+  await page.locator('.linkish', { hasText: 'עוד אפשרויות' }).click();
+  await page.waitForTimeout(350);
+  const noteChip = await page.locator('.sheet .list-link', { hasText: 'הערת כיוונון' }).count();
+  await page.locator('.sheet .list-link', { hasText: 'הערת כיוונון' }).click();
+  await page.waitForTimeout(400);
+  const savedNote = await page.locator('#sheetBody textarea').inputValue().catch(() => '');
+  await page.locator('.sheet-grab').click();
+  await page.waitForTimeout(300);
   await shot(page, 'session2-target');
 
   /* rest timer should be visible right after a set */
@@ -130,6 +153,7 @@ async function main() {
     plateRows,
     warmupRows,
     noteChip,
+    savedNote,
     timerVisible,
     timerText,
     errors

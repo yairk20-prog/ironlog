@@ -3,14 +3,14 @@
    ========================================================================== */
 
 import * as db from './db.js';
-import { el, icon, ICONS, emptyState, toast, openSheet, confirmSheet } from './ui.js';
-import { GOALS, ROTATIONS, DAY_TYPES, TEMPLATES } from './programs.js';
+import { el, icon, ICONS } from './ui.js';
+import { GOALS, ROTATIONS, DAY_TYPES, TEMPLATES, restFor } from './programs.js';
 import { exerciseName } from './exercises.js';
 import { frameUrl, hasImages, thumb } from './media.js';
 import { fmtDuration, todayISO, HEB_DAYS } from './logic.js';
 import {
   getActive, nextUp, createFromTemplate, advanceRotation,
-  recentWorkouts, workoutSummary, streak, abandonWorkout
+  recentWorkouts, workoutSummary, streak
 } from './session.js';
 
 export async function render(ctx) {
@@ -34,41 +34,50 @@ export async function render(ctx) {
       ? heroStart(ctx, up.template, settings)
       : heroRest(ctx, up));
 
-  /* ---- stats ---- */
-  const week = done.filter((w) => withinDays(w.date, 7));
-  const weekVolume = (await Promise.all(week.map((w) => workoutSummary(w.id))))
-    .reduce((s, x) => s + x.volume, 0);
+  /* What is coming, as information rather than controls: the list answers
+     "what am I doing today" without adding a single thing to tap. */
+  const preview = active?.slots || up.template?.slots;
+  if (preview?.length) {
+    wrap.appendChild(el('div', { class: 'section-title', text: 'התרגילים היום' }));
+    wrap.appendChild(el('div', { class: 'today-list' }, preview.map((slot, i) => {
+      const id = slot.ex;
+      const reps = slot.seconds ? `${slot.seconds} שניות` : `${slot.sets || slot.s} סטים`;
+      return el('div', { class: `today-row${slot.done ? ' done' : ''}` }, [
+        hasImages(id) ? thumb(id, '') : el('div', { class: 'ex-ord', text: String(i + 1) }),
+        el('div', { class: 'grow' }, [
+          el('b', { text: exerciseName(id) }),
+          el('small', { text: reps })
+        ]),
+        slot.done ? icon(ICONS.check, 16) : null
+      ]);
+    })));
+  }
 
-  wrap.appendChild(el('div', { class: 'stats' }, [
-    stat(String(stk), 'רצף ימים'),
-    stat(String(week.length), 'אימונים השבוע'),
-    stat(weekVolume >= 1000 ? `${(weekVolume / 1000).toFixed(1)}ט׳` : String(Math.round(weekVolume)), 'נפח שבועי')
-  ]));
+  /* Everything below is a progress report, and a progress report with no
+     progress in it is noise. It appears as there is something to say. */
+  if (done.length) {
+    const week = done.filter((w) => withinDays(w.date, 7));
+    const weekVolume = (await Promise.all(week.map((w) => workoutSummary(w.id))))
+      .reduce((s, x) => s + x.volume, 0);
 
-  /* ---- quick actions ---- */
-  wrap.appendChild(el('div', { class: 'row', style: { gap: '8px' } }, [
-    el('button', { class: 'btn sm grow', onclick: () => ctx.go('library') }, [icon(ICONS.library, 16), 'ספריית תרגילים']),
-    el('button', { class: 'btn sm grow', onclick: () => ctx.go('body') }, [icon(ICONS.scale, 16), 'מדידות']),
-    el('button', { class: 'btn sm grow', onclick: () => ctx.go('nutrition') }, [icon(ICONS.flame, 16), 'תזונה'])
-  ]));
+    wrap.appendChild(el('div', { class: 'stats' }, [
+      stat(String(stk), 'רצף ימים'),
+      stat(String(week.length), 'אימונים השבוע'),
+      stat(weekVolume >= 1000 ? `${(weekVolume / 1000).toFixed(1)}ט׳` : String(Math.round(weekVolume)), 'נפח שבועי')
+    ]));
 
-  /* ---- week strip ---- */
-  wrap.appendChild(el('div', { class: 'section-title', text: '7 הימים האחרונים' }));
-  wrap.appendChild(weekStrip(done));
+    wrap.appendChild(el('div', { class: 'section-title', text: '7 הימים האחרונים' }));
+    wrap.appendChild(weekStrip(done));
 
-  /* ---- recent ---- */
-  wrap.appendChild(el('div', { class: 'section-title', text: 'אימונים אחרונים' }));
-  if (!done.length) {
-    wrap.appendChild(emptyState('עוד לא רשמת אימון', 'התחל את האימון הראשון ונתחיל למדוד התקדמות'));
-  } else {
-    for (const w of done.slice(0, 4)) {
+    wrap.appendChild(el('div', { class: 'section-title', text: 'אימונים אחרונים' }));
+    for (const w of done.slice(0, 3)) {
       const sum = await workoutSummary(w.id);
       const pic = w.slots?.find((s) => hasImages(s.ex))?.ex;
       wrap.appendChild(el('button', {
         class: 'list-link',
         onclick: () => ctx.go('history')
       }, [
-        pic ? thumb(pic, w.name) : el('div', { class: 'ex-ord', text: DAY_TYPES[w.type]?.short || '★' }),
+        pic ? thumb(pic, w.name) : el('div', { class: 'ex-ord', text: DAY_TYPES[w.type]?.short || '' }),
         el('div', { class: 'grow' }, [
           el('b', { text: w.name }),
           el('small', { text: `${new Date(w.finished_at).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })} · ${sum.sets} סטים · ${Math.round(sum.volume)} ק״ג נפח` })
@@ -94,29 +103,21 @@ function heroResume(ctx, active) {
     el('button', {
       class: 'btn primary full',
       onclick: () => ctx.go('workout')
-    }, [icon(ICONS.play, 18), 'המשך אימון']),
-    el('button', {
-      class: 'btn ghost full danger',
-      style: { marginTop: '8px' },
-      onclick: async () => {
-        if (await confirmSheet('לבטל את האימון?', 'כל הסטים שנרשמו באימון הזה יימחקו.', 'בטל אימון')) {
-          await abandonWorkout(active);
-          toast('האימון בוטל');
-          ctx.reload();
-        }
-      }
-    }, [icon(ICONS.trash, 16), 'בטל אימון'])
+    }, [icon(ICONS.play, 18), 'המשך אימון'])
   ]);
 }
 
 function heroStart(ctx, tpl, settings) {
-  const exNames = tpl.slots.slice(0, 3).map((s) => exerciseName(s.ex)).join(' · ');
+  /* The exercises are listed below in full, so the hero says how big the
+     session is instead of repeating the first three names. */
+  const sets = tpl.slots.reduce((n, x) => n + (x.s || 3), 0);
+  const mins = Math.round((sets * (restFor(settings.goal, null) + 45)) / 60 / 5) * 5;
   const lead = tpl.slots.find((s) => hasImages(s.ex))?.ex;
   return el('div', { class: 'hero' }, [
     lead ? el('img', { class: 'hero-bg', src: frameUrl(lead, 0), alt: '', loading: 'lazy' }) : null,
     el('div', { class: 'hero-kicker', text: `${DAY_TYPES[tpl.type]?.name || ''} · ${GOALS[settings.goal]?.name || ''}` }),
     el('h2', { text: tpl.name }),
-    el('p', { text: `${tpl.slots.length} תרגילים · ${exNames}…` }),
+    el('p', { text: `${tpl.slots.length} תרגילים · ${sets} סטים · כ-${mins} דקות` }),
     el('button', {
       class: 'btn primary full',
       onclick: async () => {

@@ -99,76 +99,60 @@ async function main() {
     return bad.slice(0, 8);
   });
 
-  /* ---------- 4. the demo player ---------- */
+  /* ---------- 4. the demo player: a loop and nothing else ---------- */
   await page.getByRole('button', { name: /התחל אימון/ }).click();
   await page.waitForTimeout(700);
-  out.mediaPlayBadge = await page.locator('.ex-media-play').count();
-  await page.locator('.ex-media-play').click();
+  await page.locator('.ex-media').click();
   await page.waitForSelector('.player', { timeout: 6000 });
-  await page.waitForTimeout(700);
-  await shot(page, '06-player-demo');
+  await page.waitForTimeout(600);
+  await shot(page, '06-player');
 
-  out.playerTabs = await page.locator('.pl-tab').allInnerTexts();
   out.playerTitle = await page.locator('.pl-title').innerText();
   out.stageImages = await page.locator('.pl-stage img').count();
   out.stageLoaded = await page.locator('.pl-stage img').first()
     .evaluate((i) => i.complete && i.naturalWidth > 0);
 
-  /* the loop actually advances: poll for both frames showing over 3s */
+  /* the whole player is one image, one hint and one close button */
+  out.playerControls = await page.locator('.player button, .player input, .player select, .player a').count();
+  out.playerHasTabs = await page.locator('.pl-tab').count();
+  out.playerHasSpeeds = await page.locator('.pl-speeds').count();
+  out.playerHasVideo = await page.locator('.video-frame, .pl-video').count();
+  out.playerHasStepper = await page.locator('.player', { hasText: 'פריים' }).count() ? 1 : 0;
+
+  /* the loop advances on its own */
   const seen = new Set();
   for (let i = 0; i < 30; i++) {
     seen.add(await page.locator('.pl-stage img.on').getAttribute('alt'));
     if (seen.size > 1) break;
     await page.waitForTimeout(100);
   }
-  out.framesSeen = [...seen];
   out.loopAdvances = seen.size > 1;
 
-  /* play/pause holds the frame */
-  await page.locator('.pl-play').click();
+  /* tapping the image holds the frame */
+  await page.locator('.pl-stage').click();
   await page.waitForTimeout(150);
   const paused = await page.locator('.pl-stage img.on').getAttribute('alt');
-  await page.waitForTimeout(1600);
+  await page.waitForTimeout(1400);
   out.pauseHolds = paused === (await page.locator('.pl-stage img.on').getAttribute('alt'));
 
-  /* speed control */
-  await page.locator('.pl-speeds .chip').last().click();
-  out.speedSelected = await page.locator('.pl-speeds .chip.on').innerText();
-
-  /* video tab: no link-out, an embed once a URL is saved */
-  await page.locator('.pl-tab', { hasText: 'וידאו' }).click();
-  await page.waitForTimeout(400);
-  out.videoAsksForLink = await page.locator('.pl-empty').count();
-  await shot(page, '07-player-video-empty');
-
-  await page.locator('.pl-video input').fill('https://www.youtube.com/watch?v=vthMCtgVtFw');
-  await page.locator('.pl-video .btn.primary').click();
-  await page.waitForTimeout(600);
-  out.embedSrc = await page.locator('.video-frame iframe').getAttribute('src').catch(() => null);
-  await shot(page, '08-player-video-embed');
-
-  /* the saved video survives reopening */
-  await page.locator('.pl-close').click();
-  await page.waitForTimeout(250);
-  await page.locator('.ex-media-play').click();
-  await page.waitForSelector('.player', { timeout: 5000 });
-  await page.locator('.pl-tab', { hasText: 'וידאו' }).click();
-  await page.waitForTimeout(500);
-  out.embedPersisted = await page.locator('.video-frame iframe').count();
   await page.locator('.pl-close').click();
   await page.waitForTimeout(250);
   out.playerClosed = await page.locator('.player').count();
 
   /* ---------- 5. muscle map is anatomical, not a cartoon ---------- */
   out.workoutEmoji = await visibleEmoji(page);
-  await page.locator('.chip', { hasText: 'שרירים' }).click();
+  out.workoutControls = await page.locator('#view button, #view input, #view select').count();
+  await page.locator('.linkish', { hasText: 'עוד אפשרויות' }).click();
+  await page.waitForTimeout(400);
+  out.toolsSheetItems = await page.locator('.sheet .list-link').count();
+  await shot(page, '09-tools-sheet');
+  await page.locator('.sheet .list-link', { hasText: 'שרירים ופרטים' }).click();
   await page.waitForTimeout(700);
   out.mmFigures = await page.locator('.mm-figure').count();
   out.mmPaths = await page.locator('.mm-figure path').count();
   out.mmPrimary = await page.locator('.mm-primary').count();
   out.mmHeight = await page.locator('.mm-figure').first().evaluate((n) => Math.round(n.getBoundingClientRect().height));
-  out.detailPlayerButton = await page.locator('.sheet .btn.primary').count();
-  await shot(page, '09-muscle-map');
+  await shot(page, '10-muscle-map');
   await page.locator('.sheet-grab').click();
   await page.waitForTimeout(300);
 
@@ -198,10 +182,14 @@ async function main() {
     out.authMode !== 'local' && 'authMode not stored',
     !out.loopAdvances && 'demo loop does not advance',
     !out.pauseHolds && 'pause does not hold the frame',
-    !out.embedSrc?.includes('youtube-nocookie.com/embed/vthMCtgVtFw') && 'video not embedded in-app',
-    out.embedPersisted !== 1 && 'saved video did not persist',
     out.playerClosed !== 0 && 'player did not close',
     out.mmFigures !== 2 && 'muscle map missing a view',
+    out.playerHasTabs !== 0 && 'the player still has tabs',
+    out.playerHasSpeeds !== 0 && 'the player still has speed controls',
+    out.playerHasVideo !== 0 && 'the player still has a video pane',
+    out.playerControls > 1 && `the player has ${out.playerControls} controls, not one`,
+    out.workoutControls > 18 && `the workout screen has ${out.workoutControls} controls`,
+    out.toolsSheetItems < 5 && 'the tools sheet lost its items',
     out.mmHeight < 120 && 'muscle map collapsed',
     out.roundedElements.length && `rounded corners: ${out.roundedElements.join(', ')}`,
     [...out.onbEmoji, ...out.homeEmoji, ...out.workoutEmoji, ...out.moreEmoji, ...out.planEmoji, ...out.nutritionEmoji]

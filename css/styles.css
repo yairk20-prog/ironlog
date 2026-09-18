@@ -338,15 +338,26 @@ body.no-tabs .view{padding-bottom:calc(var(--safe-b) + 28px)}
 .progress-dots i.done{background:var(--accent)}
 
 .setlist{display:flex;flex-direction:column;gap:1px;background:var(--line-soft)}
+/* Column labels once, at the top, instead of on every row. */
+.set-head{
+  display:grid;grid-template-columns:36px 1fr 1fr 52px;
+  gap:8px;align-items:center;padding:7px 10px;background:var(--surface);
+}
+.set-head.with-rir{grid-template-columns:36px 1fr 1fr 62px 52px}
+.set-head span{
+  text-align:center;font-size:9px;font-weight:800;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--text-3);
+}
 .set{
   display:grid;
-  grid-template-columns:36px 1fr 1fr 62px 52px;
+  grid-template-columns:36px 1fr 1fr 52px;
   gap:8px;align-items:center;
   padding:9px 10px;
   background:var(--surface);
   border-inline-start:2px solid transparent;
   transition:background .16s var(--ease),border-color .16s var(--ease);
 }
+.set.with-rir{grid-template-columns:36px 1fr 1fr 62px 52px}
 .set.active{border-inline-start-color:var(--accent);background:var(--surface-2)}
 .set.done{background:var(--ok-dim);border-inline-start-color:var(--ok)}
 .set.warmup{opacity:.75}
@@ -365,12 +376,6 @@ body.no-tabs .view{padding-bottom:calc(var(--safe-b) + 28px)}
   padding:0 4px;background:var(--surface-2);
   font-variant-numeric:tabular-nums;
 }
-.set-field label{
-  position:absolute;inset-block-start:-6px;inset-inline-start:7px;
-  font-size:9px;color:var(--text-3);background:var(--surface);padding:0 4px;
-  letter-spacing:.1em;text-transform:uppercase;font-weight:800;
-}
-.set.active .set-field label{background:var(--surface-2)}
 .set-rir select{height:46px;text-align:center;padding:0 4px;font-size:13px;font-weight:700}
 .set-go{
   height:46px;background:var(--surface-3);
@@ -379,6 +384,14 @@ body.no-tabs .view{padding-bottom:calc(var(--safe-b) + 28px)}
 }
 .set.done .set-go{background:var(--ok);color:#00230F}
 .set.active .set-go{background:var(--text);color:#000}
+
+/* Two quiet text actions under the grid, not two more buttons. */
+.set-actions{display:flex;justify-content:space-between;gap:12px;padding:12px 2px 0}
+.linkish{
+  font-size:var(--fs-tiny);font-weight:800;color:var(--text-2);
+  padding:6px 0;letter-spacing:.01em;
+}
+.linkish:active{color:var(--text)}
 
 .prev-hint{
   display:flex;align-items:center;gap:9px;flex-wrap:wrap;
@@ -451,65 +464,34 @@ body.no-tabs .view{padding-bottom:calc(var(--safe-b) + 28px)}
 .media-row{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line-soft)}
 .media-row img{width:100%;display:block}
 
-/* video shown inside the app, never a jump to another site */
-.video-frame{position:relative;width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--line-soft)}
-.video-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
-
-/* ---------- demo player (full-screen window) ---------- */
+/* ---------- demo player ---------- */
 body.player-open{overflow:hidden}
 .player{
   position:fixed;inset:0;z-index:70;background:var(--bg);
-  display:flex;flex-direction:column;justify-content:flex-start;gap:14px;
-  padding:calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 18px);
+  display:flex;flex-direction:column;justify-content:center;gap:16px;
+  padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 20px);
   overflow-y:auto;animation:plIn .18s ease-out;
 }
 @keyframes plIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 .pl-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.pl-title{font-size:clamp(22px,6.4vw,30px);line-height:1;margin-top:4px}
+.pl-title{font-size:clamp(22px,6.4vw,30px);line-height:1.05;margin-bottom:3px}
 .pl-close{
-  flex:none;width:40px;height:40px;display:grid;place-items:center;
+  flex:none;width:44px;height:44px;display:grid;place-items:center;
   background:var(--surface-2);border:1px solid var(--line);color:var(--text);
 }
-.pl-tabs{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:1px;background:var(--line-soft)}
-.pl-tab{
-  padding:12px 8px;background:var(--surface);color:var(--text-3);
-  font-size:11px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;
-}
-.pl-tab.on{background:var(--text);color:#000}
-.pl-pane{flex:0 1 auto;min-height:0}
-.pl-loop{display:flex;flex-direction:column;gap:12px}
 .pl-stage{
   position:relative;width:100%;aspect-ratio:4/3;background:#0C0C0F;
   border:1px solid var(--line-soft);overflow:hidden;cursor:pointer;
 }
 .pl-stage img{
   position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
-  opacity:0;transition:opacity .38s ease;
+  opacity:0;transition:opacity .3s ease;
 }
 .pl-stage img.on{opacity:1}
-.pl-bar{position:absolute;inset-inline:0;inset-block-end:0;height:3px;background:rgba(255,255,255,.14)}
-.pl-bar i{
-  display:block;height:100%;background:var(--accent);
-  width:calc((var(--at,0) + 1) * 50%);transition:width linear;
+.pl-hint{
+  text-align:center;font-size:10.5px;font-weight:800;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--text-3);
 }
-.pl-controls{display:flex;flex-direction:column;gap:10px}
-.pl-phase{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:1px;background:var(--line-soft)}
-.pl-phase span{
-  padding:8px;text-align:center;background:var(--surface);color:var(--text-3);
-  font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;
-}
-.pl-phase span.on{background:var(--surface-3);color:var(--accent)}
-.pl-play{
-  flex:none;width:54px;height:54px;display:grid;place-items:center;
-  background:var(--accent);color:#000;
-}
-.pl-speeds{display:flex;gap:6px;flex:1}
-.pl-speeds .chip{flex:1;justify-content:center}
-.pl-empty{
-  display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;
-  padding:30px 18px;background:var(--surface);border:1px solid var(--line-soft);color:var(--text-2);
-}
-.pl-empty svg{color:var(--accent)}
 
 /* ---------- muscle map ---------- */
 .muscle-map{display:grid;grid-template-columns:1fr 1fr;gap:8px;background:transparent}
@@ -658,6 +640,42 @@ body.player-open{overflow:hidden}
 }
 .login-client p{margin:0}
 body.login-open{overflow:hidden}
+
+/* Today's exercises: information, not controls — nothing here is tappable. */
+.today-list{display:flex;flex-direction:column;gap:1px;background:var(--line-soft)}
+.today-row{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 12px;background:var(--surface);
+}
+.today-row b{display:block;font-size:clamp(13px,3.6vw,15px);font-weight:700;line-height:1.2}
+.today-row small{display:block;font-size:11px;color:var(--text-3);font-weight:600;margin-top:2px}
+.today-row.done{opacity:.5}
+.today-row.done svg{color:var(--ok)}
+
+/* Collapsible settings group: a row until you open it. */
+.sect{background:var(--surface);border:1px solid var(--line-soft)}
+.sect + .sect{margin-top:-12px;border-top:0}
+.sect-head{
+  display:flex;align-items:center;gap:12px;width:100%;
+  padding:15px 16px;text-align:start;color:var(--text);
+}
+.sect-head b{display:block;font-size:clamp(14px,3.9vw,16px);font-weight:800;letter-spacing:-.01em}
+.sect-head small{display:block;font-size:var(--fs-tiny);color:var(--text-3);font-weight:600;margin-top:2px}
+.sect-head svg{flex:none;color:var(--text-3);transition:transform .18s var(--ease)}
+.sect-head.open svg{transform:rotate(180deg)}
+.sect-body{
+  display:flex;flex-direction:column;gap:9px;
+  padding:4px 12px 14px;border-top:1px solid var(--line-soft);
+}
+.sect-body .card{border:0;padding:0;background:transparent}
+
+/* One line, not a panel: a number, its context, and the one action. */
+.streak-row{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 16px;background:var(--surface);border:1px solid var(--line-soft);
+}
+.streak-row b{font-size:clamp(26px,7vw,34px);font-weight:900;line-height:1}
+.streak-row span{display:block;font-size:var(--fs-tiny);color:var(--text-3);font-weight:600;margin-top:2px}
 
 /* ---------- library ---------- */
 .lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1px;background:var(--line-soft)}

@@ -24,6 +24,22 @@ async function skipOnboarding(page) {
   }
 }
 
+/* The workout screen's occasional actions moved behind one overflow sheet. */
+async function openTool(page, label) {
+  await page.locator('.linkish', { hasText: 'עוד אפשרויות' }).click();
+  await page.waitForTimeout(350);
+  await page.locator('.sheet .list-link', { hasText: label }).click();
+  await page.waitForTimeout(400);
+}
+
+/* Finishing lives in the top bar now, not at the bottom of the card. */
+async function finishWorkout(page) {
+  await page.locator('#topbarSlot .btn', { hasText: 'סיים' }).click();
+  await page.waitForTimeout(450);
+  await page.locator('#sheetBody .btn', { hasText: 'סיים ושמור' }).click();
+  await page.waitForTimeout(900);
+}
+
 async function main() {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({
@@ -125,7 +141,10 @@ async function main() {
   await shot(page, 'posture-session');
   const inPostureWorkout = await page.locator('.focus').count();
 
-  await page.locator('.btn', { hasText: 'בטל אימון' }).click();
+  /* Abandoning now lives in the overflow sheet, not beside the set grid. */
+  await page.locator('.linkish', { hasText: 'עוד אפשרויות' }).click();
+  await page.waitForTimeout(350);
+  await page.locator('.sheet .btn.danger', { hasText: 'בטל את האימון' }).click();
   await page.waitForTimeout(400);
   await page.locator('#sheetBody .btn', { hasText: 'בטל אימון' }).click();
   await page.waitForTimeout(800);

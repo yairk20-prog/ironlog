@@ -12,6 +12,22 @@ async function skipLogin(page) {
   catch { /* already past the login screen */ }
 }
 
+/* The workout screen's occasional actions moved behind one overflow sheet. */
+async function openTool(page, label) {
+  await page.locator('.linkish', { hasText: 'עוד אפשרויות' }).click();
+  await page.waitForTimeout(350);
+  await page.locator('.sheet .list-link', { hasText: label }).click();
+  await page.waitForTimeout(400);
+}
+
+/* Finishing lives in the top bar now, not at the bottom of the card. */
+async function finishWorkout(page) {
+  await page.locator('#topbarSlot .btn', { hasText: 'סיים' }).click();
+  await page.waitForTimeout(450);
+  await page.locator('#sheetBody .btn', { hasText: 'סיים ושמור' }).click();
+  await page.waitForTimeout(900);
+}
+
 async function main() {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({
@@ -131,9 +147,7 @@ async function main() {
     await page.waitForTimeout(300);
   }
 
-  await page.locator('.btn', { hasText: 'סיום ושמירת האימון' }).click();
-  await page.waitForTimeout(400);
-  await page.locator('#sheetBody .btn', { hasText: 'סיים ושמור' }).click();
+  await finishWorkout(page);
   await page.waitForTimeout(2000);
   await shot(page, '12-summary');
   const onSummary = await page.locator('.summary-hero').count();

@@ -25,6 +25,22 @@ async function skipOnboarding(page) {
   }
 }
 
+/* The workout screen's occasional actions moved behind one overflow sheet. */
+async function openTool(page, label) {
+  await page.locator('.linkish', { hasText: 'עוד אפשרויות' }).click();
+  await page.waitForTimeout(350);
+  await page.locator('.sheet .list-link', { hasText: label }).click();
+  await page.waitForTimeout(400);
+}
+
+/* Finishing lives in the top bar now, not at the bottom of the card. */
+async function finishWorkout(page) {
+  await page.locator('#topbarSlot .btn', { hasText: 'סיים' }).click();
+  await page.waitForTimeout(450);
+  await page.locator('#sheetBody .btn', { hasText: 'סיים ושמור' }).click();
+  await page.waitForTimeout(900);
+}
+
 async function main() {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({
@@ -71,7 +87,7 @@ async function main() {
   await shot(page, '03-after-ex1');
 
   // Plate calculator
-  const plateChip = page.locator('.chip', { hasText: 'פלטות' });
+  const plateChip = page.locator('.linkish', { hasText: 'עוד אפשרויות' });
   if (await plateChip.count()) {
     await plateChip.first().click();
     await page.waitForTimeout(350);
@@ -81,17 +97,12 @@ async function main() {
   }
 
   // Warm-up
-  const warm = page.locator('.chip', { hasText: 'חימום' });
-  if (await warm.count()) {
-    await warm.first().click();
-    await page.waitForTimeout(350);
-    await shot(page, '05-warmup');
-  }
+  await openTool(page, 'חימום');
+  await page.waitForTimeout(350);
+  await shot(page, '05-warmup');
 
   // Swap sheet
-  const swap = page.locator('.chip', { hasText: 'החלף תרגיל' });
-  await swap.first().click();
-  await page.waitForTimeout(350);
+  await openTool(page, 'החלף תרגיל');
   await shot(page, '06-swap');
   await page.locator('.sheet-grab').click();
   await page.waitForTimeout(250);
@@ -107,11 +118,9 @@ async function main() {
   await shot(page, '07-late-workout');
 
   // Finish
-  await page.locator('.btn', { hasText: 'סיום ושמירת האימון' }).click();
-  await page.waitForTimeout(400);
-  await shot(page, '08-finish-confirm');
-  await page.locator('.btn', { hasText: 'סיים ושמור' }).click();
-  await page.waitForTimeout(1400);
+  await shot(page, '08-before-finish');
+  await finishWorkout(page);
+  await page.waitForTimeout(700);
   await shot(page, '09-home-after');
 
   // History

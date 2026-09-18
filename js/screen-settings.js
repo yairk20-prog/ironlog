@@ -9,15 +9,36 @@ import { proteinTarget } from './logic.js';
 import * as ai from './ai.js';
 import * as gdrive from './gdrive.js';
 
+/**
+ * A settings screen that shows everything at once is a wall. Each group is a
+ * row you open, so the screen is a short list until you want one of them.
+ */
+function section(title, sub, children, open = false) {
+  const kids = [].concat(children).filter(Boolean);
+  const body = el('div', { class: 'sect-body' }, kids);
+  body.hidden = !open;
+
+  const head = el('button', { class: `sect-head${open ? ' open' : ''}`, onclick: () => {
+    const show = body.hidden;
+    body.hidden = !show;
+    head.classList.toggle('open', show);
+  } }, [
+    el('div', { class: 'grow' }, [el('b', { text: title }), sub ? el('small', { text: sub }) : null]),
+    icon(ICONS.chevronDown, 18)
+  ]);
+
+  return el('div', { class: 'sect' }, [head, body]);
+}
+
 export async function render(ctx) {
   const s = ctx.settings;
   ctx.setTitle('הגדרות');
   const wrap = el('div', { class: 'stack' });
 
   /* ---- goal ---- */
-  wrap.appendChild(el('div', { class: 'section-title', text: 'מצב מטרה' }));
+  const goalNodes = [];
   Object.values(GOALS).forEach((g) => {
-    wrap.appendChild(el('button', {
+    goalNodes.push(el('button', {
       class: `opt${s.goal === g.id ? ' on' : ''}`,
       onclick: async () => { await ctx.saveSetting('goal', g.id); ctx.reload(); }
     }, [
@@ -28,11 +49,12 @@ export async function render(ctx) {
       s.goal === g.id ? icon(ICONS.check, 18) : null
     ]));
   });
+  wrap.appendChild(section('מצב מטרה', GOALS[s.goal]?.name || '', goalNodes));
 
   /* ---- split ---- */
-  wrap.appendChild(el('div', { class: 'section-title', text: 'פיצול שבועי' }));
+  const splitNodes = [];
   Object.values(ROTATIONS).forEach((r) => {
-    wrap.appendChild(el('button', {
+    splitNodes.push(el('button', {
       class: `opt${s.rotation === r.id ? ' on' : ''}`,
       onclick: async () => {
         await ctx.saveSetting('rotation', r.id);
@@ -47,10 +69,10 @@ export async function render(ctx) {
       s.rotation === r.id ? icon(ICONS.check, 18) : null
     ]));
   });
+  wrap.appendChild(section('פיצול שבועי', ROTATIONS[s.rotation]?.name || '', splitNodes));
 
   /* ---- body & gym ---- */
-  wrap.appendChild(el('div', { class: 'section-title', text: 'גוף וציוד' }));
-  wrap.appendChild(el('div', { class: 'card stack' }, [
+  wrap.appendChild(section('גוף וציוד', `${s.bodyweight} ק״ג · מוט ${s.barWeight} ק״ג`, [el('div', { class: 'card stack' }, [
     numberField('משקל גוף (ק״ג)', s.bodyweight, (v) => ctx.saveSetting('bodyweight', v), 0.1),
     numberField('גובה (ס״מ)', s.height || 175, (v) => ctx.saveSetting('height', v), 1),
     numberField('גיל', s.age || 30, (v) => ctx.saveSetting('age', v), 1),
@@ -74,22 +96,20 @@ export async function render(ctx) {
         }
       })
     ])
-  ]));
+  ])]));
 
   /* ---- behaviour ---- */
-  wrap.appendChild(el('div', { class: 'section-title', text: 'התנהגות' }));
-  wrap.appendChild(el('div', { class: 'card stack' }, [
+  wrap.appendChild(section('התנהגות', 'טיימר, רטט, חימום, RIR', [el('div', { class: 'card stack' }, [
     toggle('טיימר מנוחה אוטומטי', s.autoTimer !== false, (v) => ctx.saveSetting('autoTimer', v)),
     toggle('רטט במכשיר', s.vibrate !== false, (v) => ctx.saveSetting('vibrate', v)),
-    toggle('הצע סטי חימום לתרגילים כבדים', s.warmupOn !== false, (v) => ctx.saveSetting('warmupOn', v))
-  ]));
+    toggle('הצע סטי חימום לתרגילים כבדים', s.warmupOn !== false, (v) => ctx.saveSetting('warmupOn', v)),
+    toggle('מעקב RIR (חזרות שנשארו במאגר)', s.trackRir === true, (v) => ctx.saveSetting('trackRir', v))
+  ])]));
 
   /* ---- Google account ---- */
-  wrap.appendChild(el('div', { class: 'section-title', text: 'חשבון Google וסנכרון' }));
-  wrap.appendChild(await accountCard(ctx));
+  wrap.appendChild(section('חשבון Google וגיבוי בענן', 'סנכרון לדרייב הפרטי שלך', [await accountCard(ctx)]));
 
   /* ---- AI ---- */
-  wrap.appendChild(el('div', { class: 'section-title', text: 'מאמן AI וניתוח תזונה' }));
   const currentKey = await ai.getKey();
   const hostedCoach = await ai.hosted();
   const keyInput = el('input', {
@@ -101,8 +121,9 @@ export async function render(ctx) {
 
   /* When the deployment hosts a key, nothing is asked of the user — the field
      stays available only as an override for a personal key. */
+  const aiNodes = [];
   if (hostedCoach) {
-    wrap.appendChild(el('div', { class: 'card stack' }, [
+    aiNodes.push(el('div', { class: 'card stack' }, [
       el('div', { class: 'row', style: { gap: '9px' } }, [
         icon(ICONS.check, 18),
         el('b', { text: 'המאמן פעיל — אין צורך במפתח' })
@@ -114,7 +135,7 @@ export async function render(ctx) {
     ]));
   }
 
-  if (!hostedCoach) wrap.appendChild(el('div', { class: 'card stack' }, [
+  if (!hostedCoach) aiNodes.push(el('div', { class: 'card stack' }, [
     el('p', {
       class: 'tiny dim', style: { margin: 0, lineHeight: '1.55' },
       text: 'מפתח Claude API מפעיל את הצ׳אט עם המאמן ואת ניתוח תמונות האוכל. המפתח נשמר רק במכשיר הזה ונשלח ישירות ל-api.anthropic.com. כל שאר האפליקציה עובדת בלעדיו.'
@@ -147,9 +168,10 @@ export async function render(ctx) {
     ])
   ]));
 
+  wrap.appendChild(section('מאמן AI וניתוח תזונה', hostedCoach ? 'פעיל' : 'דורש מפתח אישי', aiNodes));
+
   /* ---- data ---- */
-  wrap.appendChild(el('div', { class: 'section-title', text: 'נתונים' }));
-  wrap.appendChild(el('div', { class: 'card stack' }, [
+  wrap.appendChild(section('נתונים וגיבוי', 'ייצוא, שחזור, מחיקה', [el('div', { class: 'card stack' }, [
     el('button', { class: 'btn full', onclick: exportBackup }, [icon(ICONS.download, 18), 'ייצוא גיבוי JSON']),
     el('button', { class: 'btn full', onclick: () => importBackup(ctx) }, [icon(ICONS.plus, 18), 'שחזור מגיבוי']),
     el('button', {
@@ -162,7 +184,7 @@ export async function render(ctx) {
         }
       }
     }, [icon(ICONS.trash, 18), 'מחיקת כל הנתונים'])
-  ]));
+  ])]));
 
   wrap.appendChild(el('p', {
     class: 'tiny dim',

@@ -50,32 +50,17 @@ export async function render(ctx) {
 
   ctx.setTitle(W.name, `${W.slots.filter((s) => s.done).length}/${W.slots.length} תרגילים`);
   ctx.setActions([
-    el('button', { class: 'btn sm', text: 'סיים', onclick: () => finishFlow(ctx) })
+    el('button', { class: 'btn sm primary', text: 'סיים', onclick: () => finishFlow(ctx) })
   ]);
 
   DOTS = el('div', { class: 'progress-dots' });
   PANE = el('div', { id: 'exPane' });
 
+  /* One way to finish, in the bar, always reachable without scrolling.
+     Abandoning lives inside that flow — it is not a peer of finishing. */
   const root = el('div', { class: 'focus' });
   root.appendChild(DOTS);
   root.appendChild(PANE);
-  root.appendChild(el('div', { class: 'divider' }));
-  root.appendChild(el('button', {
-    class: 'btn full',
-    text: 'סיום ושמירת האימון',
-    onclick: () => finishFlow(ctx)
-  }));
-  root.appendChild(el('button', {
-    class: 'btn full ghost danger',
-    style: { marginTop: '4px' },
-    text: 'בטל אימון',
-    onclick: async () => {
-      if (await confirmSheet('לבטל את האימון?', 'כל הסטים שנרשמו יימחקו.', 'בטל אימון')) {
-        await abandonWorkout(W);
-        ctx.go('home');
-      }
-    }
-  }));
 
   paintExercise();
   return root;
@@ -124,7 +109,7 @@ function paintExercise() {
     }, [icon(ICONS.chevronBack, 20)]),
     el('div', { class: 'name' }, [
       el('b', { text: ex.name }),
-      el('small', { text: `${CATEGORIES[ex.cat]} · ${s.sets} סטים · ${range.min}–${range.max} חזרות` })
+      el('small', { text: `${s.sets} סטים · ${range.min}–${range.max} חזרות` })
     ]),
     el('button', {
       'aria-label': 'התרגיל הבא',
@@ -133,11 +118,14 @@ function paintExercise() {
     }, [icon(ICONS.chevron, 20)])
   ]));
 
-  /* movement demo */
+  /* movement demo — one tap opens it large, no separate button for it */
   if (hasImages(s.ex)) {
-    DEMO = demo(s.ex);
+    DEMO = demo(s.ex, { expandable: false, tag: 'הקש להגדלה' });
     if (DEMO.node) {
-      DEMO.node.addEventListener('dblclick', () => detailSheet(ex));
+      DEMO.node.addEventListener('click', async () => {
+        const { openPlayer } = await import('./player.js');
+        openPlayer(s.ex);
+      });
       pane.appendChild(DEMO.node);
     }
   }
@@ -172,64 +160,71 @@ function paintExercise() {
     ])
   ]));
 
-  /* tools */
-  const tools = el('div', { class: 'tool-row' });
-  if (ex.bar) tools.appendChild(chip(ICONS.plate, 'פלטות', () => platesSheet(s, ex)));
-  tools.appendChild(chip(ICONS.flame, s.warmups?.length ? 'חימום פעיל' : 'חימום', () => toggleWarmup(s, ex)));
-  tools.appendChild(chip(ICONS.swap, 'החלף תרגיל', () => swapSheet(s, ex)));
-  tools.appendChild(chip(ICONS.note, 'הערת כיוונון', () => noteSheet(ex)));
-  tools.appendChild(chip(ICONS.timer, 'מנוחה', () => restSheet(s, ex)));
-  tools.appendChild(chip(ICONS.muscle, 'שרירים', () => detailSheet(ex)));
-  tools.appendChild(chipSolid(ICONS.play, 'הדגמה', async () => {
-    const { openPlayer } = await import('./player.js');
-    openPlayer(s.ex);
-  }));
-  pane.appendChild(tools);
-
-  if (ex.cue) {
-    pane.appendChild(el('div', { class: 'prev-hint' }, [icon(ICONS.info, 15), el('span', { text: ex.cue })]));
-  }
-
-  /* sets */
+  /* sets — the reason this screen exists, so nothing competes with it */
   pane.appendChild(setList(s, ex));
 
-  /* add / remove set */
-  pane.appendChild(el('div', { class: 'row', style: { gap: '8px' } }, [
+  pane.appendChild(el('div', { class: 'set-actions' }, [
     el('button', {
-      class: 'btn sm grow', text: '+ סט נוסף',
+      class: 'linkish', text: '+ הוסף סט',
       onclick: async () => { s.sets += 1; await saveWorkout(W); paintExercise(); }
     }),
     el('button', {
-      class: 'btn sm ghost', text: '− סט',
-      onclick: async () => {
-        if (s.sets <= 1) return;
-        const last = getLog(s.ex, s.sets);
-        if (last) { await unlogSet(last.id); LOGS.delete(logKey(s.ex, s.sets)); }
-        s.sets -= 1;
-        await saveWorkout(W);
-        paintExercise();
-      }
+      class: 'linkish', text: 'עוד אפשרויות',
+      onclick: () => toolsSheet(s, ex)
     })
   ]));
 
   paintDots();
 }
 
-const chip = (iconPath, label, onclick) =>
-  el('button', { class: 'chip', onclick }, [icon(iconPath, 15), label]);
+/* Everything that is occasionally useful lives behind one door. Seven chips
+   on the main card made the set grid — the thing you are actually here for —
+   compete for attention with the plate calculator. */
+function toolsSheet(s, ex) {
+  const item = (iconPath, title, sub, onclick) => el('button', { class: 'list-link', onclick: () => { closeSheet(); onclick(); } }, [
+    el('div', { class: 'ex-ord' }, [icon(iconPath, 18)]),
+    el('div', { class: 'grow' }, [el('b', { text: title }), el('small', { text: sub })]),
+    icon(ICONS.chevron, 16)
+  ]);
 
-const chipSolid = (iconPath, label, onclick) =>
-  el('button', { class: 'chip', onclick }, [icon(iconPath, 14, 'solid'), label]);
+  openSheet(ex.name, () => {
+    const box = el('div', { class: 'stack' });
+    if (ex.bar) box.appendChild(item(ICONS.plate, 'מחשבון פלטות', 'איזה דיסקיות לשים על המוט', () => platesSheet(s, ex)));
+    box.appendChild(item(ICONS.flame, s.warmups?.length ? 'הסר סטי חימום' : 'הוסף סטי חימום', 'סולם עליות עד משקל העבודה', () => toggleWarmup(s, ex)));
+    box.appendChild(item(ICONS.swap, 'החלף תרגיל', 'המכונה תפוסה או משהו כואב', () => swapSheet(s, ex)));
+    box.appendChild(item(ICONS.timer, 'זמן מנוחה', `כרגע ${s.rest || ex.rest} שניות`, () => restSheet(s, ex)));
+    box.appendChild(item(ICONS.muscle, 'שרירים ופרטים', 'מפת שרירים, היסטוריה וטיפים', () => detailSheet(ex)));
+    box.appendChild(item(ICONS.note, 'הערת כיוונון', 'גובה ספסל, אחיזה, מספר מושב', () => noteSheet(ex)));
+    if (s.sets > 1) {
+      box.appendChild(item(ICONS.trash, 'הסר את הסט האחרון', `${s.sets} סטים כרגע`, async () => {
+        const last = getLog(s.ex, s.sets);
+        if (last) { await unlogSet(last.id); LOGS.delete(logKey(s.ex, s.sets)); }
+        s.sets -= 1;
+        await saveWorkout(W);
+        paintExercise();
+      }));
+    }
+    box.appendChild(el('button', {
+      class: 'btn full ghost danger', style: { marginTop: '6px' }, text: 'בטל את האימון',
+      onclick: async () => {
+        closeSheet();
+        if (await confirmSheet('לבטל את האימון?', 'כל הסטים שנרשמו יימחקו.', 'בטל אימון')) {
+          await abandonWorkout(W);
+          timer.stop();
+          CTX.go('home');
+        }
+      }
+    }));
+    return box;
+  });
+}
 
 async function fillPrevHint(exId, box) {
   const prev = await lastSessionSets(exId, W.id);
   if (!box) return;
+  if (!prev.length) { box.remove(); return; }
   box.innerHTML = '';
   box.appendChild(icon(ICONS.info, 15));
-  if (!prev.length) {
-    box.appendChild(el('span', { text: 'אין ביצוע קודם לתרגיל הזה' }));
-    return;
-  }
   const when = new Date(prev[0].timestamp).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' });
   box.appendChild(el('span', { text: `פעם קודמת (${when}):` }));
   prev.forEach((p) => {
@@ -240,7 +235,18 @@ async function fillPrevHint(exId, box) {
 /* ---------- set grid ---------- */
 
 function setList(s, ex) {
+  const timed = !!s.seconds;
+  const withRir = CTX?.settings?.trackRir === true;
   const list = el('div', { class: 'setlist' });
+
+  /* One header instead of the same two labels repeated on every row. */
+  list.appendChild(el('div', { class: `set-head${withRir ? ' with-rir' : ''}` }, [
+    el('span', { text: 'סט' }),
+    el('span', { text: 'ק״ג' }),
+    el('span', { text: timed ? 'שניות' : 'חזרות' }),
+    withRir ? el('span', { text: 'RIR' }) : null,
+    el('span', { text: '' })
+  ]));
 
   (s.warmups || []).forEach((w, i) => {
     list.appendChild(setRow(s, ex, -(i + 1), w.weight, w.reps, true, w.label));
@@ -269,17 +275,20 @@ function setRow(s, ex, order, defWeight, defReps, isWarmup, label) {
     placeholder: '0'
   });
 
+  const withRir = CTX?.settings?.trackRir === true;
   const rirSel = el('select', {},
     [el('option', { value: '', text: 'RIR' })].concat(
       [0, 1, 2, 3, 4, 5].map((n) => el('option', { value: String(n), text: String(n) }))
     ));
   if (log?.rir != null) rirSel.value = String(log.rir);
 
-  const row = el('div', { class: `set${done ? ' done' : ''}${active ? ' active' : ''}${isWarmup ? ' warmup' : ''}` }, [
+  const row = el('div', {
+    class: `set${withRir ? ' with-rir' : ''}${done ? ' done' : ''}${active ? ' active' : ''}${isWarmup ? ' warmup' : ''}`
+  }, [
     el('div', { class: 'set-idx', text: isWarmup ? (label || 'W') : String(order) }),
-    el('div', { class: 'set-field' }, [el('label', { text: 'ק״ג' }), wInput]),
-    el('div', { class: 'set-field' }, [el('label', { text: timed ? 'שניות' : 'חזרות' }), rInput]),
-    el('div', { class: 'set-rir' }, [isWarmup ? el('div') : rirSel]),
+    el('div', { class: 'set-field' }, [wInput]),
+    el('div', { class: 'set-field' }, [rInput]),
+    withRir ? el('div', { class: 'set-rir' }, [isWarmup ? el('div') : rirSel]) : null,
     el('button', {
       class: 'set-go',
       'aria-label': done ? 'בטל סט' : 'סיים סט',
@@ -570,8 +579,20 @@ function restSheet(s, ex) {
 async function finishFlow(ctx) {
   const logs = await setsOf(W.id);
   const working = logs.filter((l) => !l.is_warmup);
+
+  /* Nothing logged: finishing is meaningless, so the only real choice here is
+     whether to throw the session away. */
   if (!working.length) {
-    toast('לא נרשם אף סט', 'bad');
+    const drop = await confirmSheet(
+      'לא נרשם אף סט',
+      'אפשר להמשיך להתאמן, או לבטל את האימון ולחזור למסך הבית.',
+      'בטל את האימון'
+    );
+    if (drop) {
+      await abandonWorkout(W);
+      timer.stop();
+      ctx.go('home');
+    }
     return;
   }
   const vol = working.reduce((s, l) => s + l.weight_kg * l.reps, 0);
@@ -584,6 +605,7 @@ async function finishFlow(ctx) {
     false
   );
   if (!ok) return;
+
 
   await finishWorkout(W);
   await db.setSetting('lastFinishedWorkout', W.id);

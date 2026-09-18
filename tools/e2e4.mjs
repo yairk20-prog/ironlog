@@ -25,6 +25,22 @@ async function skipOnboarding(page) {
   }
 }
 
+/* The workout screen's occasional actions moved behind one overflow sheet. */
+async function openTool(page, label) {
+  await page.locator('.linkish', { hasText: 'עוד אפשרויות' }).click();
+  await page.waitForTimeout(350);
+  await page.locator('.sheet .list-link', { hasText: label }).click();
+  await page.waitForTimeout(400);
+}
+
+/* Finishing lives in the top bar now, not at the bottom of the card. */
+async function finishWorkout(page) {
+  await page.locator('#topbarSlot .btn', { hasText: 'סיים' }).click();
+  await page.waitForTimeout(450);
+  await page.locator('#sheetBody .btn', { hasText: 'סיים ושמור' }).click();
+  await page.waitForTimeout(900);
+}
+
 async function main() {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({
@@ -72,7 +88,7 @@ async function main() {
   const secondOn = await page.locator('.ex-media img.on').first().getAttribute('src');
 
   /* muscle map sheet */
-  await page.locator('.chip', { hasText: 'שרירים' }).first().click();
+  await openTool(page, 'שרירים ופרטים');
   await page.waitForTimeout(700);
   await shot(page, '03-muscle-map');
   const mapPrimary = await page.locator('.muscle-map .mm-primary').count();
@@ -82,7 +98,7 @@ async function main() {
   await page.waitForTimeout(300);
 
   /* swap sheet thumbnails */
-  await page.locator('.chip', { hasText: 'החלף תרגיל' }).first().click();
+  await openTool(page, 'החלף תרגיל');
   await page.waitForTimeout(600);
   await shot(page, '04-swap-thumbs');
   const swapThumbs = await page.locator('#sheetBody .ex-thumb').count();

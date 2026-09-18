@@ -23,24 +23,6 @@ export async function render(ctx) {
 
   const wrap = el('div', { class: 'stack' });
 
-  wrap.appendChild(el('div', { class: 'card' }, [
-    el('div', { class: 'card-head' }, [
-      el('h3', { text: 'הזזת לו״ז' }),
-      el('span', { class: 'badge accent', text: `יום ${(up.cursor % rot.days.length) + 1}` })
-    ]),
-    el('p', { class: 'tiny dim', style: { margin: '0 0 10px' }, text: 'פספסת אימון? הזז את כל הסבב יום קדימה או אחורה בלי לשבור את הרצף ההיסטורי.' }),
-    el('div', { class: 'row', style: { gap: '8px' } }, [
-      el('button', {
-        class: 'btn sm grow', text: 'יום אחורה',
-        onclick: async () => { await advanceRotation(-1); toast('הלו״ז הוזז אחורה'); ctx.reload(); }
-      }),
-      el('button', {
-        class: 'btn sm grow', text: 'יום קדימה',
-        onclick: async () => { await advanceRotation(1); toast('הלו״ז הוזז קדימה'); ctx.reload(); }
-      })
-    ])
-  ]));
-
   wrap.appendChild(el('div', { class: 'section-title', text: 'ימי הסבב' }));
 
   rot.days.forEach((key, i) => {
@@ -60,6 +42,24 @@ export async function render(ctx) {
     const tpl = TEMPLATES[key];
     wrap.appendChild(dayCard(ctx, tpl, isNext, () => daySheet(ctx, tpl, !!active)));
   });
+
+  /* A missed day is an occasional problem, so its controls sit after the plan
+     rather than on top of it. */
+  wrap.appendChild(el('div', { class: 'section-title', text: 'פספסת יום?' }));
+  wrap.appendChild(el('div', { class: 'card' }, [
+    el('p', { class: 'tiny dim', style: { margin: '0 0 10px' }, text: 'הזז את כל הסבב יום קדימה או אחורה בלי לשבור את הרצף ההיסטורי.' }),
+    el('div', { class: 'row', style: { gap: '8px' } }, [
+      el('button', {
+        class: 'btn sm grow', text: 'יום אחורה',
+        onclick: async () => { await advanceRotation(-1); toast('הלו״ז הוזז אחורה'); ctx.reload(); }
+      }),
+      el('button', {
+        class: 'btn sm grow', text: 'יום קדימה',
+        onclick: async () => { await advanceRotation(1); toast('הלו״ז הוזז קדימה'); ctx.reload(); }
+      })
+    ])
+  ]));
+
 
   return wrap;
 }

@@ -21,29 +21,19 @@ export async function render(ctx) {
   const best = await db.setting('bestStreak', 0);
   if (stk > best) await db.setSetting('bestStreak', stk);
 
-  wrap.appendChild(el('div', { class: 'card stack' }, [
-    el('div', { class: 'card-head' }, [
-      el('h3', {}, [icon(ICONS.flame, 17), ' רצף']),
-      el('span', { class: 'badge accent', text: `שיא: ${Math.max(best, stk)} ימים` })
+  /* The streak is one number and one action; it does not need a panel. */
+  const frozenToday = frozen.includes(todayISO());
+  wrap.appendChild(el('div', { class: 'streak-row' }, [
+    el('div', { class: 'grow' }, [
+      el('b', { class: 'num', text: String(stk) }),
+      el('span', { text: `ימים ברצף · שיא ${Math.max(best, stk)}` })
     ]),
-    el('div', { class: 'row between' }, [
-      el('div', {}, [
-        el('b', { class: 'num', style: { fontSize: '30px' }, text: String(stk) }),
-        el('div', { class: 'tiny dim', text: 'ימים ברצף' })
-      ]),
-      el('div', { style: { textAlign: 'end' } }, [
-        el('b', { class: 'num', style: { fontSize: '22px', color: '#4DA3FF' }, text: String(freezes) }),
-        el('div', { class: 'tiny dim', text: 'הקפאות זמינות' })
-      ])
-    ]),
-    el('p', { class: 'tiny dim', style: { margin: 0 }, text: 'יום מחלה או מנוחה מתוכננת לא אמור לשבור רצף. הקפאה מסמנת את היום כ"תקין" בלי אימון.' }),
     el('button', {
-      class: 'btn full',
-      disabled: freezes <= 0 || frozen.includes(todayISO()),
-      text: frozen.includes(todayISO()) ? 'היום כבר מוקפא' : freezes > 0 ? 'הקפא את היום' : 'נגמרו ההקפאות החודש',
+      class: 'btn sm',
+      disabled: freezes <= 0 || frozenToday,
+      text: frozenToday ? 'היום מוקפא' : `הקפא יום (${freezes})`,
       onclick: async () => {
-        const list = [...frozen, todayISO()];
-        await db.setSetting('frozenDays', list);
+        await db.setSetting('frozenDays', [...frozen, todayISO()]);
         await db.setSetting('streakFreezes', freezes - 1);
         toast('היום הוקפא — הרצף נשמר', 'ok');
         ctx.reload();
@@ -55,7 +45,6 @@ export async function render(ctx) {
   wrap.appendChild(el('div', { class: 'section-title', text: 'מודולים' }));
   wrap.appendChild(link(ICONS.library, 'ספריית תרגילים', `${EXERCISES.length} תרגילים עם תמונות, חיפוש וסינון`, () => ctx.go('library')));
   wrap.appendChild(link(ICONS.scale, 'מדידות גוף', 'משקל עם ממוצע נע, היקפים ותמונות התקדמות', () => ctx.go('body')));
-  wrap.appendChild(link(ICONS.target, 'סיכום האימון האחרון', 'נפח, שיאים ומפת שרירים', () => ctx.go('summary')));
   wrap.appendChild(link(ICONS.spark, 'מאמן אישי AI', 'שאל, שנה אימון, קבל סקירה שבועית', () => ctx.go('coach')));
   wrap.appendChild(link(ICONS.user, 'יציבה וניידות', 'הערכה עצמית ופרוטוקולים מתקנים', () => ctx.go('posture')));
   wrap.appendChild(link(ICONS.calendar, 'סנכרון ליומן', 'ייצוא התוכנית כקובץ ICS עם תזכורות', () => calendarSheet(ctx)));
