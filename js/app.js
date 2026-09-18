@@ -169,6 +169,11 @@ async function boot() {
   boot.classList.add('gone');
   setTimeout(() => boot.remove(), 320);
 
+  /* Offline caching, started before anything that waits on the user: the
+     questionnaire below blocks until it is answered, and the install prompt
+     and image pre-cache should not wait behind it. */
+  registerServiceWorker();
+
   /* First run: build the plan from a short questionnaire before anything else. */
   if (!ctx.settings.onboarded) {
     const { runOnboarding, applyAnswers } = await import('./onboarding.js');
@@ -177,13 +182,14 @@ async function boot() {
     await db.setSetting('rotationCursor', 0);
     await mount('home');
   }
+}
 
-  /* Offline caching only where it can actually work: a real origin we own,
-     not a file:// open and not an embedded preview frame. */
-  const embedded = window.top !== window.self;
-  if ('serviceWorker' in navigator && location.protocol !== 'file:' && !embedded) {
-    navigator.serviceWorker.register('sw.js').catch((e) => console.warn('[sw]', e));
-  }
+/** Only where it can actually work: a real origin, not file:// and not a preview frame. */
+function registerServiceWorker() {
+  let embedded = false;
+  try { embedded = window.top !== window.self; } catch { embedded = true; }
+  if (!('serviceWorker' in navigator) || location.protocol === 'file:' || embedded) return;
+  navigator.serviceWorker.register('sw.js').catch((e) => console.warn('[sw]', e));
 }
 
 boot();

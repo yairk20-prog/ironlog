@@ -1,5 +1,5 @@
 /* IRONLOG service worker — offline-first shell cache */
-const VERSION = 'ironlog-v2.0.0';
+const VERSION = 'ironlog-v2.0.1';
 const IMG_INDEX = './img/ex/index.json';
 const SHELL = [
   './',
