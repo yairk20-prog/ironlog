@@ -126,9 +126,10 @@ function parseJSON(text) {
 /* ---------- nutrition ---------- */
 
 const MEAL_SCHEMA = `החזר אך ורק JSON בצורה:
-{"items":[{"label":"שם המאכל בעברית","amount":"כמות משוערת","kcal":0,"p":0,"c":0,"f":0}],
+{"items":[{"label":"שם המאכל בעברית","amount":"כמות משוערת","cat":"protein|dairy|carb|produce|fat","kcal":0,"p":0,"c":0,"f":0}],
  "note":"הערה קצרה בעברית על רמת הוודאות"}
-p=חלבון בגרמים, c=פחמימות, f=שומן. אל תוסיף טקסט מחוץ ל-JSON.`;
+p=חלבון בגרמים, c=פחמימות, f=שומן. cat=הקטגוריה הדומיננטית של הפריט מתוך חמש האפשרויות בדיוק כפי שכתובות.
+אל תוסיף טקסט מחוץ ל-JSON.`;
 
 export async function analyzeMealText(text) {
   const out = await call(

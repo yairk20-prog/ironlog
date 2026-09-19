@@ -12,6 +12,21 @@ import { goalList } from './programs.js';
 import { proteinTarget, todayISO, round2 } from './logic.js';
 import { recentWorkouts } from './session.js';
 
+/* A shape and a colour per macro group — not a photo (none exist for
+   arbitrary typed food) and not an emoji (the app has none anywhere else),
+   but still the "more colourful" cue the list otherwise lacks. */
+const FOOD_CAT = {
+  protein: { ico: ICONS.egg, color: 'var(--accent)' },
+  dairy: { ico: ICONS.carton, color: '#4DA3FF' },
+  carb: { ico: ICONS.grain, color: 'var(--warn)' },
+  produce: { ico: ICONS.leaf, color: 'var(--ok)' },
+  fat: { ico: ICONS.drop, color: '#B98BFF' }
+};
+const foodIcon = (cat) => {
+  const c = FOOD_CAT[cat] || { ico: ICONS.plate, color: 'var(--text-3)' };
+  return el('div', { class: 'food-ico', style: { color: c.color } }, [icon(c.ico, 17)]);
+};
+
 export async function render(ctx) {
   const s = ctx.settings;
   const date = todayISO();
@@ -119,6 +134,7 @@ function mealCard(ctx, day, meal) {
   const rows = items.map((it) => {
     const index = day.items.indexOf(it);
     return el('div', { class: 'meal-item' }, [
+      foodIcon(it.cat),
       el('div', { class: 'grow' }, [
         el('b', { text: it.label }),
         el('small', { text: `${it.amount || ''} · ${Math.round(it.kcal)} קק״ל · ${round2(it.p)} ג׳ חלבון` })
@@ -328,6 +344,7 @@ function mealSheet(ctx, day, meal = { id: currentMeal(), name: 'ארוחה' }) {
         return;
       }
       parsed.items.forEach((i) => preview.appendChild(el('div', { class: 'ex-row' }, [
+        foodIcon(i.cat),
         el('div', { class: 'grow' }, [
           el('div', { class: 'ex-name', text: i.label }),
           el('div', { class: 'ex-meta', text: `${i.amount} · ${Math.round(i.kcal)} קק״ל · ${i.p} ג׳ חלבון` })
@@ -445,6 +462,7 @@ function photoSheet(ctx, day, meal = { id: currentMeal(), name: 'ארוחה' }) 
         items = res.items || [];
         status.remove();
         items.forEach((i) => out.appendChild(el('div', { class: 'ex-row' }, [
+          foodIcon(i.cat),
           el('div', { class: 'grow' }, [
             el('div', { class: 'ex-name', text: i.label }),
             el('div', { class: 'ex-meta', text: `${i.amount || ''} · ${Math.round(i.kcal)} קק״ל · ${i.p} ג׳ חלבון` })

@@ -80,7 +80,12 @@
   <div class="sheet-scrim" data-close></div>
   <section class="sheet-panel" role="dialog" aria-modal="true">
     <button class="sheet-grab" data-close aria-label="סגור"></button>
-    <header class="sheet-head"><h2 id="sheetTitle"></h2></header>
+    <header class="sheet-head">
+      <h2 id="sheetTitle"></h2>
+      <button class="sheet-close" data-close aria-label="סגור">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </header>
     <div class="sheet-body" id="sheetBody"></div>
   </section>
 </div>

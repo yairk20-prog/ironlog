@@ -78,7 +78,14 @@ export const ICONS = {
   camera: '<path d="M4 8h3l2-3h6l2 3h3v12H4z"/><circle cx="12" cy="13" r="4"/>',
   scale: '<path d="M5 7h14l2 13H3z"/><path d="M9 7a3 3 0 0 1 6 0"/>',
   glass: '<path d="M6 3h12l-1.5 17h-9z"/><path d="M6.6 10h10.8"/>',
-  bottle: '<path d="M10 2h4v3l2 3v13H8V8l2-3z"/><path d="M8 12h8"/>'
+  bottle: '<path d="M10 2h4v3l2 3v13H8V8l2-3z"/><path d="M8 12h8"/>',
+  /* food categories — a shape per macro group, not a photo, so it stays on
+     brand with everything else (no emoji, no stock imagery). */
+  egg: '<path d="M12 3C8 8 6 13 6 16a6 6 0 0 0 12 0c0-3-2-8-6-13z"/>',
+  carton: '<path d="M8 3h8l1 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V7z"/><path d="M7 9h10"/>',
+  grain: '<path d="M12 3v18"/><path d="M12 6l-3 2M12 6l3 2M12 10l-3 2M12 10l3 2M12 14l-3 2M12 14l3 2"/>',
+  leaf: '<path d="M5 19c8 0 14-6 14-14-8 0-14 6-14 14z"/><path d="M5 19c2-4 5-7 9-9"/>',
+  drop: '<path d="M12 3s6 7 6 12a6 6 0 0 1-12 0c0-5 6-12 6-12z"/>'
 };
 
 /* ---------- toast ---------- */
