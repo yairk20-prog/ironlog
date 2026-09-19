@@ -1,12 +1,13 @@
 /* The hosted coach: with a server key present the app must work with no key
    from the user, and with none present it must fall back to asking for one.
    Run twice — once against `COACH=1 node tools/serve.mjs`, once without. */
-import pw from '/home/claude/.npm-global/lib/node_modules/playwright/index.js';
+import pw from 'playwright';
 const { chromium } = pw;
 
+const ROOT = new URL('..', import.meta.url).pathname;
 const BASE = 'http://localhost:8777/index.html';
 const HOSTED = process.env.COACH === '1';
-const shot = (p, n) => p.screenshot({ path: `/home/claude/gym/tools/shots7/${n}.png` });
+const shot = (p, n) => p.screenshot({ path: `${ROOT}tools/shots7/${n}.png` });
 const errors = [];
 const out = { mode: HOSTED ? 'hosted' : 'bring-your-own-key' };
 
@@ -23,7 +24,7 @@ async function dismissRest(page) {
 }
 
 async function main() {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const ctx = await browser.newContext({
     viewport: { width: 414, height: 896 }, deviceScaleFactor: 2,
     locale: 'he-IL', hasTouch: true, isMobile: true

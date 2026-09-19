@@ -1,11 +1,12 @@
 /* Counts the interactive controls on each screen and screenshots it.
    A screen that asks the user to choose between a dozen things is a screen
    that has not decided what it is for. */
-import pw from '/home/claude/.npm-global/lib/node_modules/playwright/index.js';
+import pw from 'playwright';
 const { chromium } = pw;
 
+const ROOT = new URL('..', import.meta.url).pathname;
 const BASE = 'http://localhost:8777/index.html';
-const DIR = '/home/claude/gym/tools/audit';
+const DIR = `${ROOT}tools/audit`;
 
 const count = (page) => page.evaluate(() => {
   const vis = (n) => {
@@ -22,7 +23,7 @@ const count = (page) => page.evaluate(() => {
 });
 
 async function main() {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const ctx = await browser.newContext({
     viewport: { width: 414, height: 896 }, deviceScaleFactor: 2,
     locale: 'he-IL', hasTouch: true, isMobile: true

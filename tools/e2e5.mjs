@@ -1,9 +1,10 @@
 /* v2 flows: onboarding, equipment-aware planning, library, summary, body. */
-import pw from '/home/claude/.npm-global/lib/node_modules/playwright/index.js';
+import pw from 'playwright';
 const { chromium } = pw;
 
+const ROOT = new URL('..', import.meta.url).pathname;
 const BASE = 'http://localhost:8777/index.html';
-const shot = (p, n) => p.screenshot({ path: `/home/claude/gym/tools/shots5/${n}.png` });
+const shot = (p, n) => p.screenshot({ path: `${ROOT}tools/shots5/${n}.png` });
 const errors = [];
 
 async function skipLogin(page) {
@@ -41,7 +42,7 @@ async function dismissRest(page) {
 }
 
 async function main() {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const ctx = await browser.newContext({
     viewport: { width: 414, height: 896 }, deviceScaleFactor: 2, locale: 'he-IL', hasTouch: true, isMobile: true
   });
