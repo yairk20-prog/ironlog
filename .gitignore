@@ -2,3 +2,5 @@ tools/shots*/
 artifact/
 node_modules/
 .DS_Store
+tools/audit/
+tools/shots*/
