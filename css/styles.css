@@ -681,7 +681,11 @@ body.rest-open{overflow:hidden}
   display:flex;align-items:center;gap:12px;width:100%;max-width:420px;
   background:var(--surface);border:1px solid var(--line-soft);overflow:hidden;
 }
-.rest-next img{width:clamp(96px,28vw,132px);aspect-ratio:4/3;object-fit:cover;display:block}
+/* Explicit size on the box, not just the image inside it: the drawn figure
+   (an <svg>) happened to size itself from its viewBox with no rule here, but
+   the photo demo's wrapper <div> is a plain box with nothing to size against. */
+.rest-next-fig{flex:none;width:clamp(96px,28vw,132px);aspect-ratio:4/3;position:relative;overflow:hidden}
+.rest-next img{width:100%;height:100%;object-fit:cover;display:block}
 .rest-next-body{padding:10px 12px;min-width:0}
 .rest-next-body .eyebrow{font-size:9px;color:var(--accent)}
 .rest-next-body b{display:block;font-size:clamp(14px,4vw,17px);font-weight:800;margin-top:3px;line-height:1.2}

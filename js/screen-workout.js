@@ -87,9 +87,25 @@ async function openFeedMode(ctx) {
   const { openFeed } = await import('./feed.js');
   await db.setSetting('feedMode', true);
 
+  const notes = {};
+  await Promise.all([...new Set(W.slots.map((s) => s.ex))].map(async (id) => {
+    const text = await getNote(id).catch(() => '');
+    if (text) notes[id] = text;
+  }));
+
+  let glassesLeft = 0;
+  try {
+    const today = await db.byIndex('nutrition_logs', 'date', IDBKeyRange.only(todayISO()));
+    const ml = today?.[0]?.water_ml || 0;
+    const targetMl = ctx.settings.waterTarget || 3000;
+    glassesLeft = Math.max(0, Math.round((targetMl - ml) / 250));
+  } catch { /* the nutrition log is optional */ }
+
   openFeed({
     workout: W,
     settings: ctx.settings,
+    notes,
+    glassesLeft,
     getLog: (slotIndex, order) => getLog(W.slots[slotIndex].ex, order),
     onLogSet: async (slotIndex, order, weight, reps) => {
       const s = W.slots[slotIndex];
@@ -450,6 +466,7 @@ async function showRest({ slot: s, exercise: ex, allDone }) {
   } catch { /* the nutrition log is optional */ }
 
   const done = Array.from({ length: s.sets }, (_, i) => getLog(s.ex, i + 1)).filter(Boolean).length;
+  const note = await getNote(nextId).catch(() => '');
 
   const { openRest } = await import('./rest.js');
   openRest({
@@ -459,6 +476,7 @@ async function showRest({ slot: s, exercise: ex, allDone }) {
       ? `${ex.name} הושלם`
       : `סט ${Math.min(done + 1, s.sets)} מתוך ${s.sets} · ${ex.name}`,
     glassesLeft,
+    note,
     settings: {
       barWeight: CTX.settings.barWeight,
       plates: CTX.settings.plates,

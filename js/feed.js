@@ -30,8 +30,10 @@ const THRESHOLD = 70;
  * @param {(slotIndex:number, setOrder:number) => object|null} p.getLog
  * @param {() => void} p.onFinish
  * @param {object} p.settings
+ * @param {Object<string,string>} [p.notes]  exercise id → saved note from last time
+ * @param {number} [p.glassesLeft]  water glasses still owed today
  */
-export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, settings = {} }) {
+export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, settings = {}, notes = {}, glassesLeft = 0 }) {
   const cards = [];
   const figures = [];
   let at = 0;
@@ -106,7 +108,6 @@ export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, setting
     if (fig) figures.push(fig);
 
     const clock = el('b', { class: 'feed-clock num', text: '—' });
-    const note = el('p', { class: 'feed-rest-note' });
 
     /* The same clock as everywhere else; this card only listens. */
     const off = timer.onTick((remain) => {
@@ -115,15 +116,22 @@ export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, setting
     });
     figures.push({ stop: off });
 
+    /* Everything worth knowing before the next set, stacked short — the
+       note from last time (seat height, pin, grip) first, since it's the
+       one thing you'd otherwise have to rediscover by hand. */
+    const lines = [];
+    const savedNote = nextEx && notes[nextEx.id];
+    if (savedNote) lines.push(`שמרת בפעם הקודמת: ${savedNote}`);
     if (nextEx?.bar && next.targetWeight) {
       const { perSide } = platesFor(next.targetWeight, {
         barWeight: settings.barWeight, plates: settings.plates
       });
       if (perSide.length) {
-        note.textContent = `תכין ${fmtW(next.targetWeight)} — ${perSide.map((p) => `${p.plate}×${p.count}`).join(' · ')} לכל צד`;
+        lines.push(`תכין ${fmtW(next.targetWeight)} — ${perSide.map((p) => `${p.plate}×${p.count}`).join(' · ')} לכל צד`);
       }
     }
-    if (!note.textContent) note.textContent = nextEx?.cue || 'נשימה עמוקה, ואז הבא בתור.';
+    if (!lines.length) lines.push(nextEx?.cue || 'נשימה עמוקה, ואז הבא בתור.');
+    if (glassesLeft > 0) lines.push(`נשארו ${glassesLeft} כוסות מים להיום — עכשיו זה הזמן`);
 
     return el('div', { class: 'feed-card feed-rest' }, [
       el('span', { class: 'eyebrow', text: 'מנוחה' }),
@@ -134,7 +142,7 @@ export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, setting
       ]),
       fig ? el('div', { class: 'feed-fig small' }, [fig.node]) : null,
       nextEx ? el('h3', { text: `הבא: ${nextEx.name}` }) : el('h3', { text: 'זה האחרון' }),
-      note
+      ...lines.map((text) => el('p', { class: 'feed-rest-note', text }))
     ]);
   };
 

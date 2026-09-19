@@ -14,14 +14,20 @@
 import { el, icon, ICONS, buzz } from './ui.js';
 import * as timer from './timer.js';
 import { getExercise, MUSCLES } from './exercises.js';
-import { figureDemo } from './figure.js';
+import { exerciseDemo } from './media.js';
 import { platesFor, fmtTime, fmtW } from './logic.js';
 
 let closeCurrent = null;
 
 /** The one useful thing to say during this particular rest. */
-function tips({ next, isLastSet, settings, glassesLeft }) {
+function tips({ next, isLastSet, settings, glassesLeft, note }) {
   const out = [];
+
+  /* Your own note from last time (seat height, pin position, grip) beats a
+     generic cue — it's the thing you'd otherwise have to re-discover by hand. */
+  if (note) {
+    out.push({ icon: ICONS.note, title: 'שמרת בפעם הקודמת', text: note });
+  }
 
   if (next?.cue) {
     out.push({ icon: ICONS.info, title: 'דגש לביצוע', text: next.cue });
@@ -75,8 +81,9 @@ function tips({ next, isLastSet, settings, glassesLeft }) {
  * @param {number}  p.setLabel   e.g. "סט 3 מתוך 4" for the line under the clock
  * @param {object}  p.settings   bar weight, plates and the next target
  * @param {number}  p.glassesLeft
+ * @param {string}  p.note  saved note from the last time this exercise was logged
  */
-export function openRest({ nextId, isLastSet = false, setLabel = '', settings = {}, glassesLeft = 0 }) {
+export function openRest({ nextId, isLastSet = false, setLabel = '', settings = {}, glassesLeft = 0, note = '' }) {
   closeCurrent?.();
 
   const next = getExercise(nextId);
@@ -103,7 +110,7 @@ export function openRest({ nextId, isLastSet = false, setLabel = '', settings = 
     el('div', { class: 'rest-face' }, [clock, sub])
   ]);
 
-  const list = tips({ next, isLastSet, settings, glassesLeft });
+  const list = tips({ next, isLastSet, settings, glassesLeft, note });
   let at = 0;
   const tipBox = el('div', { class: 'rest-tip' });
   const paintTip = () => {
@@ -124,7 +131,7 @@ export function openRest({ nextId, isLastSet = false, setLabel = '', settings = 
   /* Rotate slowly: long enough to read, short enough to be worth watching. */
   const rotate = list.length > 1 ? setInterval(() => { at += 1; paintTip(); }, 6000) : null;
 
-  const nextFig = next ? figureDemo(next, { period: 2800 }) : null;
+  const nextFig = next ? exerciseDemo(next, { period: 2800 }) : null;
   const preview = next
     ? el('div', { class: 'rest-next' }, [
       el('div', { class: 'rest-next-fig' }, [nextFig.node]),
