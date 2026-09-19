@@ -16,7 +16,7 @@ import * as db from './db.js';
 
 const DIRECT = 'https://api.anthropic.com/v1/messages';
 const PROXY = '/api/coach';
-const MODEL = 'claude-sonnet-4-5';
+const MODEL = 'claude-sonnet-5';
 
 /** Cached answer to "does this deployment host a coach?" — asked once. */
 let hostedPromise = null;

@@ -22,7 +22,7 @@ const ENDPOINT = 'https://api.anthropic.com/v1/messages';
 
 /* Pinned here, not taken from the request: the caller must not be able to ask
    for a more expensive model than the owner agreed to pay for. */
-const MODEL = process.env.COACH_MODEL || 'claude-sonnet-4-5';
+const MODEL = process.env.COACH_MODEL || 'claude-sonnet-5';
 
 const MAX_TOKENS = Number(process.env.COACH_MAX_TOKENS || 1500);
 const MAX_BODY_BYTES = Number(process.env.COACH_MAX_BODY || 1_500_000); // a meal photo is ~1 MB
@@ -130,8 +130,13 @@ export default async (req) => {
 
   const body = await upstream.text();
   /* Upstream errors can quote the key back in some failure modes; never relay
-     an error body verbatim, only its status. */
-  if (!upstream.ok) return json(upstream.status === 429 ? 429 : 502, { error: `שגיאת AI (${upstream.status})` });
+     an error body verbatim to the browser, only its status. The full body is
+     safe to log server-side (Netlify function logs) and is the only way to
+     see *why* a call failed without reading source on every report. */
+  if (!upstream.ok) {
+    console.error(`coach: upstream ${upstream.status}`, body.slice(0, 1000));
+    return json(upstream.status === 429 ? 429 : 502, { error: `שגיאת AI (${upstream.status})` });
+  }
 
   return new Response(body, {
     status: 200,
