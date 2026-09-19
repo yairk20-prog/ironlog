@@ -53,6 +53,7 @@ export const ICONS = {
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
   muscle: '<path d="M4 15c2-1 3-3 4-5s3-3 5-3 4 1 5 3 2 4 2 6a3 3 0 0 1-3 3H8a4 4 0 0 1-4-4z"/><path d="M9 10c1.5 1 3 1.5 5 1.5"/>',
   expand: '<path d="M4 9V4h5M20 15v5h-5M15 4h5v5M9 20H4v-5"/>',
+  feed: '<rect x="5" y="3" width="14" height="8"/><rect x="5" y="13" width="14" height="8"/>',
   timer: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/>',
   plate: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>',
   flame: '<path d="M12 3s5 4 5 9a5 5 0 0 1-10 0c0-2 1-3 1-3s1 2 2 2 2-8 2-8z"/>',

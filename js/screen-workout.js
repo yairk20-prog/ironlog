@@ -50,6 +50,10 @@ export async function render(ctx) {
 
   ctx.setTitle(W.name, `${W.slots.filter((s) => s.done).length}/${W.slots.length} תרגילים`);
   ctx.setActions([
+    el('button', {
+      class: 'btn sm', 'aria-label': 'מצב גלילה',
+      onclick: () => openFeedMode(ctx)
+    }, [icon(ICONS.feed, 16)]),
     el('button', { class: 'btn sm primary', text: 'סיים', onclick: () => finishFlow(ctx) })
   ]);
 
@@ -72,6 +76,51 @@ export async function render(ctx) {
 
   paintExercise();
   return root;
+}
+
+/**
+ * The same workout, swiped instead of scrolled. It writes through the same
+ * logging path as the list, so the two are never out of step — switching
+ * between them mid-session is just a change of view.
+ */
+async function openFeedMode(ctx) {
+  const { openFeed } = await import('./feed.js');
+  await db.setSetting('feedMode', true);
+
+  openFeed({
+    workout: W,
+    settings: ctx.settings,
+    getLog: (slotIndex, order) => getLog(W.slots[slotIndex].ex, order),
+    onLogSet: async (slotIndex, order, weight, reps) => {
+      const s = W.slots[slotIndex];
+      const ex = getExercise(s.ex);
+      const existing = getLog(s.ex, order);
+      if (existing) {
+        await unlogSet(existing.id);
+        LOGS.delete(logKey(s.ex, order));
+        s.done = false;
+        await saveWorkout(W);
+        return;
+      }
+      const row = await logSet({
+        workout_id: W.id, exercise_id: s.ex, set_order: order,
+        weight_kg: weight, reps, rir: null, is_warmup: false
+      });
+      LOGS.set(logKey(s.ex, order), row);
+      buzz(14);
+      s.done = Array.from({ length: s.sets }, (_, i) => getLog(s.ex, i + 1)).every(Boolean);
+      await saveWorkout(W);
+      if (ctx.settings.autoTimer !== false) {
+        timer.start(s.rest || restFor(goalList(ctx.settings), ex), `מנוחה · ${ex.name}`);
+      }
+    },
+    onFinish: () => finishFlow(ctx),
+    onClose: async () => {
+      await db.setSetting('feedMode', false);
+      await loadLogs();
+      paintExercise();
+    }
+  });
 }
 
 /* ---------- data ---------- */

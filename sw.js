@@ -29,6 +29,7 @@ const SHELL = [
   './js/player.js',
   './js/login.js',
   './js/rest.js',
+  './js/feed.js',
   './js/body-paths.js',
   './js/screen-home.js',
   './js/screen-workout.js',

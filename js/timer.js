@@ -61,6 +61,9 @@ function bindDrag() {
   let startY = 0;
   let dragging = false;
   let collapsedAtStart = false;
+  /* A drag ends with a click event; without this the tap-to-expand handler
+     below would immediately undo the drag that just happened. */
+  let justDragged = false;
 
   const down = (e) => {
     dragging = true;
@@ -85,14 +88,23 @@ function bindDrag() {
     dock.classList.remove('dragging');
     dock.style.transform = '';
     const dy = e.clientY - startY;
+    justDragged = Math.abs(dy) > 4;
     if (dy > 28) collapse();
     else if (dy < -28) expand();
     else if (Math.abs(dy) < 6) (collapsedAtStart ? expand() : collapse());
+    setTimeout(() => { justDragged = false; }, 300);
   };
 
   grab.addEventListener('pointerdown', down);
   grab.addEventListener('pointermove', move);
   ['pointerup', 'pointercancel'].forEach((ev) => grab.addEventListener(ev, up));
+
+  /* Once it is tucked away the handle is a thin strip at the bottom of the
+     screen; anywhere on what is left brings it back. */
+  dock.addEventListener('click', (e) => {
+    if (justDragged) return;
+    if (dock.classList.contains('collapsed') && !e.target.closest('[data-add], .timer-x')) expand();
+  });
   grab.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();

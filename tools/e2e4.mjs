@@ -94,10 +94,12 @@ async function main() {
   await page.getByRole('button', { name: /התחל אימון/ }).click();
   await page.waitForTimeout(1200);
   await shot(page, '02-focus-demo');
-  const mediaCount = await page.locator('.ex-media img').count();
-  const firstOn = await page.locator('.ex-media img.on').first().getAttribute('src');
-  await page.waitForTimeout(1400);
-  const secondOn = await page.locator('.ex-media img.on').first().getAttribute('src');
+  /* The demo is a drawn figure now, so what is checked is that it is there
+     and that its pose changes. */
+  const mediaCount = await page.locator('.ex-media .fg .fg-body').count();
+  const firstOn = await page.locator('.ex-media .fg').innerHTML();
+  await page.waitForTimeout(600);
+  const secondOn = await page.locator('.ex-media .fg').innerHTML();
 
   /* muscle map sheet */
   await openTool(page, 'שרירים ופרטים');
@@ -105,7 +107,7 @@ async function main() {
   await shot(page, '03-muscle-map');
   const mapPrimary = await page.locator('.muscle-map .mm-primary').count();
   const mapSecondary = await page.locator('.muscle-map .mm-secondary').count();
-  const detailFrames = await page.locator('.media-row img').count();
+  const detailFrames = await page.locator('.sheet .ex-media .fg .fg-body').count();
   await page.locator('.sheet-grab').click();
   await page.waitForTimeout(300);
 
