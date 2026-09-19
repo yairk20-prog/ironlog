@@ -214,7 +214,28 @@ function registerServiceWorker() {
   let embedded = false;
   try { embedded = window.top !== window.self; } catch { embedded = true; }
   if (!('serviceWorker' in navigator) || location.protocol === 'file:' || embedded) return;
-  navigator.serviceWorker.register('sw.js').catch((e) => console.warn('[sw]', e));
+
+  /* The worker already takes over immediately on install (skipWaiting +
+     clients.claim) — but that only controls *future* requests. A page
+     opened before the update, especially a PWA left running for days, keeps
+     executing the JS modules it already loaded until something reloads it.
+     One reload per new controller closes that gap. */
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloaded) return;
+    reloaded = true;
+    location.reload();
+  });
+
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    /* Browsers only check for a new sw.js on navigation, which a standalone
+       PWA that's reopened from its icon (not truly re-navigated) may skip
+       for a long time. Foregrounding the app is exactly when "is there an
+       update" is worth asking. */
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reg.update().catch(() => {});
+    });
+  }).catch((e) => console.warn('[sw]', e));
 }
 
 boot();

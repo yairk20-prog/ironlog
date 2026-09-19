@@ -1,5 +1,5 @@
 /* IRONLOG service worker — offline-first shell cache */
-const VERSION = 'ironlog-v5.0.0';
+const VERSION = 'ironlog-v5.1.0';
 const IMG_INDEX = './img/ex/index.json';
 const SHELL = [
   './',
@@ -120,7 +120,26 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Assets: cache-first, refresh in background.
+  /* Code and markup: network-first. A stale image is invisible; stale JS is
+     a bug report from someone who can't see why the app won't update. Only
+     what's actually new-and-unreachable falls back to cache. */
+  if (/\.(?:js|css|webmanifest|html)$/.test(url.pathname) || url.pathname === '/') {
+    e.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.status === 200 && res.type === 'basic') {
+            const copy = res.clone();
+            caches.open(VERSION).then((c) => c.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // Everything else (photos, icons): cache-first, refresh in background.
+  // These don't change once shipped, so there's nothing stale to chase.
   e.respondWith(
     caches.match(req).then((hit) => {
       const net = fetch(req)

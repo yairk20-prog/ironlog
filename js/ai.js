@@ -53,11 +53,13 @@ async function deviceId() {
   return id;
 }
 
-async function call(messages, { system, maxTokens = 1200, temperature = 0.2 } = {}) {
+async function call(messages, { system, maxTokens = 1200 } = {}) {
+  /* No `temperature` (or top_p/top_k): current-generation models — Sonnet 5
+     included — reject sampling params with a 400, on both the hosted proxy
+     and a direct (BYOK) call. */
   const body = {
     model: MODEL,
     max_tokens: maxTokens,
-    temperature,
     ...(system ? { system } : {}),
     messages
   };
@@ -72,7 +74,7 @@ async function call(messages, { system, maxTokens = 1200, temperature = 0.2 } = 
     if (res.status === 503) {
       /* The key was removed after we asked; fall through to a personal one. */
       hostedPromise = Promise.resolve(false);
-      return call(messages, { system, maxTokens, temperature });
+      return call(messages, { system, maxTokens });
     }
     if (!res.ok) {
       const msg = await res.json().then((j) => j.error).catch(() => '');
@@ -175,7 +177,7 @@ const COACH_SYSTEM = `אתה מאמן כושר אישי מקצועי שמדבר 
  */
 export async function coach(messages, context) {
   const sys = `${COACH_SYSTEM}\n\nהקשר נוכחי:\n${JSON.stringify(context, null, 1)}`;
-  const raw = await call(messages, { system: sys, maxTokens: 1400, temperature: 0.4 });
+  const raw = await call(messages, { system: sys, maxTokens: 1400 });
 
   const actions = [];
   const text = raw.replace(/<<ACTION>>([\s\S]*?)<<END>>/g, (_, json) => {
@@ -191,6 +193,6 @@ export async function coach(messages, context) {
 export async function weeklyReview(summary) {
   return call(
     [{ role: 'user', content: `הנה סיכום האימונים שלי מהשבועות האחרונים:\n${JSON.stringify(summary, null, 1)}\n\nנתח מגמות נפח, זהה תקיעות והמלץ אם צריך שבוע דלואוד. ענה בעברית, עד 200 מילים, בנקודות.` }],
-    { system: 'אתה מאמן כוח ומדען אימון. תשובות קצרות ומעשיות בעברית.', maxTokens: 900, temperature: 0.5 }
+    { system: 'אתה מאמן כוח ומדען אימון. תשובות קצרות ומעשיות בעברית.', maxTokens: 900 }
   );
 }

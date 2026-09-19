@@ -95,7 +95,7 @@ export default async (req) => {
     return json(400, { error: 'invalid JSON' });
   }
 
-  const { messages, system, max_tokens: want, temperature } = payload || {};
+  const { messages, system, max_tokens: want } = payload || {};
   if (!Array.isArray(messages) || !messages.length) return json(400, { error: 'messages required' });
 
   const device = String(payload.device || '').slice(0, 64) || 'anon';
@@ -119,7 +119,8 @@ export default async (req) => {
       body: JSON.stringify({
         model: MODEL,
         max_tokens: Math.min(Number(want) || 1200, MAX_TOKENS),
-        temperature: Math.min(Math.max(Number(temperature) || 0.2, 0), 1),
+        /* No `temperature` (or top_p/top_k): current-generation models
+           (Sonnet 5 included) reject sampling params with a 400. */
         ...(typeof system === 'string' && system ? { system } : {}),
         messages
       })
