@@ -56,6 +56,14 @@ export async function render(ctx) {
   DOTS = el('div', { class: 'progress-dots' });
   PANE = el('div', { id: 'exPane' });
 
+  /* Tapping the dock's clock reopens the full rest screen for the set that
+     is actually resting. */
+  timer.setExpandHandler(() => {
+    const s = slot();
+    const ex = getExercise(s.ex);
+    if (ex) showRest({ slot: s, exercise: ex, allDone: !!s.done });
+  });
+
   /* One way to finish, in the bar, always reachable without scrolling.
      Abandoning lives inside that flow — it is not a peer of finishing. */
   const root = el('div', { class: 'focus' });

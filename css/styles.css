@@ -60,6 +60,18 @@
   /* Overshoots slightly on the way in — the difference between a panel that
      appears and one that arrives. */
   --spring:cubic-bezier(.34,1.42,.64,1);
+
+  /* ---- elevation ----
+     On a black ground a drop shadow alone is invisible, so depth is built
+     from three things at once: a shadow below, a hairline highlight along the
+     top edge where light would catch, and a surface a shade lighter than what
+     it sits on. Higher elements get more of all three. */
+  --lift-1:0 1px 0 rgba(255,255,255,.05) inset, 0 2px 6px rgba(0,0,0,.55);
+  --lift-2:0 1px 0 rgba(255,255,255,.07) inset, 0 6px 18px rgba(0,0,0,.6);
+  --lift-3:0 1px 0 rgba(255,255,255,.09) inset, 0 14px 38px rgba(0,0,0,.72);
+  --lift-press:0 1px 0 rgba(255,255,255,.04) inset, 0 1px 3px rgba(0,0,0,.6);
+  --glow-accent:0 6px 22px rgba(255,92,0,.36);
+  --glow-white:0 6px 22px rgba(255,255,255,.18);
 }
 
 *,*::before,*::after{box-sizing:border-box}
@@ -103,6 +115,28 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:square;stroke-linejoin:miter}
 /* Glyphs drawn as shapes rather than strokes (play, pause, the Google mark). */
 svg.solid{fill:currentColor;stroke:none}
+
+/* The app is square, not flat: corners stay at 0 and depth comes from light.
+   Everything that sits on top of something else says so. */
+.card,.list-link,.day-card,.lib-card,.opt,.pick,.sect,.stepper,.streak-row,
+.rest-next,.rest-tip,.today-row,.ex-media,.set,.target-box{
+  box-shadow:var(--lift-1);
+}
+.btn,.chip,.set-go,.step-btn,.glass,.plate-pick,.pick-tile,.pl-close,.rest-close{
+  box-shadow:var(--lift-2);
+}
+.btn.primary{box-shadow:var(--lift-2),var(--glow-white)}
+.btn.ok,.set.done .set-go{box-shadow:var(--lift-2),0 6px 22px rgba(40,209,124,.3)}
+.set.active .set-go,.pl-play,.rest-tip-ico{box-shadow:var(--lift-2)}
+
+/* Pressing pushes the object into the page rather than just tinting it. */
+.btn:active,.chip:active,.set-go:active,.step-btn:active,.glass:active,
+.plate-pick:active,.pick-tile:active{
+  box-shadow:var(--lift-press);
+  transform:translateY(2px) scale(.985);
+}
+.sheet-panel,.player,.rest-screen{box-shadow:var(--lift-3)}
+.topbar,.tabbar{box-shadow:0 8px 24px rgba(0,0,0,.6)}
 
 /* Display type: heavy, tight, slightly condensed by tracking. */
 h1,h2,h3{margin:0;font-weight:900;letter-spacing:-.03em;text-wrap:balance}
@@ -227,7 +261,6 @@ body.timer-on.no-tabs .view{padding-bottom:calc(var(--safe-b) + 130px)}
   font-weight:800;font-size:var(--fs-btn);letter-spacing:.01em;
   transition:background .14s var(--ease),border-color .14s var(--ease),transform .08s var(--ease);
 }
-.btn:active{transform:translateY(1px)}
 .btn:hover{border-color:var(--text-3)}
 .btn.full{width:100%}
 /* The strongest action on a black screen is white. */
@@ -246,7 +279,6 @@ body.timer-on.no-tabs .view{padding-bottom:calc(var(--safe-b) + 130px)}
   font-size:var(--fs-tiny);font-weight:700;color:var(--text-2);
   transition:all .13s var(--ease);
 }
-.chip:active{transform:translateY(1px)}
 .chip.on{background:var(--text);border-color:var(--text);color:#000}
 
 .badge{
@@ -418,7 +450,6 @@ body.timer-on.no-tabs .view{padding-bottom:calc(var(--safe-b) + 130px)}
 }
 .set.done .set-go{background:var(--ok);color:#00230F;animation:pop .32s var(--spring)}
 .set.active .set-go{background:var(--text);color:#000}
-.set-go:active{transform:scale(.88)}
 @keyframes pop{0%{transform:scale(.7)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
 
 /* A logged row settles into place rather than switching colour. */
@@ -474,10 +505,12 @@ body.timer-on.no-tabs .view{padding-bottom:calc(var(--safe-b) + 130px)}
 
 /* ---------- exercise imagery ---------- */
 .ex-media{
-  position:relative;overflow:hidden;
-  background:var(--surface-2);
+  position:relative;overflow:hidden;cursor:pointer;
+  background:linear-gradient(180deg,#191920,#0C0C10);
+  border:1px solid var(--line-soft);
   aspect-ratio:4/3;
 }
+.ex-media .fg{position:absolute;inset:0;padding:8px}
 .ex-media img{
   position:absolute;inset:0;
   width:100%;height:100%;object-fit:cover;
@@ -578,6 +611,18 @@ body.player-open{overflow:hidden}
   text-align:center;font-size:10.5px;font-weight:800;
   letter-spacing:.14em;text-transform:uppercase;color:var(--text-3);
 }
+
+/* ---------- the drawn figure ---------- */
+.fg{width:100%;height:100%;display:block}
+.fg *{stroke:none}
+/* Body on the near side is bright; the far side is the same shape darker,
+   which is the whole of the three-dimensional effect. */
+.fg-body{fill:#E8E8EE}
+.fg-far{fill:#83838F}
+.fg-work{fill:var(--accent);opacity:.94}
+.fg-prop{fill:#33333D}
+.fg-load{fill:#4A4A56;stroke:#0E0E12;stroke-width:1}
+.fg-cable{stroke:#6C6C75;stroke-width:1.5;fill:none}
 
 /* ---------- muscle map ---------- */
 .muscle-map{display:grid;grid-template-columns:1fr 1fr;gap:8px;background:transparent}
@@ -757,7 +802,7 @@ body.login-open{overflow:hidden}
   background:var(--surface-3);color:var(--text);border:1px solid var(--line);
   touch-action:none;transition:background .12s var(--ease),transform .1s var(--ease);
 }
-.step-btn:active{background:var(--accent);color:#000;transform:scale(.94)}
+.step-btn:active{background:var(--accent);color:#000}
 
 /* Equipment you point at instead of describing. */
 .pick-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:1px;background:var(--line-soft)}
@@ -782,7 +827,32 @@ body.login-open{overflow:hidden}
   background:var(--plate);border-color:var(--plate);
   color:#000;text-shadow:0 1px 0 rgba(255,255,255,.35);
 }
-.plate-pick:active{transform:scale(.9)}
+
+/* The day, as meals. The plus is the whole interaction. */
+.meal{
+  background:var(--surface);border:1px solid var(--line-soft);
+  box-shadow:var(--lift-1);
+}
+.meal + .meal{margin-top:-6px}
+.meal.now{border-color:var(--accent)}
+.meal-head{display:flex;align-items:center;gap:12px;padding:13px 14px}
+.meal-head b{display:block;font-size:clamp(14px,3.9vw,16px);font-weight:800;letter-spacing:-.01em}
+.meal-head small{display:block;font-size:var(--fs-tiny);color:var(--text-3);font-weight:600;margin-top:2px}
+.meal.now .meal-head small{color:var(--accent)}
+.meal-add{
+  flex:none;width:42px;height:42px;display:grid;place-items:center;
+  background:var(--surface-3);border:1px solid var(--line);color:var(--text);
+  box-shadow:var(--lift-2);transition:background .14s var(--ease);
+}
+.meal.now .meal-add{background:var(--accent);border-color:var(--accent);color:#000}
+.meal-add:active{box-shadow:var(--lift-press);transform:translateY(2px)}
+.meal-item{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 14px;border-top:1px solid var(--line-soft);
+}
+.meal-item b{display:block;font-size:13.5px;font-weight:700}
+.meal-item small{display:block;font-size:11px;color:var(--text-3);font-weight:600;margin-top:2px}
+.meal-del{flex:none;width:32px;height:32px;display:grid;place-items:center;color:var(--text-3)}
 
 /* Water as glasses: the row is the readout and the control at once. */
 .glasses{display:flex;flex-wrap:wrap;gap:6px}
@@ -794,7 +864,6 @@ body.login-open{overflow:hidden}
 }
 .glass svg{width:20px;height:20px}
 .glass.full{background:#1B3A5C;border-color:#4DA3FF;color:#7CC0FF}
-.glass:active{transform:scale(.92)}
 
 /* Today's exercises: information, not controls — nothing here is tappable. */
 .today-list{display:flex;flex-direction:column;gap:1px;background:var(--line-soft)}
@@ -893,28 +962,43 @@ body.login-open{overflow:hidden}
 
 /* ---------- rest timer ---------- */
 .timer-dock{
-  position:fixed;inset-inline:0;
-  bottom:calc(var(--tab-h) + var(--safe-b));
-  z-index:40;
-  display:flex;align-items:center;gap:12px;
-  padding:13px var(--pad);
+  position:fixed;inset-inline:12px;
+  bottom:calc(var(--tab-h) + var(--safe-b) + 12px);
+  z-index:45;
   background:var(--surface-2);
-  border-top:1px solid var(--line);
-  animation:up .22s var(--ease);
-  overflow:hidden;
+  border:1px solid var(--line);
+  box-shadow:var(--lift-3);
+  max-width:760px;margin:0 auto;
+  overflow:hidden;touch-action:none;
+  animation:up .26s var(--spring);
+  transition:transform .22s var(--spring);
 }
-body.no-tabs .timer-dock{bottom:var(--safe-b)}
-.timer-dock.over{background:var(--accent);color:#000}
-.timer-x{width:32px;height:32px;background:rgba(255,255,255,.08);color:inherit;flex:none;display:grid;place-items:center}
+/* Clear of the gesture bar: flush to the edge, the phone's own home
+   indicator sits on top of it and the countdown is half a dock. */
+body.no-tabs .timer-dock{bottom:calc(var(--safe-b) + 14px)}
+
+.timer-grab{
+  height:22px;display:grid;place-items:center;cursor:grab;
+}
+.timer-grab::after{
+  content:"";width:46px;height:4px;background:var(--line);
+}
+.timer-dock.collapsed{transform:translateY(calc(100% - 34px))}
+.timer-dock.collapsed .timer-grab::after{background:var(--accent)}
+.timer-dock.dragging{transition:none}
+
+.timer-main{display:flex;align-items:center;gap:10px;padding:0 12px 12px}
+.timer-dock.over{background:var(--accent);color:#000;box-shadow:0 10px 30px rgba(255,92,0,.34)}
+.timer-x{width:36px;height:36px;background:rgba(255,255,255,.08);color:inherit;flex:none;display:grid;place-items:center}
 .timer-x svg{width:15px;height:15px}
 .timer-dock.over .timer-x{background:rgba(0,0,0,.18)}
-.timer-read{flex:1;min-width:0}
-.timer-read strong{display:block;font-size:clamp(22px,6vw,28px);font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-.04em;line-height:1}
+.timer-read{flex:1;min-width:0;cursor:pointer}
+.timer-read strong{display:block;font-size:clamp(24px,6.6vw,30px);font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-.04em;line-height:1}
 .timer-read small{font-size:10px;opacity:.72;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
 .timer-acts{display:flex;gap:1px;flex:none}
-.timer-acts .chip{min-height:34px;padding:0 11px;font-size:11px;background:rgba(255,255,255,.08);border:0;color:inherit}
+.timer-acts .chip{min-height:38px;padding:0 13px;font-size:13px;font-weight:900;background:rgba(255,255,255,.08);border:0;color:inherit}
 .timer-dock.over .timer-acts .chip{background:rgba(0,0,0,.18)}
-.timer-track{position:absolute;inset-inline:0;bottom:0;height:2px;background:rgba(255,255,255,.12)}
+.timer-track{position:absolute;inset-inline:0;bottom:0;height:3px;background:rgba(255,255,255,.12)}
 .timer-track i{display:block;height:100%;background:var(--accent);transition:width .25s linear}
 .timer-dock.over .timer-track i{background:#000}
 
@@ -965,5 +1049,7 @@ body.no-tabs .timer-dock{bottom:var(--safe-b)}
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
   .view > .stack > *{animation:none}
+  .btn:active,.chip:active,.set-go:active,.step-btn:active,.glass:active,
+  .plate-pick:active,.pick-tile:active{transform:none}
   *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
 }

@@ -122,7 +122,8 @@ async function main() {
   /* ---- nutrition: log a meal ---- */
   await page.locator('.tab[data-route="nutrition"]').click();
   await page.waitForTimeout(500);
-  await page.locator('.btn', { hasText: 'הוסף ארוחה' }).click();
+  /* Food is added on the meal it belongs to, not from one catch-all button. */
+  await page.locator('.meal', { hasText: 'ארוחת בוקר' }).locator('.meal-add').click();
   await page.waitForTimeout(400);
   await page.locator('#sheetBody textarea').first().fill('שתי ביצים וסקופ חלבון');
   await page.waitForTimeout(400);

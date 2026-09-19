@@ -50,23 +50,19 @@ async function main() {
     };
   }));
 
-  /* ---------- 2. the loop is a real animation ---------- */
+  /* ---------- 2. the demo is a drawn figure that moves ---------- */
   await page.getByRole('button', { name: /התחל אימון/ }).click();
   await page.waitForTimeout(900);
-  const media = page.locator('.ex-media img').first();
-  out.demoSrc = await media.getAttribute('src');
-  out.demoIsMotion = /img\/motion\//.test(out.demoSrc || '');
-  out.demoLoaded = await media.evaluate((i) => i.complete && i.naturalWidth > 0);
-  out.demoFrames = await media.evaluate(async (i) => {
-    /* An animated WebP decodes to more than one frame; a still does not. */
-    const res = await fetch(i.src);
-    const buf = new Uint8Array(await res.arrayBuffer());
-    let anim = 0;
-    for (let k = 0; k < buf.length - 4; k++) {
-      if (buf[k] === 0x41 && buf[k + 1] === 0x4E && buf[k + 2] === 0x4D && buf[k + 3] === 0x46) anim++;
-    }
-    return anim;
-  });
+  out.figureShapes = await page.locator('.ex-media .fg path, .ex-media .fg circle, .ex-media .fg ellipse').count();
+  out.figureHasVolume = await page.locator('.ex-media .fg .fg-body').count();
+  out.figureHasFarSide = await page.locator('.ex-media .fg .fg-far').count();
+  out.figureHasWorkedMuscle = await page.locator('.ex-media .fg .fg-work').count();
+
+  /* The pose changes frame to frame, which is the whole point. */
+  const poseAt = () => page.locator('.ex-media .fg').innerHTML();
+  const poseBefore = await poseAt();
+  await page.waitForTimeout(500);
+  out.figureAnimates = poseBefore !== (await poseAt());
   await shot(page, '02-workout');
 
   /* ---------- 3. the rest screen ---------- */
@@ -184,9 +180,11 @@ async function main() {
   await browser.close();
 
   const fatal = [
-    !out.demoIsMotion && 'the demo is not the animated loop',
-    !out.demoLoaded && 'the loop did not load',
-    out.demoFrames < 2 && 'the loop file is not animated',
+    out.figureShapes < 10 && 'the drawn figure is missing',
+    !out.figureHasVolume && 'the figure has no solid body',
+    !out.figureHasFarSide && 'the figure has no far-side limbs',
+    !out.figureHasWorkedMuscle && 'the worked muscle is not marked',
+    !out.figureAnimates && 'the figure does not move',
     (out.storedGoals || []).length < 2 && 'two goals were not stored',
     out.onbBlendNote !== 1 && 'the questionnaire did not explain the blend',
     !out.restHasRing && 'the rest screen has no countdown ring',

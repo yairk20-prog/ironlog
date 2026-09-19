@@ -14,7 +14,7 @@
 import { el, icon, ICONS, buzz } from './ui.js';
 import * as timer from './timer.js';
 import { getExercise, MUSCLES } from './exercises.js';
-import { hasImages, hasMotion, motionUrl, frameUrl } from './media.js';
+import { figureDemo } from './figure.js';
 import { platesFor, fmtTime, fmtW } from './logic.js';
 
 let closeCurrent = null;
@@ -124,12 +124,10 @@ export function openRest({ nextId, isLastSet = false, setLabel = '', settings = 
   /* Rotate slowly: long enough to read, short enough to be worth watching. */
   const rotate = list.length > 1 ? setInterval(() => { at += 1; paintTip(); }, 6000) : null;
 
-  const preview = next && hasImages(next.id)
+  const nextFig = next ? figureDemo(next, { period: 2800 }) : null;
+  const preview = next
     ? el('div', { class: 'rest-next' }, [
-      el('img', {
-        src: hasMotion(next.id) ? motionUrl(next.id) : frameUrl(next.id, 0),
-        alt: '', decoding: 'async'
-      }),
+      el('div', { class: 'rest-next-fig' }, [nextFig.node]),
       el('div', { class: 'rest-next-body' }, [
         el('span', { class: 'eyebrow', text: isLastSet ? 'התרגיל הבא' : 'הסט הבא' }),
         el('b', { text: next.name })
@@ -139,6 +137,7 @@ export function openRest({ nextId, isLastSet = false, setLabel = '', settings = 
 
   const close = () => {
     clearInterval(rotate);
+    nextFig?.stop();
     off();
     document.removeEventListener('keydown', onKey);
     wrap.remove();

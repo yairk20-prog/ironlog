@@ -37,42 +37,18 @@ export async function render(ctx) {
   /* ---- water, counted the way people drink it ---- */
   wrap.appendChild(waterCard(ctx, day, s));
 
-  /* ---- add meal ---- */
-  wrap.appendChild(el('button', {
-    class: 'btn primary full',
-    onclick: () => mealSheet(ctx, day)
-  }, [icon(ICONS.plus, 18), 'הוסף ארוחה']));
-
-  const keyed = await ai.hasKey();
-  wrap.appendChild(el('button', {
-    class: 'btn full',
-    onclick: () => (keyed ? photoSheet(ctx, day) : toast('הגדר מפתח API בהגדרות כדי לנתח תמונות', 'bad'))
-  }, [icon(ICONS.plate, 18), keyed ? 'צלם צלחת וניתוח AI' : 'ניתוח תמונה (דורש מפתח API)']));
+  /* Adding food happens on the meal you are adding it to, so the two
+     catch-all buttons that used to live here are gone. */
 
   /* ---- today's items ---- */
-  wrap.appendChild(el('div', { class: 'section-title', text: 'מה נאכל היום' }));
-  if (!day.items.length) {
-    wrap.appendChild(emptyState('עוד לא רשמת אוכל היום', 'כתוב למשל: "שתי ביצים וסקופ חלבון"', ICONS.plate));
-  } else {
-    day.items.forEach((it, i) => {
-      wrap.appendChild(el('div', { class: 'ex-row' }, [
-        el('div', { class: 'grow' }, [
-          el('div', { class: 'ex-name', text: it.label }),
-          el('div', { class: 'ex-meta', text: `${it.amount || ''} · ${Math.round(it.kcal)} קק״ל · ${round2(it.p)} ג׳ חלבון` })
-        ]),
-        el('button', {
-          class: 'chip',
-          'aria-label': 'מחק',
-          onclick: async () => {
-            day.items.splice(i, 1);
-            recompute(day);
-            await saveDay(day);
-            ctx.reload();
-          }
-        }, [icon(ICONS.trash, 14)])
-      ]));
-    });
-  }
+  /* The day is a set of meals, not a list of foods: a plus on each one, so
+     adding lunch is one tap and the day reads back the way it was eaten. */
+  wrap.appendChild(el('div', { class: 'section-title', text: 'הארוחות של היום' }));
+  MEALS.forEach((meal) => wrap.appendChild(mealCard(ctx, day, meal)));
+
+  /* ---- what to eat, given what you are training for ---- */
+  wrap.appendChild(el('div', { class: 'section-title', text: 'מה כדאי לאכול' }));
+  wrap.appendChild(guidanceCard(ctx, day, pTarget, kcalTarget, trainedToday));
 
   /* ---- coach / dietitian notes ---- */
   wrap.appendChild(el('div', { class: 'section-title', text: 'דגשים מהמאמן / תזונאית' }));
@@ -98,7 +74,7 @@ function normalize(row) {
     carbs_grams: row.carbs_grams || 0,
     fat_grams: row.fat_grams || 0,
     water_ml: row.water_ml || 0,
-    items: row.items || [],
+    items: (row.items || []).map((i) => ({ meal: i.meal || 'other', ...i })),
     ai_raw_analysis: row.ai_raw_analysis || null
   };
 }
@@ -114,6 +90,133 @@ function recompute(day) {
 }
 
 const saveDay = (day) => db.put('nutrition_logs', day);
+
+/* ---------- meals ---------- */
+
+/* Times are when people actually eat, and the order is the order of the day —
+   the card you want is the one nearest the top when you open the app. */
+const MEALS = [
+  { id: 'breakfast', name: 'ארוחת בוקר', hint: 'חלבון + פחמימה מורכבת', from: 5, to: 11 },
+  { id: 'snack1', name: 'ביניים · בוקר', hint: 'פרי, יוגורט, אגוזים', from: 11, to: 13 },
+  { id: 'lunch', name: 'ארוחת צהריים', hint: 'העיקרית — חלבון, פחמימה, ירק', from: 13, to: 17 },
+  { id: 'snack2', name: 'ביניים · אחה״צ', hint: 'לפני או אחרי האימון', from: 17, to: 20 },
+  { id: 'dinner', name: 'ארוחת ערב', hint: 'חלבון וירקות, פחמימה קלה', from: 20, to: 23 },
+  { id: 'other', name: 'נשנושים', hint: 'כל מה שנאכל בדרך', from: 0, to: 5 }
+];
+
+/** The meal the clock says you are probably adding to. */
+function currentMeal() {
+  const h = new Date().getHours();
+  return (MEALS.find((m) => h >= m.from && h < m.to) || MEALS[0]).id;
+}
+
+function mealCard(ctx, day, meal) {
+  const items = day.items.filter((i) => (i.meal || 'other') === meal.id);
+  const kcal = Math.round(items.reduce((a, i) => a + (i.kcal || 0), 0));
+  const protein = round2(items.reduce((a, i) => a + (i.p || 0), 0));
+  const now = currentMeal() === meal.id;
+
+  const rows = items.map((it) => {
+    const index = day.items.indexOf(it);
+    return el('div', { class: 'meal-item' }, [
+      el('div', { class: 'grow' }, [
+        el('b', { text: it.label }),
+        el('small', { text: `${it.amount || ''} · ${Math.round(it.kcal)} קק״ל · ${round2(it.p)} ג׳ חלבון` })
+      ]),
+      el('button', {
+        class: 'meal-del', 'aria-label': `מחק ${it.label}`,
+        onclick: async () => {
+          day.items.splice(index, 1);
+          recompute(day);
+          await saveDay(day);
+          ctx.reload();
+        }
+      }, [icon(ICONS.trash, 14)])
+    ]);
+  });
+
+  return el('div', { class: `meal${now ? ' now' : ''}${items.length ? ' filled' : ''}` }, [
+    el('div', { class: 'meal-head' }, [
+      el('div', { class: 'grow' }, [
+        el('b', { text: meal.name }),
+        el('small', { text: items.length ? `${kcal} קק״ל · ${protein} ג׳ חלבון` : meal.hint })
+      ]),
+      el('button', {
+        class: 'meal-add', 'aria-label': `הוסף ל${meal.name}`,
+        onclick: () => mealSheet(ctx, day, meal)
+      }, [icon(ICONS.plus, 20)])
+    ]),
+    ...rows
+  ]);
+}
+
+/* ---------- what to eat ---------- */
+
+/**
+ * Guidance that follows the goals actually selected, and the gap left in the
+ * day. Generic advice is ignorable; "you are 60 g of protein short and it is
+ * eight in the evening" is not.
+ */
+function guidanceCard(ctx, day, pTarget, kcalTarget, trainedToday) {
+  const goals = goalList(ctx.settings);
+  const proteinLeft = Math.max(0, Math.round(pTarget - day.protein_grams));
+  const kcalLeft = Math.round(kcalTarget - day.calories_consumed);
+  const hour = new Date().getHours();
+
+  const lines = [];
+
+  if (proteinLeft > 0) {
+    const portions = Math.max(1, Math.round(proteinLeft / 25));
+    lines.push({
+      icon: ICONS.target,
+      title: `חסרים ${proteinLeft} גרם חלבון`,
+      text: `זה בערך ${portions} מנות: חזה עוף 150 ג׳, 200 ג׳ קוטג׳, סקופ אבקת חלבון או 3 ביצים.`
+    });
+  }
+
+  if (goals.includes('cut') && kcalLeft < 0) {
+    lines.push({
+      icon: ICONS.flame,
+      title: `חריגה של ${Math.abs(kcalLeft)} קק״ל`,
+      text: 'בגירעון שווה לסגור את היום בחלבון וירקות — הם משביעים על הכי מעט קלוריות.'
+    });
+  } else if (goals.includes('hypertrophy') && kcalLeft > 400 && hour >= 19) {
+    lines.push({
+      icon: ICONS.plus,
+      title: `נשארו ${kcalLeft} קק״ל`,
+      text: 'לבניית שריר צריך עודף. ארוחה נוספת עכשיו עדיפה על לסיים את היום בחוסר.'
+    });
+  }
+
+  if (goals.includes('strength') && trainedToday) {
+    lines.push({
+      icon: ICONS.plate,
+      title: 'פחמימה אחרי אימון כוח',
+      text: 'אורז, פסטה, תפוח אדמה או פירות בשעתיים שאחרי — זה מה שממלא את מאגרי הגליקוגן לאימון הבא.'
+    });
+  }
+
+  if (goals.includes('abs') || goals.includes('cut')) {
+    lines.push({
+      icon: ICONS.glass,
+      title: 'סיבים ומים',
+      text: 'ירקות בכל ארוחה ושתייה לפני האוכל — הדרך הזולה ביותר להרגיש שבע בגירעון.'
+    });
+  }
+
+  if (!lines.length) {
+    lines.push({
+      icon: ICONS.check,
+      title: 'היום סגור',
+      text: 'החלבון והקלוריות בטווח. כל מה שנשאר זה לחזור על זה מחר.'
+    });
+  }
+
+  return el('div', { class: 'stack' }, lines.map((l) => el('div', { class: 'rest-tip' }, [
+    el('div', { class: 'rest-tip-ico' }, [icon(l.icon, 18)]),
+    el('div', { class: 'grow' }, [el('b', { text: l.title }), el('p', { text: l.text })])
+  ])));
+}
 
 /* ---------- UI bits ---------- */
 
@@ -192,9 +295,17 @@ function estimateCalories(s, trainedToday) {
 
 /* ---------- meal entry ---------- */
 
-function mealSheet(ctx, day) {
-  openSheet('הוספת ארוחה', (close) => {
+function mealSheet(ctx, day, meal = { id: currentMeal(), name: 'ארוחה' }) {
+  openSheet(`הוסף ל${meal.name}`, (close) => {
     const box = el('div', { class: 'stack' });
+
+    ai.hasKey().then((keyed) => {
+      if (!keyed) return;
+      box.insertBefore(el('button', {
+        class: 'btn full',
+        onclick: () => { close(); photoSheet(ctx, day, meal); }
+      }, [icon(ICONS.camera, 18), 'צלם את הצלחת במקום']), box.firstChild);
+    });
     const ta = el('textarea', { rows: '3', placeholder: 'לדוגמה: שתי ביצים, 150 גרם חזה עוף וכוס אורז' });
     const preview = el('div', { class: 'stack' });
 
@@ -222,7 +333,7 @@ function mealSheet(ctx, day) {
 
     const save = async () => {
       if (!parsed.items.length) { toast('לא זוהה אוכל בטקסט', 'bad'); return; }
-      day.items.push(...parsed.items);
+      day.items.push(...parsed.items.map((i) => ({ ...i, meal: meal.id })));
       recompute(day);
       await saveDay(day);
       close();
@@ -266,7 +377,7 @@ function mealSheet(ctx, day) {
         const kcal = Number(kc.value) || 0;
         const p = Number(pr.value) || 0;
         if (!kcal && !p) { toast('הזן ערכים', 'bad'); return; }
-        day.items.push({ label: nm.value.trim() || 'ארוחה', amount: 'ידני', kcal, p, c: 0, f: 0 });
+        day.items.push({ label: nm.value.trim() || 'ארוחה', amount: 'ידני', kcal, p, c: 0, f: 0, meal: meal.id });
         recompute(day);
         await saveDay(day);
         close();
@@ -284,7 +395,7 @@ const sum = (items) => items.reduce((a, i) => ({
 
 /* ---------- photo analysis ---------- */
 
-function photoSheet(ctx, day) {
+function photoSheet(ctx, day, meal = { id: currentMeal(), name: 'ארוחה' }) {
   openSheet('ניתוח צלחת', (close) => {
     const box = el('div', { class: 'stack' });
     const file = el('input', { type: 'file', accept: 'image/*', capture: 'environment' });
@@ -328,7 +439,7 @@ function photoSheet(ctx, day) {
       class: 'btn primary full', text: 'הוסף ליום',
       onclick: async () => {
         if (!items.length) { toast('אין תוצאות לשמירה', 'bad'); return; }
-        day.items.push(...items);
+        day.items.push(...items.map((i) => ({ ...i, meal: meal.id })));
         recompute(day);
         await saveDay(day);
         close();

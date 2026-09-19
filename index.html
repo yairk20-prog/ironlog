@@ -61,14 +61,17 @@
 
 <!-- Rest timer dock -->
 <div id="timerDock" class="timer-dock" hidden>
-  <button class="timer-x" id="timerSkip" aria-label="דלג על מנוחה"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-  <div class="timer-read">
-    <strong id="timerRead">00:00</strong>
-    <small id="timerLabel">מנוחה</small>
-  </div>
-  <div class="timer-acts">
-    <button class="chip" data-add="30">+30ש׳</button>
-    <button class="chip" data-add="60">+60ש׳</button>
+  <div class="timer-grab" id="timerGrab" role="button" tabindex="0" aria-label="גרור כדי להסתיר או להציג"></div>
+  <div class="timer-main">
+    <button class="timer-x" id="timerSkip" aria-label="דלג על מנוחה"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <div class="timer-read" id="timerOpen" role="button" tabindex="0">
+      <strong id="timerRead">00:00</strong>
+      <small id="timerLabel">מנוחה</small>
+    </div>
+    <div class="timer-acts">
+      <button class="chip" data-add="-20" aria-label="פחות 20 שניות">−20</button>
+      <button class="chip" data-add="20" aria-label="עוד 20 שניות">+20</button>
+    </div>
   </div>
   <div class="timer-track"><i id="timerFill"></i></div>
 </div>

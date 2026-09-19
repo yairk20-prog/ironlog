@@ -18,7 +18,11 @@ const state = {
   tick: null
 };
 
-let dock, read, labelEl, fill, skipBtn;
+let dock, read, labelEl, fill, skipBtn, grab;
+
+/** What tapping the countdown should do — the workout screen supplies it. */
+let onExpand = null;
+export const setExpandHandler = (fn) => { onExpand = fn; };
 
 function bind() {
   if (dock) return;
@@ -27,10 +31,73 @@ function bind() {
   labelEl = $('#timerLabel');
   fill = $('#timerFill');
   skipBtn = $('#timerSkip');
+  grab = $('#timerGrab');
 
   skipBtn.addEventListener('click', stop);
   dock.querySelectorAll('[data-add]').forEach((b) => {
-    b.addEventListener('click', () => add(Number(b.dataset.add)));
+    b.addEventListener('click', (e) => { e.stopPropagation(); add(Number(b.dataset.add)); });
+  });
+
+  /* Tapping the clock opens the full rest screen; the dock is the compact
+     form of the same thing. */
+  $('#timerOpen')?.addEventListener('click', () => {
+    if (dock.classList.contains('collapsed')) return expand();
+    onExpand?.();
+  });
+
+  bindDrag();
+}
+
+/* ---------- drag to hide and show ---------- */
+
+const collapse = () => { dock.classList.add('collapsed'); buzz(8); };
+const expand = () => { dock.classList.remove('collapsed'); buzz(8); };
+
+/**
+ * Drag the dock down to tuck it away and up to bring it back. The handle is
+ * the whole grab strip, so it works with a thumb on a phone.
+ */
+function bindDrag() {
+  let startY = 0;
+  let dragging = false;
+  let collapsedAtStart = false;
+
+  const down = (e) => {
+    dragging = true;
+    collapsedAtStart = dock.classList.contains('collapsed');
+    startY = e.clientY;
+    dock.classList.add('dragging');
+    grab.setPointerCapture?.(e.pointerId);
+  };
+
+  const move = (e) => {
+    if (!dragging) return;
+    const dy = e.clientY - startY;
+    const base = collapsedAtStart ? dock.offsetHeight - 34 : 0;
+    /* Resists past the ends rather than tearing free of them. */
+    const limited = Math.max(-12, Math.min(dock.offsetHeight - 34, base + dy));
+    dock.style.transform = `translateY(${limited}px)`;
+  };
+
+  const up = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    dock.classList.remove('dragging');
+    dock.style.transform = '';
+    const dy = e.clientY - startY;
+    if (dy > 28) collapse();
+    else if (dy < -28) expand();
+    else if (Math.abs(dy) < 6) (collapsedAtStart ? expand() : collapse());
+  };
+
+  grab.addEventListener('pointerdown', down);
+  grab.addEventListener('pointermove', move);
+  ['pointerup', 'pointercancel'].forEach((ev) => grab.addEventListener(ev, up));
+  grab.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      dock.classList.contains('collapsed') ? expand() : collapse();
+    }
   });
 }
 
@@ -55,6 +122,7 @@ export function start(seconds, label = 'מנוחה') {
   render();
   if (!state.tick) state.tick = setInterval(render, 250);
   dock.hidden = false;
+  dock.classList.remove('collapsed');
   /* The dock floats over the page, so the page has to make room for it —
      otherwise it sits on top of whatever is at the bottom of the card. */
   document.body.classList.add('timer-on');
@@ -76,8 +144,12 @@ export function stop() {
 export function add(seconds) {
   bind();
   if (!state.endAt) return;
-  state.endAt += seconds * 1000;
-  state.total += seconds;
+  /* Taking time off must not run the clock past zero from a button press. */
+  const left = (state.endAt - Date.now()) / 1000;
+  const delta = Math.max(seconds, -Math.max(0, left - 1));
+  state.endAt += delta * 1000;
+  state.total = Math.max(5, state.total + delta);
+  buzz(8);
   state.fired = false;
   dock.classList.remove('over');
   persist();

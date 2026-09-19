@@ -1,7 +1,6 @@
 /* IRONLOG service worker — offline-first shell cache */
-const VERSION = 'ironlog-v4.0.0';
+const VERSION = 'ironlog-v5.0.0';
 const IMG_INDEX = './img/ex/index.json';
-const MOTION_INDEX = './img/motion/index.json';
 const SHELL = [
   './',
   './index.html',
@@ -22,7 +21,7 @@ const SHELL = [
   './js/anatomy.js',
   './js/media.js',
   './js/ex-images.js',
-  './js/ex-motion.js',
+  './js/figure.js',
   './js/chart.js',
   './js/onboarding.js',
   './js/gdrive.js',
@@ -80,16 +79,6 @@ async function warmImages() {
     if (res.ok) {
       for (const f of await res.json()) {
         const url = `./img/ex/${f}`;
-        if (!(await cache.match(url))) missing.push(url);
-      }
-    }
-
-    /* The animated loops matter most offline — that is when there is no
-       falling back to anything. */
-    const mot = await fetch(MOTION_INDEX, { cache: 'no-cache' });
-    if (mot.ok) {
-      for (const id of await mot.json()) {
-        const url = `./img/motion/${id}.webp`;
         if (!(await cache.match(url))) missing.push(url);
       }
     }

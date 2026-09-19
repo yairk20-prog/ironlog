@@ -120,10 +120,6 @@ async function main() {
   await shot(page, '06-player');
 
   out.playerTitle = await page.locator('.pl-title').innerText();
-  out.stageImages = await page.locator('.pl-stage img').count();
-  out.stageLoaded = await page.locator('.pl-stage img').first()
-    .evaluate((i) => i.complete && i.naturalWidth > 0);
-
   /* the whole player is one image, one hint and one close button */
   out.playerControls = await page.locator('.player button, .player input, .player select, .player a').count();
   out.playerHasTabs = await page.locator('.pl-tab').count();
@@ -134,16 +130,21 @@ async function main() {
   /* The loop is now one animated file, so "advancing" is the browser's job:
      what this checks is that the player shows the animation and that a tap
      swaps it for a still. */
-  out.playerSrc = await page.locator('.pl-stage img').first().getAttribute('src');
-  out.playerShowsMotion = /img\/motion\//.test(out.playerSrc || '');
+  out.playerFigure = await page.locator('.player .fg .fg-body').count();
+
+  const poseNow = () => page.locator('.player .fg').innerHTML();
+  const before = await poseNow();
+  await page.waitForTimeout(500);
+  out.playerAnimates = before !== (await poseNow());
 
   await page.locator('.pl-stage').click();
-  await page.waitForTimeout(300);
-  out.pausedSrc = await page.locator('.pl-stage img').first().getAttribute('src');
-  out.pauseSwapsToStill = /img\/ex\//.test(out.pausedSrc || '');
+  await page.waitForTimeout(500);
+  const held = await poseNow();
+  await page.waitForTimeout(500);
+  out.pauseHolds = held === (await poseNow());
   await page.locator('.pl-stage').click();
-  await page.waitForTimeout(250);
-  out.resumes = /img\/motion\//.test(await page.locator('.pl-stage img').first().getAttribute('src'));
+  await page.waitForTimeout(400);
+  out.resumes = held !== (await poseNow());
 
   await page.locator('.pl-close').click();
   await page.waitForTimeout(250);
@@ -190,8 +191,9 @@ async function main() {
   const fatal = [
     out.loginHero !== 1 && 'login hero missing',
     out.authMode !== 'local' && 'authMode not stored',
-    !out.playerShowsMotion && 'the player is not showing the animated loop',
-    !out.pauseSwapsToStill && 'tapping the player does not hold a frame',
+    !out.playerFigure && 'the player is not showing the figure',
+    !out.playerAnimates && 'the player figure does not move',
+    !out.pauseHolds && 'tapping the player does not hold the pose',
     !out.resumes && 'the player does not resume',
     out.playerClosed !== 0 && 'player did not close',
     out.mmFigures !== 2 && 'muscle map missing a view',

@@ -1,14 +1,13 @@
 /* ==========================================================================
    media.js — exercise imagery.
-   Every exercise ships an animated loop, built offline from its two stills by
-   tools/build-motion.py, so the demo is a real movement rather than two
-   photographs swapping places. Exercises without one fall back to the old
-   cross-fade. Everything is local: it all works with the phone offline.
+   Photographs are used where a photograph is best — as a thumbnail, so a row
+   is recognisable at a glance. The demonstration itself is drawn: see
+   figure.js for why, and for what it buys.
    ========================================================================== */
 
 import { el, icon, ICONS } from './ui.js';
 import { WITH_IMAGES, TWO_FRAMES } from './ex-images.js';
-import { WITH_MOTION } from './ex-motion.js';
+import { figureDemo } from './figure.js';
 import { muscleMap, musclesFor } from './anatomy.js';
 import { getExercise, CATEGORIES, MUSCLES, ytUrl } from './exercises.js';
 import { lineChart } from './chart.js';
@@ -16,12 +15,9 @@ import * as db from './db.js';
 import { oneRM, round2 } from './logic.js';
 
 const BASE = 'img/ex';
-const MOTION = 'img/motion';
 
 export const hasImages = (id) => WITH_IMAGES.has(id);
-export const hasMotion = (id) => WITH_MOTION.has(id);
 export const frameUrl = (id, n = 0) => `${BASE}/${id}-${n}.webp`;
-export const motionUrl = (id) => `${MOTION}/${id}.webp`;
 
 /** Small square image for list rows. */
 export function thumb(id, alt = '') {
@@ -38,76 +34,30 @@ export function thumb(id, alt = '') {
 const placeholder = () => el('div', { class: 'ex-thumb', style: { display: 'grid', placeItems: 'center' } }, [icon(ICONS.dumbbell, 18)]);
 
 /**
- * The movement demo. An animated loop where one exists — the browser plays it,
- * so there is no timer to run or stop — and the old two-frame cross-fade where
- * there is not. Returns {node, stop}; callers must call stop() when the card is
- * replaced, or a fallback loop keeps ticking off-screen.
+ * The movement demo: a drawn figure performing the exercise.
+ * @returns {{node, stop, play, pause}}
  */
-export function demo(id, { interval = 1100, tag = 'הדגמת תנועה', expandable = true } = {}) {
-  if (!hasImages(id)) return { node: null, stop: () => {} };
+export function demo(id, { tag = 'הדגמת תנועה', expandable = true } = {}) {
+  const ex = getExercise(id);
+  if (!ex) return { node: null, stop: () => {}, play: () => {}, pause: () => {} };
 
   const box = el('div', { class: 'ex-media' });
-  const openPlayer = async (e) => {
-    e.stopPropagation();
-    const { openPlayer: open } = await import('./player.js');
-    open(id);
-  };
+  const fig = figureDemo(ex);
+  box.appendChild(fig.node);
+  box.appendChild(el('div', { class: 'ex-media-tag', text: tag }));
 
-  const chrome = () => {
-    box.appendChild(el('div', { class: 'ex-media-tag', text: tag }));
-    if (expandable) {
-      box.appendChild(el('button', {
-        class: 'ex-media-play', 'aria-label': 'פתח הדגמה גדולה', onclick: openPlayer
-      }, [icon(ICONS.expand, 18), el('span', { text: 'הגדל' })]));
-    }
-  };
-
-  /* The common case: one animated file, no JavaScript driving it. */
-  if (hasMotion(id)) {
-    box.appendChild(el('img', {
-      class: 'on', src: motionUrl(id), alt: 'הדגמת התרגיל', decoding: 'async', loading: 'lazy'
-    }));
-    chrome();
-    return { node: box, stop: () => {} };
+  if (expandable) {
+    box.appendChild(el('button', {
+      class: 'ex-media-play', 'aria-label': 'פתח הדגמה גדולה',
+      onclick: async (e) => {
+        e.stopPropagation();
+        const { openPlayer } = await import('./player.js');
+        openPlayer(id);
+      }
+    }, [icon(ICONS.expand, 18), el('span', { text: 'הגדל' })]));
   }
 
-  const frames = TWO_FRAMES.has(id) ? [0, 1] : [0];
-  const imgs = frames.map((n, i) => el('img', {
-    class: i === 0 ? 'on' : '',
-    src: frameUrl(id, n),
-    alt: '',
-    loading: 'lazy',
-    decoding: 'async'
-  }));
-  imgs.forEach((i) => box.appendChild(i));
-  chrome();
-
-  let at = 0;
-  let timer = null;
-
-  const tick = () => {
-    imgs[at].classList.remove('on');
-    at = (at + 1) % imgs.length;
-    imgs[at].classList.add('on');
-  };
-
-  const play = () => {
-    if (timer || imgs.length < 2) return;
-    timer = setInterval(tick, interval);
-  };
-  const pause = () => { clearInterval(timer); timer = null; };
-
-  play();
-  const onVis = () => (document.hidden ? pause() : play());
-  document.addEventListener('visibilitychange', onVis);
-
-  return {
-    node: box,
-    stop: () => {
-      pause();
-      document.removeEventListener('visibilitychange', onVis);
-    }
-  };
+  return { node: box, stop: fig.stop, play: fig.play, pause: fig.pause };
 }
 
 /** Full exercise card for a bottom sheet: frames, muscle map, metadata. */
