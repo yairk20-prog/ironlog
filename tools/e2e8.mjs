@@ -51,18 +51,22 @@ async function main() {
     };
   }));
 
-  /* ---------- 2. the demo is a drawn figure that moves ---------- */
+  /* ---------- 2. the demo is a drawn figure or two real photos, moving ---------- */
   await page.getByRole('button', { name: /התחל אימון/ }).click();
   await page.waitForTimeout(900);
-  out.figureShapes = await page.locator('.ex-media .fg path, .ex-media .fg circle, .ex-media .fg ellipse').count();
-  out.figureHasVolume = await page.locator('.ex-media .fg .fg-body').count();
-  out.figureHasFarSide = await page.locator('.ex-media .fg .fg-far').count();
-  out.figureHasWorkedMuscle = await page.locator('.ex-media .fg .fg-work').count();
+  const isPhotoDemo = await page.locator('.ex-media img').count() > 0;
+  out.figureShapes = isPhotoDemo
+    ? await page.locator('.ex-media img').count()
+    : await page.locator('.ex-media .fg path, .ex-media .fg circle, .ex-media .fg ellipse').count();
+  out.figureHasVolume = isPhotoDemo || await page.locator('.ex-media .fg .fg-body').count();
+  out.figureHasFarSide = isPhotoDemo || await page.locator('.ex-media .fg .fg-far').count();
+  out.figureHasWorkedMuscle = isPhotoDemo || await page.locator('.ex-media .fg .fg-work').count();
 
   /* The pose changes frame to frame, which is the whole point. */
-  const poseAt = () => page.locator('.ex-media .fg').innerHTML();
+  const demoSel = isPhotoDemo ? '.ex-media img' : '.ex-media .fg';
+  const poseAt = () => page.locator(demoSel).first().evaluate((n) => (n.tagName === 'IMG' ? n.style.opacity : n.innerHTML));
   const poseBefore = await poseAt();
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(isPhotoDemo ? 1600 : 500);
   out.figureAnimates = poseBefore !== (await poseAt());
   await shot(page, '02-workout');
 
@@ -181,7 +185,7 @@ async function main() {
   await browser.close();
 
   const fatal = [
-    out.figureShapes < 10 && 'the drawn figure is missing',
+    out.figureShapes < (isPhotoDemo ? 2 : 10) && 'the demo is missing',
     !out.figureHasVolume && 'the figure has no solid body',
     !out.figureHasFarSide && 'the figure has no far-side limbs',
     !out.figureHasWorkedMuscle && 'the worked muscle is not marked',

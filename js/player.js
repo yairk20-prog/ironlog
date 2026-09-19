@@ -6,7 +6,7 @@
 
 import { el, icon, ICONS } from './ui.js';
 import { getExercise, MUSCLES, CATEGORIES } from './exercises.js';
-import { figureDemo } from './figure.js';
+import { exerciseDemo } from './media.js';
 
 let closeCurrent = null;
 
@@ -16,7 +16,7 @@ export function openPlayer(id) {
   if (!ex) return () => {};
   closeCurrent?.();
 
-  const fig = figureDemo(ex, { period: 3000 });
+  const fig = exerciseDemo(ex, { period: 3000 });
   const stage = el('div', { class: 'pl-stage' }, [fig.node]);
   const hint = el('div', { class: 'pl-hint', text: 'הקש כדי לעצור' });
 

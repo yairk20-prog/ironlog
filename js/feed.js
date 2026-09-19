@@ -16,7 +16,7 @@
 import { el, icon, ICONS, buzz, toast } from './ui.js';
 import * as timer from './timer.js';
 import { getExercise, MUSCLES, CATEGORIES } from './exercises.js';
-import { figureDemo } from './figure.js';
+import { exerciseDemo } from './media.js';
 import { fmtTime, fmtW, round2, platesFor } from './logic.js';
 
 /** How far a drag must go before it counts as a swipe. */
@@ -39,11 +39,18 @@ export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, setting
   const track = el('div', { class: 'feed-track' });
   const counter = el('div', { class: 'feed-count' });
 
+  /* One tick per exercise in the split — not per card, so rest cards don't
+     inflate the count. Lets a lifter see the whole session's shape: what's
+     behind, what's now, and — distinctly — what's immediately next versus
+     everything further out. */
+  const progress = el('div', { class: 'feed-progress' },
+    workout.slots.map((slot, i) => el('i', { title: getExercise(slot.ex)?.name || '' })));
+
   /* ---------- cards ---------- */
 
   const exerciseCard = (slot, index) => {
     const ex = getExercise(slot.ex);
-    const fig = figureDemo(ex, { period: 2800 });
+    const fig = exerciseDemo(ex, { period: 2800 });
     figures.push(fig);
 
     const rows = el('div', { class: 'feed-sets' });
@@ -95,7 +102,7 @@ export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, setting
   const restCard = (slot, index) => {
     const next = workout.slots[index + 1];
     const nextEx = next ? getExercise(next.ex) : null;
-    const fig = nextEx ? figureDemo(nextEx, { period: 2800 }) : null;
+    const fig = nextEx ? exerciseDemo(nextEx, { period: 2800 }) : null;
     if (fig) figures.push(fig);
 
     const clock = el('b', { class: 'feed-clock num', text: '—' });
@@ -131,10 +138,21 @@ export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, setting
     ]);
   };
 
+  /* Maps a card index to where it leaves the *exercise* sequence: which
+     slots are behind us, which one is showing now, which is immediately
+     next. Built alongside `cards` so the progress strip and the swipe
+     track never disagree about position. */
+  const focusForCard = [];
+
   workout.slots.forEach((slot, i) => {
     cards.push(exerciseCard(slot, i));
-    if (i < workout.slots.length - 1) cards.push(restCard(slot, i));
+    focusForCard.push({ doneUpTo: i - 1, now: i, next: i + 1 < workout.slots.length ? i + 1 : -1 });
+    if (i < workout.slots.length - 1) {
+      cards.push(restCard(slot, i));
+      focusForCard.push({ doneUpTo: i, now: -1, next: i + 1 });
+    }
   });
+  focusForCard.push({ doneUpTo: workout.slots.length - 1, now: -1, next: -1 }); // the end card
 
   cards.push(el('div', { class: 'feed-card feed-end' }, [
     el('span', { class: 'eyebrow', text: 'סיום' }),
@@ -151,6 +169,13 @@ export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, setting
     track.style.transform = `translateY(${-at * 100}%)`;
     counter.textContent = `${Math.min(at + 1, cards.length)} / ${cards.length}`;
     cards.forEach((c, i) => c.classList.toggle('on', i === at));
+
+    const focus = focusForCard[at];
+    progress.childNodes.forEach((tick, i) => {
+      tick.classList.toggle('done', i <= focus.doneUpTo);
+      tick.classList.toggle('now', i === focus.now);
+      tick.classList.toggle('next', i === focus.next);
+    });
   };
 
   const go = (delta) => {
@@ -206,8 +231,9 @@ export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, setting
       counter,
       el('button', { class: 'btn sm primary', text: 'סיים', onclick: () => { close(); onFinish(); } })
     ]),
+    progress,
     track,
-    el('div', { class: 'feed-hint' }, [icon(ICONS.chevronDown, 16), el('span', { text: 'החלק למעלה להמשך' })])
+    el('div', { class: 'feed-hint' }, [icon(ICONS.chevronUp, 16), el('span', { text: 'החלק למעלה להמשך, למטה כדי לחזור' })])
   ]);
 
   wrap.addEventListener('pointerdown', down);

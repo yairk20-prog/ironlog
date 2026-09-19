@@ -242,6 +242,9 @@ body.timer-on.no-tabs .view{padding-bottom:calc(var(--safe-b) + 130px)}
 .dim{color:var(--text-3)}
 .tiny{font-size:var(--fs-tiny)}
 .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum";letter-spacing:-.02em}
+/* A "value / target" pair is a ratio, always read left-to-right, even here —
+   without this the bidi algorithm can swap which number reads as which. */
+.num.tiny{direction:ltr;unicode-bidi:isolate}
 
 /* ---------- card ---------- */
 .card{
@@ -565,7 +568,21 @@ body.feed-open{overflow:hidden}
 .feed-count{
   flex:1;text-align:center;font-size:11px;font-weight:800;
   letter-spacing:.16em;color:var(--text-3);font-variant-numeric:tabular-nums;
+  direction:ltr;unicode-bidi:isolate; /* "1 / 12", not "12 / 1" — see .bidi-ltr */
 }
+/* One tick per exercise, so the whole session's shape is visible at a
+   glance: passed (filled), the one right after this point (bright, the
+   answer to "what's next"), and everything further out (dim outline). */
+.feed-progress{
+  display:flex;gap:4px;padding:0 16px 10px;position:relative;z-index:2;
+}
+.feed-progress i{
+  flex:1;height:4px;background:var(--surface-2);border:1px solid var(--line-soft);
+  transition:background .2s var(--ease),border-color .2s var(--ease);
+}
+.feed-progress i.done{background:var(--text-3);border-color:var(--text-3)}
+.feed-progress i.now{background:var(--accent);border-color:var(--accent)}
+.feed-progress i.next{background:transparent;border-color:var(--accent)}
 .feed-track{
   flex:1;min-height:0;
   transition:transform .42s var(--spring);will-change:transform;

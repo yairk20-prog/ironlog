@@ -34,7 +34,58 @@ export function thumb(id, alt = '') {
 const placeholder = () => el('div', { class: 'ex-thumb', style: { display: 'grid', placeItems: 'center' } }, [icon(ICONS.dumbbell, 18)]);
 
 /**
- * The movement demo: a drawn figure performing the exercise.
+ * Two real photographs of the start and end position, crossfaded — used only
+ * for the exercises `TWO_FRAMES` actually has both frames for. A profile
+ * stick figure reads as an abstraction; a real photo of the position reads as
+ * an instruction, which is the point of a demo.
+ * @returns {{node, stop, play, pause, isRunning}}
+ */
+function photoDemo(id, { period = 2600 } = {}) {
+  const frameStyle = {
+    position: 'absolute', inset: '0', width: '100%', height: '100%',
+    objectFit: 'contain', opacity: '0', transition: 'opacity .38s ease'
+  };
+  const a = el('img', { src: frameUrl(id, 0), alt: '', loading: 'lazy', decoding: 'async', style: { ...frameStyle, opacity: '1' } });
+  const b = el('img', { src: frameUrl(id, 1), alt: '', loading: 'lazy', decoding: 'async', style: frameStyle });
+  const node = el('div', { style: { position: 'relative', width: '100%', height: '100%' } }, [a, b]);
+
+  let timer = null;
+  let onB = false;
+  const isRunning = () => timer != null;
+
+  const swap = () => {
+    onB = !onB;
+    a.style.opacity = onB ? '0' : '1';
+    b.style.opacity = onB ? '1' : '0';
+  };
+
+  const play = () => { if (!isRunning()) timer = setInterval(swap, Math.max(600, period / 2)); };
+  const stop = () => { clearInterval(timer); timer = null; };
+
+  play();
+  const onVis = () => (document.hidden ? stop() : play());
+  document.addEventListener('visibilitychange', onVis);
+
+  return {
+    node, play, pause: stop, isRunning,
+    stop: () => { stop(); document.removeEventListener('visibilitychange', onVis); }
+  };
+}
+
+/**
+ * Whichever demo is clearer for this exercise: real before/after photos when
+ * both frames exist, the drawn figure otherwise (unfilmed movements, or where
+ * only one bundled photo exists).
+ * @returns {{node, stop, play, pause}}
+ */
+export function exerciseDemo(exOrId, opts = {}) {
+  const ex = typeof exOrId === 'string' ? getExercise(exOrId) : exOrId;
+  if (!ex) return { node: null, stop: () => {}, play: () => {}, pause: () => {} };
+  return TWO_FRAMES.has(ex.id) ? photoDemo(ex.id, opts) : figureDemo(ex, opts);
+}
+
+/**
+ * The movement demo, in its own labelled, expandable frame.
  * @returns {{node, stop, play, pause}}
  */
 export function demo(id, { tag = 'הדגמת תנועה', expandable = true } = {}) {
@@ -42,7 +93,7 @@ export function demo(id, { tag = 'הדגמת תנועה', expandable = true } = 
   if (!ex) return { node: null, stop: () => {}, play: () => {}, pause: () => {} };
 
   const box = el('div', { class: 'ex-media' });
-  const fig = figureDemo(ex);
+  const fig = exerciseDemo(ex);
   box.appendChild(fig.node);
   box.appendChild(el('div', { class: 'ex-media-tag', text: tag }));
 

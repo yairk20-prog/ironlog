@@ -128,23 +128,27 @@ async function main() {
   out.playerHasVideo = await page.locator('.video-frame, .pl-video').count();
   out.playerHasStepper = await page.locator('.player', { hasText: 'פריים' }).count() ? 1 : 0;
 
-  /* The loop is now one animated file, so "advancing" is the browser's job:
-     what this checks is that the player shows the animation and that a tap
-     swaps it for a still. */
-  out.playerFigure = await page.locator('.player .fg .fg-body').count();
+  /* The demo is either a drawn figure (rAF-animated pose) or — for exercises
+     with two bundled photos — a crossfade between real frames. Either way,
+     the check is the same shape: it moves, a tap holds it, another resumes it. */
+  const isPhotoDemo = await page.locator('.player img').count() > 0;
+  const demoSel = isPhotoDemo ? '.player img' : '.player .fg';
+  out.playerFigure = isPhotoDemo
+    ? await page.locator('.player img').count()
+    : await page.locator('.player .fg .fg-body').count();
 
-  const poseNow = () => page.locator('.player .fg').innerHTML();
+  const poseNow = () => page.locator(demoSel).first().evaluate((n) => (n.tagName === 'IMG' ? n.style.opacity : n.innerHTML));
   const before = await poseNow();
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(isPhotoDemo ? 1600 : 500);
   out.playerAnimates = before !== (await poseNow());
 
   await page.locator('.pl-stage').click();
   await page.waitForTimeout(500);
   const held = await poseNow();
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(isPhotoDemo ? 1600 : 500);
   out.pauseHolds = held === (await poseNow());
   await page.locator('.pl-stage').click();
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(isPhotoDemo ? 1600 : 400);
   out.resumes = held !== (await poseNow());
 
   await page.locator('.pl-close').click();

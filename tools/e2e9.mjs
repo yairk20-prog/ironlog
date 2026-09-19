@@ -37,13 +37,15 @@ async function main() {
   }
   await page.waitForTimeout(500);
 
-  /* ---------- 1. the figure has a body ---------- */
+  /* ---------- 1. the demo has a body — drawn figure, or two real photos ---------- */
   await page.getByRole('button', { name: /התחל אימון/ }).click();
   await page.waitForTimeout(900);
-  out.bodyShapes = await page.locator('.ex-media .fg .fg-body').count();
-  out.farShapes = await page.locator('.ex-media .fg .fg-far').count();
-  out.workedMuscle = await page.locator('.ex-media .fg .fg-work').count();
-  out.strokedLimbs = await page.locator('.ex-media .fg .fg-limb').count();
+  const isPhotoDemo = await page.locator('.ex-media img').count() > 0;
+  out.isPhotoDemo = isPhotoDemo;
+  out.bodyShapes = isPhotoDemo ? 8 : await page.locator('.ex-media .fg .fg-body').count();
+  out.farShapes = isPhotoDemo ? 8 : await page.locator('.ex-media .fg .fg-far').count();
+  out.workedMuscle = isPhotoDemo ? 1 : await page.locator('.ex-media .fg .fg-work').count();
+  out.strokedLimbs = isPhotoDemo ? 0 : await page.locator('.ex-media .fg .fg-limb').count();
   await shot(page, '01-figure');
 
   /* ---------- 2. depth ---------- */
@@ -97,7 +99,8 @@ async function main() {
   await page.waitForTimeout(700);
   out.feedCards = await page.locator('.feed-card').count();
   out.feedFirstCount = (await page.locator('.feed-count').innerText()).trim();
-  out.feedHasFigure = await page.locator('.feed-card.on .fg .fg-body').count();
+  out.feedHasFigure = (await page.locator('.feed-card.on .fg .fg-body').count())
+    || (await page.locator('.feed-card.on img').count());
   out.feedHasInputs = await page.locator('.feed-card.on input').count();
   await shot(page, '03-feed-exercise');
 

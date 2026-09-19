@@ -299,21 +299,34 @@ function mealSheet(ctx, day, meal = { id: currentMeal(), name: 'ארוחה' }) {
   openSheet(`הוסף ל${meal.name}`, (close) => {
     const box = el('div', { class: 'stack' });
 
+    let aiAvailable = false;
     ai.hasKey().then((keyed) => {
+      aiAvailable = keyed;
       if (!keyed) return;
       box.insertBefore(el('button', {
         class: 'btn full',
         onclick: () => { close(); photoSheet(ctx, day, meal); }
       }, [icon(ICONS.camera, 18), 'צלם את הצלחת במקום']), box.firstChild);
+      draw();
     });
     const ta = el('textarea', { rows: '3', placeholder: 'לדוגמה: שתי ביצים, 150 גרם חזה עוף וכוס אורז' });
     const preview = el('div', { class: 'stack' });
 
     let parsed = { items: [], total: { kcal: 0, p: 0, c: 0, f: 0 }, unmatched: [] };
 
+    /* The offline dictionary knows ~70 common foods; everything else needs
+       the AI pass. Rather than a dead-end "not found" toast, point straight
+       at the button that actually handles the rest. */
     const draw = () => {
       preview.innerHTML = '';
-      if (!parsed.items.length) return;
+      if (!parsed.items.length) {
+        if (parsed.unmatched?.length) {
+          preview.appendChild(el('div', { class: 'tiny dim' }, aiAvailable
+            ? [`"${parsed.unmatched.join(', ')}" לא נמצא ברשימה המקומית. לחץ `, el('b', { text: '"דיוק בעזרת AI"' }), ' למטה כדי שהוא ינותח.']
+            : [`"${parsed.unmatched.join(', ')}" לא נמצא ברשימה המקומית. אפשר להזין ידנית למטה, או להגדיר מפתח API בהגדרות כדי שה-AI ינתח כל מאכל.`]));
+        }
+        return;
+      }
       parsed.items.forEach((i) => preview.appendChild(el('div', { class: 'ex-row' }, [
         el('div', { class: 'grow' }, [
           el('div', { class: 'ex-name', text: i.label }),
@@ -332,7 +345,7 @@ function mealSheet(ctx, day, meal = { id: currentMeal(), name: 'ארוחה' }) {
     ta.addEventListener('input', () => { parsed = parseMeal(ta.value); draw(); });
 
     const save = async () => {
-      if (!parsed.items.length) { toast('לא זוהה אוכל בטקסט', 'bad'); return; }
+      if (!parsed.items.length) { toast('לא זוהה אוכל בטקסט — נסה AI או הזנה ידנית', 'bad'); return; }
       day.items.push(...parsed.items.map((i) => ({ ...i, meal: meal.id })));
       recompute(day);
       await saveDay(day);
