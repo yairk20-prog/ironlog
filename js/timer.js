@@ -5,7 +5,7 @@
    PWA is resumed minutes later. State survives a reload via localStorage.
    ========================================================================== */
 
-import { $, buzz } from './ui.js';
+import { $, buzz, chime } from './ui.js';
 import { fmtTime } from './logic.js';
 
 const KEY = 'ironlog.timer';
@@ -191,6 +191,7 @@ function render() {
     if (!state.fired) {
       state.fired = true;
       buzz([0, 220, 90, 220]);
+      chime();
       dock.classList.add('over');
       labelEl.textContent = 'המנוחה הסתיימה — קדימה';
       notify();

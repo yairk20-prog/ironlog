@@ -6,7 +6,7 @@
 
 import * as db from './db.js';
 import { DEFAULTS } from './programs.js';
-import { $, clear, toast, setHaptics } from './ui.js';
+import { $, clear, toast, setHaptics, setSoundAlert } from './ui.js';
 import * as timer from './timer.js';
 
 import { render as renderHome } from './screen-home.js';
@@ -59,6 +59,7 @@ async function loadSettings() {
   const stored = await db.settingsAll();
   ctx.settings = { ...DEFAULTS, ...stored };
   setHaptics(ctx.settings.vibrate !== false);
+  setSoundAlert(ctx.settings.soundAlert !== false);
   applyTheme(ctx.settings.themeColor);
 }
 
@@ -66,6 +67,7 @@ async function saveSetting(key, value) {
   ctx.settings[key] = value;
   await db.setSetting(key, value);
   if (key === 'vibrate') setHaptics(value !== false);
+  if (key === 'soundAlert') setSoundAlert(value !== false);
   if (key === 'themeColor') applyTheme(value);
 }
 

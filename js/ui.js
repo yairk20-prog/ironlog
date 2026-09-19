@@ -116,6 +116,52 @@ export function buzz(pattern = 12) {
   try { navigator.vibrate?.(pattern); } catch { /* unsupported */ }
 }
 
+/* ---------- rest-done chime ----------
+   A vibration alone is silent through headphones, and at rest's end that is
+   exactly when someone has earbuds in with music at full volume. A tone
+   generated here shares the device's one audio output with whatever else is
+   playing, so it comes through mixed in — audible without pausing the music.
+
+   Autoplay policy requires an AudioContext to start from a user gesture. One
+   is created (and kept resumed) on the first tap anywhere in the app, well
+   before any timer can end, so the chime is never the thing trying to
+   unlock audio. */
+let soundOn = true;
+export const setSoundAlert = (on) => { soundOn = !!on; };
+
+let audioCtx = null;
+function ensureAudio() {
+  if (audioCtx) return audioCtx;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  audioCtx = new Ctx();
+  return audioCtx;
+}
+document.addEventListener('pointerdown', () => { ensureAudio()?.resume().catch(() => {}); }, { once: true });
+
+/** Three short beeps — a kitchen timer, not a notification ding. */
+export function chime() {
+  if (!soundOn) return;
+  try {
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const start = ctx.currentTime + 0.02;
+    [0, 0.26, 0.52].forEach((offset) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 1046.5; // C6 — cuts through low bass without being shrill
+      gain.gain.setValueAtTime(0, start + offset);
+      gain.gain.linearRampToValueAtTime(0.35, start + offset + 0.015);
+      gain.gain.linearRampToValueAtTime(0, start + offset + 0.16);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start + offset);
+      osc.stop(start + offset + 0.18);
+    });
+  } catch { /* unsupported or blocked — vibration still fires */ }
+}
+
 /* ---------- bottom sheet ---------- */
 
 let sheetCloser = null;

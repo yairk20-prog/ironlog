@@ -107,6 +107,7 @@ export async function render(ctx) {
   wrap.appendChild(section('התנהגות', 'טיימר, רטט, חימום, RIR', [el('div', { class: 'card stack' }, [
     toggle('טיימר מנוחה אוטומטי', s.autoTimer !== false, (v) => ctx.saveSetting('autoTimer', v)),
     toggle('רטט במכשיר', s.vibrate !== false, (v) => ctx.saveSetting('vibrate', v)),
+    toggle('צליל בסיום המנוחה (נשמע גם עם אוזניות)', s.soundAlert !== false, (v) => ctx.saveSetting('soundAlert', v)),
     toggle('הצע סטי חימום לתרגילים כבדים', s.warmupOn !== false, (v) => ctx.saveSetting('warmupOn', v)),
     toggle('מעקב RIR (חזרות שנשארו במאגר)', s.trackRir === true, (v) => ctx.saveSetting('trackRir', v))
   ])]));
