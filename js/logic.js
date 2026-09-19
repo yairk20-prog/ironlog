@@ -7,7 +7,7 @@
      · 1RM estimates, volume, moving average
    ========================================================================== */
 
-import { GOALS, repRange } from './programs.js';
+import { GOALS, repRange, resolveGoal } from './programs.js';
 
 /* ---------- rounding ---------- */
 
@@ -40,7 +40,7 @@ export function roundToStep(weight, step) {
  */
 export function nextTarget({ lastSets, exercise, goal, settings }) {
   const range = repRange(goal, exercise);
-  const g = GOALS[goal] || GOALS.hypertrophy;
+  const g = resolveGoal(goal);
   const step = stepFor(exercise, settings);
 
   const working = (lastSets || []).filter((s) => !s.is_warmup && s.reps > 0);
@@ -173,7 +173,9 @@ export function movingAverage(series, window = 7) {
 
 /** Daily protein target in grams, 1.6–2.2 g/kg, higher on training days. */
 export function proteinTarget(bodyweightKg, isTrainingDay, goal = 'hypertrophy') {
-  const base = goal === 'cut' ? 2.0 : 1.6;
+  /* A deficit is when protein matters most, so any cut in the mix wins. */
+  const ids = Array.isArray(goal) ? goal : [goal];
+  const base = ids.includes('cut') ? 2.0 : 1.6;
   const perKg = isTrainingDay ? base + 0.2 : base;
   return Math.round(bodyweightKg * Math.min(2.2, perKg));
 }

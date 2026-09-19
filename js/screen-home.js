@@ -4,7 +4,7 @@
 
 import * as db from './db.js';
 import { el, icon, ICONS } from './ui.js';
-import { GOALS, ROTATIONS, DAY_TYPES, TEMPLATES, restFor } from './programs.js';
+import { ROTATIONS, DAY_TYPES, TEMPLATES, restFor, goalList, resolveGoal } from './programs.js';
 import { exerciseName } from './exercises.js';
 import { frameUrl, hasImages, thumb } from './media.js';
 import { fmtDuration, todayISO, HEB_DAYS } from './logic.js';
@@ -111,11 +111,11 @@ function heroStart(ctx, tpl, settings) {
   /* The exercises are listed below in full, so the hero says how big the
      session is instead of repeating the first three names. */
   const sets = tpl.slots.reduce((n, x) => n + (x.s || 3), 0);
-  const mins = Math.round((sets * (restFor(settings.goal, null) + 45)) / 60 / 5) * 5;
+  const mins = Math.round((sets * (restFor(goalList(settings), null) + 45)) / 60 / 5) * 5;
   const lead = tpl.slots.find((s) => hasImages(s.ex))?.ex;
   return el('div', { class: 'hero' }, [
     lead ? el('img', { class: 'hero-bg', src: frameUrl(lead, 0), alt: '', loading: 'lazy' }) : null,
-    el('div', { class: 'hero-kicker', text: `${DAY_TYPES[tpl.type]?.name || ''} · ${GOALS[settings.goal]?.name || ''}` }),
+    el('div', { class: 'hero-kicker', text: `${DAY_TYPES[tpl.type]?.name || ''} · ${resolveGoal(goalList(settings)).name}` }),
     el('h2', { text: tpl.name }),
     el('p', { text: `${tpl.slots.length} תרגילים · ${sets} סטים · כ-${mins} דקות` }),
     el('button', {

@@ -10,6 +10,9 @@ const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const PORT = Number(process.argv[2] || 8777);
 const COACH = process.env.COACH === '1';
 
+/** In-memory stand-in for Netlify Blobs, so the backup flow can be tested. */
+const BACKUPS = new Map();
+
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -29,6 +32,29 @@ const send = (res, status, body, type) => {
 http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
   let pathname = decodeURIComponent(url.pathname);
+
+  if (pathname === '/api/backup') {
+    if (!COACH) return send(res, 200, fs.readFileSync(path.join(ROOT, 'index.html')), TYPES['.html']);
+    if (req.method === 'GET' && !url.searchParams.get('device')) {
+      return send(res, 200, JSON.stringify({ available: true }), TYPES['.json']);
+    }
+    if (req.method === 'GET') {
+      const saved = BACKUPS.get(url.searchParams.get('device'));
+      if (!saved) return send(res, 404, JSON.stringify({ error: 'not found' }), TYPES['.json']);
+      return send(res, 200, saved, TYPES['.json']);
+    }
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    return req.on('end', () => {
+      try {
+        const parsed = JSON.parse(body);
+        BACKUPS.set(parsed.device, JSON.stringify({ saved_at: new Date().toISOString(), data: parsed.data }));
+        send(res, 200, JSON.stringify({ ok: true, saved_at: new Date().toISOString() }), TYPES['.json']);
+      } catch {
+        send(res, 400, JSON.stringify({ error: 'bad json' }), TYPES['.json']);
+      }
+    });
+  }
 
   if (pathname === '/api/coach') {
     if (!COACH) return send(res, 200, fs.readFileSync(path.join(ROOT, 'index.html')), TYPES['.html']);

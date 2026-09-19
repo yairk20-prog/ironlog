@@ -1,12 +1,14 @@
 /* ==========================================================================
    media.js — exercise imagery.
-   Two bundled frames per exercise are cross-faded into a slow loop, which
-   reads as a movement demo without shipping video or GIF weight. Everything
-   is local, so it works with the phone offline.
+   Every exercise ships an animated loop, built offline from its two stills by
+   tools/build-motion.py, so the demo is a real movement rather than two
+   photographs swapping places. Exercises without one fall back to the old
+   cross-fade. Everything is local: it all works with the phone offline.
    ========================================================================== */
 
 import { el, icon, ICONS } from './ui.js';
 import { WITH_IMAGES, TWO_FRAMES } from './ex-images.js';
+import { WITH_MOTION } from './ex-motion.js';
 import { muscleMap, musclesFor } from './anatomy.js';
 import { getExercise, CATEGORIES, MUSCLES, ytUrl } from './exercises.js';
 import { lineChart } from './chart.js';
@@ -14,9 +16,12 @@ import * as db from './db.js';
 import { oneRM, round2 } from './logic.js';
 
 const BASE = 'img/ex';
+const MOTION = 'img/motion';
 
 export const hasImages = (id) => WITH_IMAGES.has(id);
+export const hasMotion = (id) => WITH_MOTION.has(id);
 export const frameUrl = (id, n = 0) => `${BASE}/${id}-${n}.webp`;
+export const motionUrl = (id) => `${MOTION}/${id}.webp`;
 
 /** Small square image for list rows. */
 export function thumb(id, alt = '') {
@@ -33,13 +38,39 @@ export function thumb(id, alt = '') {
 const placeholder = () => el('div', { class: 'ex-thumb', style: { display: 'grid', placeItems: 'center' } }, [icon(ICONS.dumbbell, 18)]);
 
 /**
- * Cross-fading two-frame demo. Returns {node, stop} — callers must call stop()
- * when the card is replaced, or the interval keeps running off-screen.
+ * The movement demo. An animated loop where one exists — the browser plays it,
+ * so there is no timer to run or stop — and the old two-frame cross-fade where
+ * there is not. Returns {node, stop}; callers must call stop() when the card is
+ * replaced, or a fallback loop keeps ticking off-screen.
  */
 export function demo(id, { interval = 1100, tag = 'הדגמת תנועה', expandable = true } = {}) {
   if (!hasImages(id)) return { node: null, stop: () => {} };
 
   const box = el('div', { class: 'ex-media' });
+  const openPlayer = async (e) => {
+    e.stopPropagation();
+    const { openPlayer: open } = await import('./player.js');
+    open(id);
+  };
+
+  const chrome = () => {
+    box.appendChild(el('div', { class: 'ex-media-tag', text: tag }));
+    if (expandable) {
+      box.appendChild(el('button', {
+        class: 'ex-media-play', 'aria-label': 'פתח הדגמה גדולה', onclick: openPlayer
+      }, [icon(ICONS.expand, 18), el('span', { text: 'הגדל' })]));
+    }
+  };
+
+  /* The common case: one animated file, no JavaScript driving it. */
+  if (hasMotion(id)) {
+    box.appendChild(el('img', {
+      class: 'on', src: motionUrl(id), alt: 'הדגמת התרגיל', decoding: 'async', loading: 'lazy'
+    }));
+    chrome();
+    return { node: box, stop: () => {} };
+  }
+
   const frames = TWO_FRAMES.has(id) ? [0, 1] : [0];
   const imgs = frames.map((n, i) => el('img', {
     class: i === 0 ? 'on' : '',
@@ -49,19 +80,7 @@ export function demo(id, { interval = 1100, tag = 'הדגמת תנועה', expan
     decoding: 'async'
   }));
   imgs.forEach((i) => box.appendChild(i));
-  box.appendChild(el('div', { class: 'ex-media-tag', text: tag }));
-
-  /* One tap opens the full player — the demo in the card stays a preview. */
-  if (expandable) {
-    box.appendChild(el('button', {
-      class: 'ex-media-play', 'aria-label': 'פתח נגן הדגמה',
-      onclick: async (e) => {
-        e.stopPropagation();
-        const { openPlayer } = await import('./player.js');
-        openPlayer(id);
-      }
-    }, [icon(ICONS.expand, 18), el('span', { text: 'נגן' })]));
-  }
+  chrome();
 
   let at = 0;
   let timer = null;
@@ -75,26 +94,17 @@ export function demo(id, { interval = 1100, tag = 'הדגמת תנועה', expan
   const play = () => {
     if (timer || imgs.length < 2) return;
     timer = setInterval(tick, interval);
-    box.classList.remove('paused');
   };
-  const pause = () => {
-    clearInterval(timer);
-    timer = null;
-    box.classList.add('paused');
-  };
+  const pause = () => { clearInterval(timer); timer = null; };
 
-  box.addEventListener('click', () => (timer ? pause() : play()));
   play();
-
-  /* stop looping while the tab is in the background */
   const onVis = () => (document.hidden ? pause() : play());
   document.addEventListener('visibilitychange', onVis);
 
   return {
     node: box,
     stop: () => {
-      clearInterval(timer);
-      timer = null;
+      pause();
       document.removeEventListener('visibilitychange', onVis);
     }
   };
@@ -107,14 +117,8 @@ export function exerciseDetail(id) {
   if (!ex) return box;
 
   if (hasImages(id)) {
-    box.appendChild(el('div', { class: 'media-row' }, [
-      el('img', { src: frameUrl(id, 0), alt: 'תנוחת פתיחה', loading: 'lazy' }),
-      TWO_FRAMES.has(id) ? el('img', { src: frameUrl(id, 1), alt: 'תנוחת סיום', loading: 'lazy' }) : null
-    ]));
-    box.appendChild(el('div', { class: 'row between tiny dim' }, [
-      el('span', { text: 'פתיחה' }),
-      el('span', { text: 'סיום' })
-    ]));
+    const { node } = demo(id, { expandable: false, tag: 'הדגמת תנועה' });
+    if (node) box.appendChild(node);
   }
 
   /* progress, filled in once the history query returns */

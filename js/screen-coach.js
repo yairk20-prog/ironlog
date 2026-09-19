@@ -9,7 +9,7 @@ import * as db from './db.js';
 import { el, icon, ICONS, toast, emptyState } from './ui.js';
 import * as ai from './ai.js';
 import { EXERCISES, getExercise, exerciseName, substitutes } from './exercises.js';
-import { GOALS } from './programs.js';
+import { goalList, resolveGoal } from './programs.js';
 import { getActive, saveWorkout, recentWorkouts, workoutSummary, setsOf } from './session.js';
 import { restFor } from './programs.js';
 import { fmtW, round2 } from './logic.js';
@@ -135,7 +135,7 @@ async function buildContext(ctx, active) {
   }
 
   const context = {
-    goal: GOALS[ctx.settings.goal]?.name,
+    goal: resolveGoal(goalList(ctx.settings)).name,
     bodyweight: ctx.settings.bodyweight,
     rotation: ctx.settings.rotation,
     recent_workouts: history

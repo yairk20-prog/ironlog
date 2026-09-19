@@ -25,6 +25,18 @@ async function visibleEmoji(page) {
   });
 }
 
+/* Logging a working set now takes over the screen with the rest card; the
+   suites are not testing rest, so they step past it. */
+async function dismissRest(page) {
+  /* The card mounts a tick after the set is logged, so give it that tick
+     before deciding it is not there. */
+  try {
+    await page.locator('.rest-close').waitFor({ timeout: 900 });
+    await page.locator('.rest-close').click();
+    await page.waitForSelector('.rest-screen', { state: 'detached', timeout: 2000 });
+  } catch { /* no rest screen for this set */ }
+}
+
 async function main() {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({
@@ -119,21 +131,19 @@ async function main() {
   out.playerHasVideo = await page.locator('.video-frame, .pl-video').count();
   out.playerHasStepper = await page.locator('.player', { hasText: 'פריים' }).count() ? 1 : 0;
 
-  /* the loop advances on its own */
-  const seen = new Set();
-  for (let i = 0; i < 30; i++) {
-    seen.add(await page.locator('.pl-stage img.on').getAttribute('alt'));
-    if (seen.size > 1) break;
-    await page.waitForTimeout(100);
-  }
-  out.loopAdvances = seen.size > 1;
+  /* The loop is now one animated file, so "advancing" is the browser's job:
+     what this checks is that the player shows the animation and that a tap
+     swaps it for a still. */
+  out.playerSrc = await page.locator('.pl-stage img').first().getAttribute('src');
+  out.playerShowsMotion = /img\/motion\//.test(out.playerSrc || '');
 
-  /* tapping the image holds the frame */
   await page.locator('.pl-stage').click();
-  await page.waitForTimeout(150);
-  const paused = await page.locator('.pl-stage img.on').getAttribute('alt');
-  await page.waitForTimeout(1400);
-  out.pauseHolds = paused === (await page.locator('.pl-stage img.on').getAttribute('alt'));
+  await page.waitForTimeout(300);
+  out.pausedSrc = await page.locator('.pl-stage img').first().getAttribute('src');
+  out.pauseSwapsToStill = /img\/ex\//.test(out.pausedSrc || '');
+  await page.locator('.pl-stage').click();
+  await page.waitForTimeout(250);
+  out.resumes = /img\/motion\//.test(await page.locator('.pl-stage img').first().getAttribute('src'));
 
   await page.locator('.pl-close').click();
   await page.waitForTimeout(250);
@@ -180,8 +190,9 @@ async function main() {
   const fatal = [
     out.loginHero !== 1 && 'login hero missing',
     out.authMode !== 'local' && 'authMode not stored',
-    !out.loopAdvances && 'demo loop does not advance',
-    !out.pauseHolds && 'pause does not hold the frame',
+    !out.playerShowsMotion && 'the player is not showing the animated loop',
+    !out.pauseSwapsToStill && 'tapping the player does not hold a frame',
+    !out.resumes && 'the player does not resume',
     out.playerClosed !== 0 && 'player did not close',
     out.mmFigures !== 2 && 'muscle map missing a view',
     out.playerHasTabs !== 0 && 'the player still has tabs',

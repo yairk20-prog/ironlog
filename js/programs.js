@@ -162,6 +162,8 @@ export const ROTATIONS = {
 
 export const DEFAULTS = {
   goal: 'hypertrophy',
+  /* Several goals can run at once; `goal` stays for older saved settings. */
+  goals: ['hypertrophy'],
   rotation: 'ppl6',
   barWeight: 20,
   plates: [25, 20, 15, 10, 5, 2.5, 1.25],
@@ -176,15 +178,69 @@ export const DEFAULTS = {
   bodyweight: 75
 };
 
-/** Rep range for a slot, resolved against the active goal. */
+/**
+ * Blend several goals into one training profile.
+ *
+ * People rarely want exactly one thing — "get stronger but also lean out" is
+ * the normal case, and running two programmes at once is how you make no
+ * progress at either. So the selected goals collapse into a single coherent
+ * prescription rather than alternating:
+ *
+ *   compounds follow the *heaviest* goal chosen (its range is the lowest),
+ *   isolation follows the *highest-volume* goal chosen,
+ *   rest is the longest any goal asks for, because the heavy work needs it,
+ *   load increases take the most conservative number, and
+ *   protein follows the most demanding goal (a cut needs the most).
+ *
+ * Accepts a single id, a list of ids, or a settings-shaped object.
+ */
+export function resolveGoal(goal) {
+  const list = (Array.isArray(goal) ? goal : [goal])
+    .map((g) => GOALS[g])
+    .filter(Boolean);
+
+  if (!list.length) return GOALS.hypertrophy;
+  if (list.length === 1) return list[0];
+
+  const compound = [
+    Math.min(...list.map((g) => g.reps.compound[0])),
+    Math.min(...list.map((g) => g.reps.compound[1]))
+  ];
+  const isolation = [
+    Math.max(...list.map((g) => g.reps.isolation[0])),
+    Math.max(...list.map((g) => g.reps.isolation[1]))
+  ];
+
+  return {
+    id: list.map((g) => g.id).join('+'),
+    ids: list.map((g) => g.id),
+    name: list.map((g) => g.name).join(' + '),
+    desc: 'שילוב מטרות — מורכבים כבדים, בידוד בנפח גבוה',
+    reps: { compound, isolation },
+    restMul: Math.max(...list.map((g) => g.restMul)),
+    incCompound: Math.min(...list.map((g) => g.incCompound)),
+    incIsolation: Math.min(...list.map((g) => g.incIsolation)),
+    rirTarget: Math.min(...list.map((g) => g.rirTarget))
+  };
+}
+
+/** The goals a settings object selects, always as a list. */
+export const goalList = (settings) => {
+  const list = Array.isArray(settings?.goals) && settings.goals.length
+    ? settings.goals
+    : [settings?.goal || 'hypertrophy'];
+  return list.filter((id) => GOALS[id]);
+};
+
+/** Rep range for a slot, resolved against the active goal(s). */
 export function repRange(goal, exercise) {
-  const g = GOALS[goal] || GOALS.hypertrophy;
+  const g = resolveGoal(goal);
   const [lo, hi] = exercise?.compound ? g.reps.compound : g.reps.isolation;
   return { min: lo, max: hi };
 }
 
 export function restFor(goal, exercise) {
-  const g = GOALS[goal] || GOALS.hypertrophy;
+  const g = resolveGoal(goal);
   return Math.round((exercise?.rest ?? 90) * g.restMul);
 }
 

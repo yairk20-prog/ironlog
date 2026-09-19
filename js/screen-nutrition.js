@@ -8,6 +8,7 @@ import * as db from './db.js';
 import { el, icon, ICONS, toast, openSheet, confirmSheet, emptyState, buzz } from './ui.js';
 import { parseMeal } from './food.js';
 import * as ai from './ai.js';
+import { goalList } from './programs.js';
 import { proteinTarget, todayISO, round2 } from './logic.js';
 import { recentWorkouts } from './session.js';
 
@@ -18,7 +19,7 @@ export async function render(ctx) {
 
   const day = await loadDay(date);
   const trainedToday = (await recentWorkouts(10)).some((w) => w.date === date);
-  const pTarget = proteinTarget(s.bodyweight, trainedToday, s.goal);
+  const pTarget = proteinTarget(s.bodyweight, trainedToday, goalList(s));
   const kcalTarget = s.calorieTarget || estimateCalories(s, trainedToday);
 
   const wrap = el('div', { class: 'stack' });
@@ -30,23 +31,11 @@ export async function render(ctx) {
       el('span', { class: 'badge accent', text: `${day.items.length} רישומים` })
     ]),
     meter('חלבון', day.protein_grams, pTarget, 'גרם', 'var(--accent)'),
-    meter('קלוריות', day.calories_consumed, kcalTarget, 'קק״ל', 'var(--ok)'),
-    meter('מים', day.water_ml, s.waterTarget || 3000, 'מ״ל', '#4DA3FF')
+    meter('קלוריות', day.calories_consumed, kcalTarget, 'קק״ל', 'var(--ok)')
   ]));
 
-  /* ---- quick water ---- */
-  wrap.appendChild(el('div', { class: 'row', style: { gap: '8px' } }, [
-    ...[250, 500, 750].map((ml) => el('button', {
-      class: 'btn sm grow',
-      text: `+${ml} מ״ל`,
-      onclick: async () => {
-        day.water_ml += ml;
-        await saveDay(day);
-        buzz(10);
-        ctx.reload();
-      }
-    }))
-  ]));
+  /* ---- water, counted the way people drink it ---- */
+  wrap.appendChild(waterCard(ctx, day, s));
 
   /* ---- add meal ---- */
   wrap.appendChild(el('button', {
@@ -128,6 +117,55 @@ const saveDay = (day) => db.put('nutrition_logs', day);
 
 /* ---------- UI bits ---------- */
 
+/* Nobody thinks in millilitres. A glass is 250 ml, a sports bottle is 750:
+   the card counts glasses and stores the millilitres behind them. */
+const GLASS_ML = 250;
+const BOTTLE_ML = 750;
+
+function waterCard(ctx, day, s) {
+  const targetMl = s.waterTarget || 3000;
+  const targetGlasses = Math.max(1, Math.round(targetMl / GLASS_ML));
+  const drunk = day.water_ml / GLASS_ML;
+  const full = Math.floor(drunk + 0.001);
+
+  const add = async (ml) => {
+    day.water_ml = Math.max(0, day.water_ml + ml);
+    await saveDay(day);
+    buzz(10);
+    ctx.reload();
+  };
+
+  /* One glass per tap, so the row is both the readout and the control. */
+  const glasses = el('div', { class: 'glasses' });
+  for (let i = 0; i < targetGlasses; i++) {
+    const filled = i < full;
+    glasses.appendChild(el('button', {
+      class: `glass${filled ? ' full' : ''}`,
+      'aria-label': filled ? `כוס ${i + 1}, שתויה` : `כוס ${i + 1}`,
+      onclick: () => add(filled ? -GLASS_ML : (i + 1 - full) * GLASS_ML)
+    }, [icon(ICONS.glass, 20)]));
+  }
+
+  const left = Math.max(0, targetGlasses - full);
+
+  return el('div', { class: 'card stack' }, [
+    el('div', { class: 'card-head' }, [
+      el('h3', { text: 'מים' }),
+      el('span', {
+        class: `badge ${left ? '' : 'ok'}`,
+        text: left ? `עוד ${left} כוסות` : 'הושלם'
+      })
+    ]),
+    glasses,
+    el('div', { class: 'row', style: { gap: '8px' } }, [
+      el('button', { class: 'btn sm grow', onclick: () => add(GLASS_ML) }, [icon(ICONS.glass, 15), 'כוס']),
+      el('button', { class: 'btn sm grow', onclick: () => add(BOTTLE_ML) }, [icon(ICONS.bottle, 15), 'בקבוק']),
+      full ? el('button', { class: 'btn sm ghost', text: 'בטל', onclick: () => add(-GLASS_ML) }) : null
+    ]),
+    el('div', { class: 'tiny dim', text: `${full} מתוך ${targetGlasses} כוסות · כוס = ${GLASS_ML} מ״ל` })
+  ]);
+}
+
 function meter(label, value, target, unit, color) {
   const pct = Math.min(100, target > 0 ? (value / target) * 100 : 0);
   return el('div', {}, [
@@ -145,7 +183,10 @@ function estimateCalories(s, trainedToday) {
   // Mifflin-St Jeor with a moderate activity factor; adjusted by goal.
   const bmr = 10 * s.bodyweight + 6.25 * (s.height || 175) - 5 * (s.age || 30) + 5;
   const tdee = bmr * (trainedToday ? 1.55 : 1.35);
-  const adj = s.goal === 'cut' ? -0.18 : s.goal === 'hypertrophy' ? 0.1 : 0;
+  /* A deficit wins over a surplus when both are selected — you cannot eat
+     above and below maintenance at the same time. */
+  const goals = goalList(s);
+  const adj = goals.includes('cut') ? -0.18 : goals.includes('hypertrophy') ? 0.1 : 0;
   return Math.round(tdee * (1 + adj));
 }
 

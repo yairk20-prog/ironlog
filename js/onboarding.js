@@ -7,7 +7,7 @@
 
 import { el, icon, ICONS, buzz } from './ui.js';
 import { frameUrl, hasImages } from './media.js';
-import { GOALS, ROTATIONS } from './programs.js';
+import { GOALS, ROTATIONS, resolveGoal } from './programs.js';
 import { proteinTarget } from './logic.js';
 
 /* Every option carries a real photo where one exists in the bundle, and a
@@ -59,6 +59,7 @@ export function runOnboarding() {
       bodyweight: 75,
       experience: 'intermediate',
       goal: 'hypertrophy',
+      goals: ['hypertrophy'],
       rotation: 'ppl6',
       equipment: ['FreeWeights', 'Machine', 'Cable', 'Bodyweight'],
       limits: [],
@@ -166,7 +167,7 @@ function stepBody(a, repaint) {
               borderRadius: 'var(--r-s)', background: 'var(--accent-dim)',
               color: 'var(--accent)', fontWeight: '800', fontSize: 'clamp(15px,4vw,18px)'
             },
-            text: `${proteinTarget(a.bodyweight, true, a.goal)} גרם`
+            text: `${proteinTarget(a.bodyweight, true, a.goals)} גרם`
           })
         ])
       ])
@@ -190,13 +191,23 @@ function stepExperience(a, repaint) {
 }
 
 function stepGoal(a, repaint) {
+  const toggle = (id) => {
+    const i = a.goals.indexOf(id);
+    if (i >= 0) { if (a.goals.length > 1) a.goals.splice(i, 1); }
+    else a.goals.push(id);
+    a.goal = a.goals[0];
+    repaint();
+  };
   return el('div', {}, [
-    ...head('שלב 3', 'מה המטרה?', 'קובע את טווח החזרות, זמני המנוחה וקצב העלאת המשקל.'),
+    ...head('שלב 3', 'מה המטרה?', 'אפשר לבחור כמה — נשלב ביניהן. קובע את טווח החזרות, זמני המנוחה וקצב העלאת המשקל.'),
     ...Object.values(GOALS).map((g) => pick(
       { pic: g.id === 'hypertrophy' ? 'db_curl' : g.id === 'strength' ? 'bb_squat' : g.id === 'cut' ? 'plank' : 'hip_thrust', name: g.name, desc: g.desc },
-      a.goal === g.id,
-      () => { a.goal = g.id; repaint(); }
-    ))
+      a.goals.includes(g.id),
+      () => toggle(g.id)
+    )),
+    a.goals.length > 1
+      ? el('p', { class: 'tiny dim', style: { lineHeight: '1.5' }, text: `משולב: ${resolveGoal(a.goals).name} — מורכבים בטווח הכבד, בידוד בנפח גבוה.` })
+      : null
   ]);
 }
 
@@ -240,7 +251,7 @@ function stepLimits(a, repaint) {
 
 function stepDone(a) {
   const rot = ROTATIONS[a.rotation];
-  const goal = GOALS[a.goal];
+  const goal = resolveGoal(a.goals);
   const equipNames = a.equipment.map((id) => EQUIPMENT.find((e) => e.id === id)?.name).filter(Boolean);
   const limitNames = a.limits.map((id) => LIMITS.find((l) => l.id === id)?.name).filter(Boolean);
 
@@ -252,7 +263,7 @@ function stepDone(a) {
       summaryRow('פיצול', rot.name),
       summaryRow('טווח חזרות', `${goal.reps.compound[0]}–${goal.reps.compound[1]} במורכבים · ${goal.reps.isolation[0]}–${goal.reps.isolation[1]} בבידוד`),
       summaryRow('ציוד', equipNames.join(' · ')),
-      summaryRow('יעד חלבון', `${proteinTarget(a.bodyweight, true, a.goal)} גרם ביום אימון`),
+      summaryRow('יעד חלבון', `${proteinTarget(a.bodyweight, true, a.goals)} גרם ביום אימון`),
       limitNames.length ? summaryRow('נעקוף', limitNames.join(' · ')) : null,
       a.posture ? summaryRow('תוספת', 'מודול יציבה וניידות') : null
     ])
@@ -293,7 +304,8 @@ export async function applyAnswers(ctx, a) {
     height: a.height,
     bodyweight: a.bodyweight,
     experience: a.experience,
-    goal: a.goal,
+    goal: a.goals[0],
+    goals: a.goals,
     rotation: a.rotation,
     equipment: a.equipment,
     limits: a.limits,

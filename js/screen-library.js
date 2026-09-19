@@ -9,7 +9,7 @@ import { el, icon, ICONS, toast, openSheet, emptyState } from './ui.js';
 import { EXERCISES, CATEGORIES, MUSCLES, getExercise, isAllowed } from './exercises.js';
 import { thumb, exerciseDetail, hasImages, frameUrl } from './media.js';
 import { getActive, saveWorkout } from './session.js';
-import { restFor } from './programs.js';
+import { restFor, goalList } from './programs.js';
 import { todayISO } from './logic.js';
 
 let state = { q: '', muscle: null, cat: null, mineOnly: false };
@@ -30,32 +30,45 @@ export async function render(ctx) {
     el('div', { class: 'grow' }, [search])
   ]));
 
+  /* Filter chips used to be built once with their starting state and never
+     updated, so tapping one filtered the list but left every chip looking
+     unselected. Each chip now carries the test for its own state and is
+     re-checked on every paint. */
+  const chips = [];
+  const filterChip = (label, isOn, onclick) => {
+    const node = el('button', { class: 'chip', text: label, onclick });
+    chips.push({ node, isOn });
+    return node;
+  };
+  const syncChips = () => chips.forEach(({ node, isOn }) => node.classList.toggle('on', !!isOn()));
+
   /* equipment filter */
   const catRow = el('div', { class: 'filter-row' });
-  catRow.appendChild(filterChip('כל הציוד', state.cat === null, () => { state.cat = null; paint(); }));
+  catRow.appendChild(filterChip('כל הציוד', () => state.cat === null, () => { state.cat = null; paint(); }));
   Object.entries(CATEGORIES).forEach(([id, name]) => {
-    catRow.appendChild(filterChip(name, state.cat === id, () => { state.cat = state.cat === id ? null : id; paint(); }));
+    catRow.appendChild(filterChip(name, () => state.cat === id, () => { state.cat = state.cat === id ? null : id; paint(); }));
   });
   wrap.appendChild(catRow);
 
   /* muscle filter */
   const muscleRow = el('div', { class: 'filter-row' });
-  muscleRow.appendChild(filterChip('כל השרירים', state.muscle === null, () => { state.muscle = null; paint(); }));
+  muscleRow.appendChild(filterChip('כל השרירים', () => state.muscle === null, () => { state.muscle = null; paint(); }));
   const usedMuscles = [...new Set(EXERCISES.map((e) => e.muscle))];
   usedMuscles.forEach((m) => {
-    muscleRow.appendChild(filterChip(MUSCLES[m] || m, state.muscle === m, () => { state.muscle = state.muscle === m ? null : m; paint(); }));
+    muscleRow.appendChild(filterChip(MUSCLES[m] || m, () => state.muscle === m, () => { state.muscle = state.muscle === m ? null : m; paint(); }));
   });
   wrap.appendChild(muscleRow);
 
   /* only what I can actually do */
   wrap.appendChild(el('div', { class: 'row between' }, [
-    filterChip('רק מה שמתאים לציוד שלי', state.mineOnly, () => { state.mineOnly = !state.mineOnly; paint(); }),
+    filterChip('רק מה שמתאים לציוד שלי', () => state.mineOnly, () => { state.mineOnly = !state.mineOnly; paint(); }),
     count
   ]));
 
   wrap.appendChild(grid);
 
   function paint() {
+    syncChips();
     const q = state.q.trim();
     const filter = { equipment: ctx.settings.equipment, limits: ctx.settings.limits || [] };
 
@@ -95,9 +108,6 @@ export async function render(ctx) {
   return wrap;
 }
 
-const filterChip = (label, on, onclick) =>
-  el('button', { class: `chip${on ? ' on' : ''}`, onclick, text: label });
-
 function detailSheet(ctx, id) {
   const ex = getExercise(id);
   openSheet(ex.name, (close) => {
@@ -135,7 +145,7 @@ function makeSlot(ctx, id) {
     targetReps: 0,
     action: 'start',
     note: 'נוסף מהספרייה',
-    rest: restFor(ctx.settings.goal, ex),
+    rest: restFor(goalList(ctx.settings), ex),
     done: false
   };
 }

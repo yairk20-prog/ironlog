@@ -45,6 +45,7 @@ export const ICONS = {
   chevronDown: '<path d="M6 9l6 6 6-6"/>',
   check: '<path d="M4 12l5 5L20 6"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
+  minus: '<path d="M5 12h14"/>',
   swap: '<path d="M4 8h13l-3-3M20 16H7l3 3"/>',
   note: '<path d="M5 4h11l4 4v12H5z"/><path d="M15 4v5h5"/>',
   play: '<path d="M7 4l12 8-12 8z"/>',
@@ -73,7 +74,9 @@ export const ICONS = {
   spark: '<path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/>',
   arrowLeft: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
   camera: '<path d="M4 8h3l2-3h6l2 3h3v12H4z"/><circle cx="12" cy="13" r="4"/>',
-  scale: '<path d="M5 7h14l2 13H3z"/><path d="M9 7a3 3 0 0 1 6 0"/>'
+  scale: '<path d="M5 7h14l2 13H3z"/><path d="M9 7a3 3 0 0 1 6 0"/>',
+  glass: '<path d="M6 3h12l-1.5 17h-9z"/><path d="M6.6 10h10.8"/>',
+  bottle: '<path d="M10 2h4v3l2 3v13H8V8l2-3z"/><path d="M8 12h8"/>'
 };
 
 /* ---------- toast ---------- */

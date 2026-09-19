@@ -5,7 +5,7 @@
 
 import * as db from './db.js';
 import { el, icon, ICONS, toast, openSheet } from './ui.js';
-import { ROTATIONS, TEMPLATES, DAY_TYPES, GOALS, repRange } from './programs.js';
+import { ROTATIONS, TEMPLATES, DAY_TYPES, GOALS, repRange, goalList, resolveGoal } from './programs.js';
 import { getExercise, CATEGORIES } from './exercises.js';
 import { createFromTemplate, getActive, nextUp, advanceRotation, resolveExercise } from './session.js';
 import { thumb, exerciseDetail, hasImages, frameUrl } from './media.js';
@@ -16,7 +16,7 @@ export async function render(ctx) {
   const up = await nextUp(settings);
   const active = await getActive();
 
-  ctx.setTitle('תוכנית', `${rot.name} · ${GOALS[settings.goal]?.name || ''}`);
+  ctx.setTitle('תוכנית', `${rot.name} · ${resolveGoal(goalList(settings)).name}`);
   ctx.setActions([
     el('button', { class: 'btn sm', text: 'החלף פיצול', onclick: () => rotationSheet(ctx) })
   ]);
@@ -79,7 +79,7 @@ function daySheet(ctx, tpl, hasActive) {
       const ex = getExercise(exId);
       if (!ex) return;
       const swapped = exId !== s.ex;
-      const r = repRange(ctx.settings.goal, ex);
+      const r = repRange(goalList(ctx.settings), ex);
       box.appendChild(el('button', {
         class: 'ex-row',
         style: { width: '100%', textAlign: 'start' },

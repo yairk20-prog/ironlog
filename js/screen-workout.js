@@ -11,10 +11,10 @@ import {
 } from './ui.js';
 import * as timer from './timer.js';
 import { getExercise, substitutes, sameMuscle, CATEGORIES, search } from './exercises.js';
-import { repRange, restFor, GOALS } from './programs.js';
+import { repRange, restFor, GOALS, goalList } from './programs.js';
 import {
   platesFor, warmupSets, PLATE_COLORS, oneRM, fmtW, fmtDuration,
-  stepFor, roundToStep, round2
+  stepFor, roundToStep, round2, todayISO
 } from './logic.js';
 import {
   getActive, saveWorkout, finishWorkout, abandonWorkout,
@@ -98,7 +98,7 @@ function paintExercise() {
 
   const s = slot();
   const ex = getExercise(s.ex);
-  const range = repRange(CTX.settings.goal, ex);
+  const range = repRange(goalList(CTX.settings), ex);
 
   /* nav */
   pane.appendChild(el('div', { class: 'focus-nav' }, [
@@ -356,8 +356,9 @@ async function toggleSet(s, ex, order, refs) {
   await saveWorkout(W);
 
   /* rest timer */
+  let rest = 0;
   if (CTX.settings.autoTimer !== false) {
-    const rest = refs.isWarmup ? 45 : (s.rest || restFor(CTX.settings.goal, ex));
+    rest = refs.isWarmup ? 45 : (s.rest || restFor(goalList(CTX.settings), ex));
     timer.start(rest, `מנוחה · ${ex.name}`);
   }
 
@@ -368,6 +369,45 @@ async function toggleSet(s, ex, order, refs) {
     toast('תרגיל הושלם — עובר לתרגיל הבא', 'ok');
     setTimeout(() => move(1), 700);
   }
+
+  /* A real rest is a minute or more of nothing. Short warm-up pauses and
+     quick-fire sets are left alone — a takeover screen for 45 seconds is an
+     interruption, not a feature. */
+  if (rest >= 60 && !refs.isWarmup && CTX.settings.restScreen !== false) {
+    showRest({ slot: s, exercise: ex, allDone });
+  }
+}
+
+/** Hand the rest screen everything it needs to be worth looking at. */
+async function showRest({ slot: s, exercise: ex, allDone }) {
+  const upcoming = allDone && W.cursor < W.slots.length - 1 ? W.slots[W.cursor + 1] : null;
+  const nextId = upcoming ? upcoming.ex : s.ex;
+  const target = upcoming ? upcoming.targetWeight : s.targetWeight;
+
+  let glassesLeft = 0;
+  try {
+    const today = await db.byIndex('nutrition_logs', 'date', IDBKeyRange.only(todayISO()));
+    const ml = today?.[0]?.water_ml || 0;
+    const targetMl = CTX.settings.waterTarget || 3000;
+    glassesLeft = Math.max(0, Math.round((targetMl - ml) / 250));
+  } catch { /* the nutrition log is optional */ }
+
+  const done = Array.from({ length: s.sets }, (_, i) => getLog(s.ex, i + 1)).filter(Boolean).length;
+
+  const { openRest } = await import('./rest.js');
+  openRest({
+    nextId,
+    isLastSet: allDone,
+    setLabel: allDone
+      ? `${ex.name} הושלם`
+      : `סט ${Math.min(done + 1, s.sets)} מתוך ${s.sets} · ${ex.name}`,
+    glassesLeft,
+    settings: {
+      barWeight: CTX.settings.barWeight,
+      plates: CTX.settings.plates,
+      nextWeight: target
+    }
+  });
 }
 
 async function move(delta) {
@@ -482,7 +522,7 @@ function swapSheet(s, ex) {
       const target = getExercise(id);
       const prev = await lastSessionSets(id, W.id);
       s.ex = id;
-      s.rest = restFor(CTX.settings.goal, target);
+      s.rest = restFor(goalList(CTX.settings), target);
       s.warmups = [];
       if (prev.length) {
         const top = Math.max(...prev.map((p) => p.weight_kg));
@@ -612,7 +652,9 @@ async function finishFlow(ctx) {
   timer.stop();
   celebratePR('אימון הושלם');
 
-  /* fire-and-forget: never make the user wait on the network to finish a set */
+  /* Fire and forget, both of them: finishing a workout must never wait on a
+     network round trip. */
+  import('./cloud.js').then((c) => c.autoBackUp()).catch(() => {});
   import('./gdrive.js').then((g) => g.autoSync()).catch(() => {});
 
   setTimeout(() => ctx.go('summary'), 700);

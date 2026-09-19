@@ -28,6 +28,18 @@ async function finishWorkout(page) {
   await page.waitForTimeout(900);
 }
 
+/* Logging a working set now takes over the screen with the rest card; the
+   suites are not testing rest, so they step past it. */
+async function dismissRest(page) {
+  /* The card mounts a tick after the set is logged, so give it that tick
+     before deciding it is not there. */
+  try {
+    await page.locator('.rest-close').waitFor({ timeout: 900 });
+    await page.locator('.rest-close').click();
+    await page.waitForSelector('.rest-screen', { state: 'detached', timeout: 2000 });
+  } catch { /* no rest screen for this set */ }
+}
+
 async function main() {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({
@@ -138,6 +150,7 @@ async function main() {
       await row.locator('input').nth(0).fill('50');
       await row.locator('input').nth(1).fill('10');
       await row.locator('.set-go').click();
+      await dismissRest(page);
       await page.waitForTimeout(240);
     }
     await page.waitForTimeout(450);

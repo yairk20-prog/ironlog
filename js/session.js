@@ -5,7 +5,7 @@
    ========================================================================== */
 
 import * as db from './db.js';
-import { TEMPLATES, ROTATIONS, repRange, restFor } from './programs.js';
+import { TEMPLATES, ROTATIONS, repRange, restFor, goalList } from './programs.js';
 import { getExercise, isAllowed, substitutes, sameMuscle } from './exercises.js';
 import { nextTarget, oneRM, volume, todayISO } from './logic.js';
 
@@ -66,6 +66,7 @@ export async function createFromTemplate(templateId, settings) {
   const tpl = TEMPLATES[templateId];
   if (!tpl) throw new Error('תבנית לא נמצאה');
 
+  const goals = goalList(settings);
   const slots = [];
   const taken = new Set(tpl.slots.map((x) => x.ex));
   for (const raw of tpl.slots) {
@@ -78,8 +79,8 @@ export async function createFromTemplate(templateId, settings) {
     const ex = getExercise(exId);
     if (!ex) continue;
     const prev = await lastSessionSets(slot.ex);
-    const target = nextTarget({ lastSets: prev, exercise: ex, goal: settings.goal, settings });
-    const range = repRange(settings.goal, ex);
+    const target = nextTarget({ lastSets: prev, exercise: ex, goal: goals, settings });
+    const range = repRange(goals, ex);
     const swapped = exId !== raw.ex;
     slots.push({
       ex: slot.ex,
@@ -89,7 +90,7 @@ export async function createFromTemplate(templateId, settings) {
       targetReps: slot.seconds ? 0 : (target.reps || range.min),
       action: target.action,
       note: swapped ? `הוחלף אוטומטית לפי הציוד והמגבלות שלך · ${target.note}` : target.note,
-      rest: restFor(settings.goal, ex),
+      rest: restFor(goals, ex),
       done: false
     });
   }
