@@ -62,7 +62,7 @@ function setsFor(base, settings) {
  * Build a workout from a template, resolving each slot's target from the
  * previous session of that exercise (progressive overload).
  */
-export async function createFromTemplate(templateId, settings) {
+export async function createFromTemplate(templateId, settings, { offPlan = false } = {}) {
   const tpl = TEMPLATES[templateId];
   if (!tpl) throw new Error('תבנית לא נמצאה');
 
@@ -106,12 +106,74 @@ export async function createFromTemplate(templateId, settings) {
     duration_seconds: 0,
     completed: 0,
     cursor: 0,
+    offPlan,
     slots
   };
 
   await db.put('workouts', workout);
   await db.setSetting('activeWorkoutId', workout.id);
   return workout;
+}
+
+/**
+ * A spontaneous session with no template — started from one exercise the
+ * lifter actually wants to do right now (a stretch, an ab finisher, a
+ * machine that happened to be free), with more added as they go via
+ * addFreeSlot(). Marked off-plan so finishing it never eats into the split.
+ */
+export async function createFreeWorkout(exerciseId, settings) {
+  const slot = await buildFreeSlot(exerciseId, settings);
+  if (!slot) throw new Error('תרגיל לא נמצא');
+
+  const workout = {
+    id: db.uid('w'),
+    date: todayISO(),
+    type: 'Custom',
+    template_id: null,
+    name: 'אימון חופשי',
+    started_at: Date.now(),
+    finished_at: null,
+    duration_seconds: 0,
+    completed: 0,
+    cursor: 0,
+    offPlan: true,
+    slots: [slot]
+  };
+
+  await db.put('workouts', workout);
+  await db.setSetting('activeWorkoutId', workout.id);
+  return workout;
+}
+
+/** One ad-hoc slot: 3 working sets, target from that exercise's own history. */
+async function buildFreeSlot(exerciseId, settings) {
+  const ex = getExercise(exerciseId);
+  if (!ex) return null;
+  const goals = goalList(settings);
+  const prev = await lastSessionSets(exerciseId);
+  const target = nextTarget({ lastSets: prev, exercise: ex, goal: goals, settings });
+  const range = repRange(goals, ex);
+  return {
+    ex: exerciseId,
+    sets: setsFor(3, settings),
+    seconds: null,
+    targetWeight: target.weight,
+    targetReps: target.reps || range.min,
+    action: target.action,
+    note: target.note,
+    rest: restFor(goals, ex),
+    done: false
+  };
+}
+
+/** Append one more ad-hoc exercise to a running workout — a free session
+    growing, or a planned one picking up a bonus exercise mid-workout. */
+export async function addFreeSlot(workout, exerciseId, settings) {
+  const slot = await buildFreeSlot(exerciseId, settings);
+  if (!slot) throw new Error('תרגיל לא נמצא');
+  workout.slots.push(slot);
+  await db.put('workouts', workout);
+  return slot;
 }
 
 export async function saveWorkout(workout) {
@@ -125,7 +187,10 @@ export async function finishWorkout(workout) {
   workout.completed = 1;
   await db.put('workouts', workout);
   await db.setSetting('activeWorkoutId', null);
-  await advanceRotation(1);
+  /* An off-plan session (a spontaneous free workout, or a day started out of
+     turn from the plan screen) isn't the day the rotation was waiting on —
+     advancing past it would silently skip whatever was actually scheduled. */
+  if (!workout.offPlan) await advanceRotation(1);
   return workout;
 }
 

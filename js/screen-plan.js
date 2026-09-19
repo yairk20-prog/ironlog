@@ -33,7 +33,7 @@ export async function render(ctx) {
     }
 
     const tpl = TEMPLATES[key];
-    wrap.appendChild(dayCard(ctx, tpl, isNext, () => daySheet(ctx, tpl, !!active)));
+    wrap.appendChild(dayCard(ctx, tpl, isNext, () => daySheet(ctx, tpl, !!active, isNext)));
   });
 
   /* A missed day is an occasional problem, so its controls sit after the plan
@@ -57,7 +57,7 @@ export async function render(ctx) {
   return wrap;
 }
 
-function daySheet(ctx, tpl, hasActive) {
+function daySheet(ctx, tpl, hasActive, isNext) {
   openSheet(tpl.name, (close) => {
     const box = el('div', { class: 'stack' });
 
@@ -87,13 +87,20 @@ function daySheet(ctx, tpl, hasActive) {
       ]));
     });
 
+    if (!isNext) {
+      box.appendChild(el('p', {
+        class: 'tiny dim', style: { margin: '2px 0 0' },
+        text: 'זה לא היום המתוכנן כרגע — האימון הזה לא יזיז את הסבב, והיום שמחכה בתור יישאר מחכה.'
+      }));
+    }
+
     box.appendChild(el('button', {
       class: 'btn primary full',
       style: { marginTop: '6px' },
       text: hasActive ? 'כבר יש אימון פעיל' : 'התחל את האימון הזה',
       disabled: hasActive,
       onclick: async () => {
-        await createFromTemplate(tpl.id, ctx.settings);
+        await createFromTemplate(tpl.id, ctx.settings, { offPlan: !isNext });
         close();
         ctx.go('workout');
       }

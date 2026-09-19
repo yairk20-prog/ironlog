@@ -3,14 +3,14 @@
    ========================================================================== */
 
 import * as db from './db.js';
-import { el, icon, ICONS } from './ui.js';
+import { el, icon, ICONS, openSheet } from './ui.js';
 import { DAY_TYPES, restFor, goalList, resolveGoal, templateForIndex } from './programs.js';
 import { dayCard, restDayCard } from './screen-plan.js';
-import { exerciseName } from './exercises.js';
+import { exerciseName, search, CATEGORIES } from './exercises.js';
 import { frameUrl, hasImages, thumb } from './media.js';
 import { fmtDuration, todayISO, HEB_DAYS } from './logic.js';
 import {
-  getActive, nextUp, createFromTemplate, advanceRotation,
+  getActive, nextUp, createFromTemplate, createFreeWorkout, advanceRotation,
   recentWorkouts, workoutSummary, streak
 } from './session.js';
 
@@ -34,6 +34,17 @@ export async function render(ctx) {
     : up.template
       ? heroStart(ctx, up.template, settings)
       : heroRest(ctx, up));
+
+  /* A way out of the plan that doesn't require being on a rest day for it:
+     a stretch, an ab finisher, or whatever's free at the gym right now.
+     Off-plan by design, so it never touches the rotation. */
+  if (!active) {
+    wrap.appendChild(el('button', {
+      class: 'linkish',
+      style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', width: '100%' },
+      onclick: () => spontaneousSheet(ctx)
+    }, [icon(ICONS.spark, 15), el('span', { text: 'אימון ספונטני — יציבה, מתיחות או משהו חופשי' })]));
+  }
 
   /* What is coming, as information rather than controls: the list answers
      "what am I doing today" without adding a single thing to tap. */
@@ -158,6 +169,56 @@ function heroRest(ctx, up) {
       }, [icon(ICONS.chevron, 17), 'דלג ליום הבא'])
     ])
   ]);
+}
+
+/** A workout that isn't the plan: today's posture routine, or one exercise
+    picked freely with more addable once it's running (screen-workout.js's
+    "הוסף תרגיל לאימון"). Neither one moves the rotation. */
+function spontaneousSheet(ctx) {
+  openSheet('אימון ספונטני', (close) => {
+    const box = el('div', { class: 'stack' });
+
+    box.appendChild(el('button', {
+      class: 'opt',
+      onclick: async () => {
+        await createFromTemplate('posture', ctx.settings, { offPlan: true });
+        close();
+        ctx.go('workout');
+      }
+    }, [
+      el('div', { class: 'grow' }, [
+        el('b', { text: 'יציבה ומתיחות' }),
+        el('small', { text: 'השגרה הקבועה — לא תזיז את הסבב השבועי' })
+      ])
+    ]));
+
+    box.appendChild(el('div', { class: 'section-title', text: 'או תרגיל חופשי' }));
+    const q = el('input', { type: 'search', placeholder: 'שם תרגיל… בטן, ריצה, כל דבר' });
+    const results = el('div');
+    q.addEventListener('input', () => {
+      results.innerHTML = '';
+      if (q.value.trim().length < 2) return;
+      search(q.value).slice(0, 10).forEach((o) => {
+        results.appendChild(el('button', {
+          class: 'opt',
+          onclick: async () => {
+            await createFreeWorkout(o.id, ctx.settings);
+            close();
+            ctx.go('workout');
+          }
+        }, [
+          thumb(o.id, o.name),
+          el('div', { class: 'grow' }, [
+            el('b', { text: o.name }),
+            el('small', { text: CATEGORIES[o.cat] })
+          ])
+        ]));
+      });
+    });
+    box.appendChild(q);
+    box.appendChild(results);
+    return box;
+  });
 }
 
 /* ---------- bits ---------- */

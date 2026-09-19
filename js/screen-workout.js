@@ -19,7 +19,7 @@ import {
 import {
   getActive, saveWorkout, finishWorkout, abandonWorkout,
   setsOf, logSet, unlogSet, lastSessionSets, personalBest,
-  getNote, setNote
+  getNote, setNote, addFreeSlot
 } from './session.js';
 import { demo, thumb, exerciseDetail, hasImages } from './media.js';
 
@@ -268,6 +268,7 @@ function toolsSheet(s, ex) {
     box.appendChild(item(ICONS.timer, 'זמן מנוחה', `כרגע ${s.rest || ex.rest} שניות`, () => restSheet(s, ex)));
     box.appendChild(item(ICONS.muscle, 'שרירים ופרטים', 'מפת שרירים, היסטוריה וטיפים', () => detailSheet(ex)));
     box.appendChild(item(ICONS.note, 'הערת כיוונון', 'גובה ספסל, אחיזה, מספר מושב', () => noteSheet(ex)));
+    box.appendChild(item(ICONS.plus, 'הוסף תרגיל לאימון', 'תרגיל נוסף שלא בתוכנית — מתיחה, בטן, כל דבר', () => addExerciseSheet()));
     if (s.sets > 1) {
       box.appendChild(item(ICONS.trash, 'הסר את הסט האחרון', `${s.sets} סטים כרגע`, async () => {
         const last = getLog(s.ex, s.sets);
@@ -588,6 +589,42 @@ async function toggleWarmup(s, ex) {
   await saveWorkout(W);
   toast(`${sets.length} סטי חימום נוספו`, 'ok');
   paintExercise();
+}
+
+/** Add an ad-hoc exercise to the running workout — the point isn't in the
+    plan, so there's nothing to resolve or swap: pick, and it's the next slot. */
+function addExerciseSheet() {
+  openSheet('הוספת תרגיל', (close) => {
+    const box = el('div', { class: 'stack' });
+    const pick = async (id) => {
+      await addFreeSlot(W, id, CTX.settings);
+      W.cursor = W.slots.length - 1;
+      close();
+      toast(`${getExercise(id).name} נוסף לאימון`, 'ok');
+      paintExercise();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    box.appendChild(el('div', { class: 'section-title', text: 'חיפוש' }));
+    const q = el('input', { type: 'search', placeholder: 'שם תרגיל…' });
+    const results = el('div');
+    q.addEventListener('input', () => {
+      results.innerHTML = '';
+      if (q.value.trim().length < 2) return;
+      search(q.value).slice(0, 10).forEach((o) => {
+        results.appendChild(el('button', { class: 'opt', onclick: () => pick(o.id) }, [
+          thumb(o.id, o.name),
+          el('div', { class: 'grow' }, [
+            el('b', { text: o.name }),
+            el('small', { text: CATEGORIES[o.cat] })
+          ])
+        ]));
+      });
+    });
+    box.appendChild(q);
+    box.appendChild(results);
+    return box;
+  });
 }
 
 function swapSheet(s, ex) {
