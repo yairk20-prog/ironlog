@@ -18,6 +18,12 @@ OUT = ROOT / 'artifact'
 INCLUDE_DIRS = ('js', 'css', 'icons', 'img')
 INCLUDE_FILES = ('manifest.webmanifest',)
 
+# The hosted preview has a hard cap on published files. Every exercise now
+# ships an animated loop, and the app only ever reaches for the second still
+# through a fallback that can no longer trigger — so the end-position stills
+# are the thing to leave out. The downloadable build keeps them.
+EXCLUDE_SUFFIXES = ('-1.webp',)
+
 
 def page():
     html = (ROOT / 'index.html').read_text(encoding='utf-8')
@@ -39,7 +45,7 @@ def files():
     out = []
     for d in INCLUDE_DIRS:
         for p in sorted((ROOT / d).rglob('*')):
-            if p.is_file():
+            if p.is_file() and not p.name.endswith(EXCLUDE_SUFFIXES):
                 out.append(str(p.relative_to(ROOT)).replace('\\', '/'))
     out.extend(INCLUDE_FILES)
     return out

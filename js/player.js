@@ -32,7 +32,9 @@ export function openPlayer(id) {
     let running = true;
     stage.addEventListener('click', () => {
       running = !running;
-      loop.src = running ? motionUrl(id) : frameUrl(id, 1);
+      /* Hold on the start position: it is the one worth studying, and it is
+         the frame every exercise ships regardless of motion. */
+      loop.src = running ? motionUrl(id) : frameUrl(id, 0);
       hint.textContent = running ? 'הקש כדי לעצור' : 'הקש כדי להמשיך';
       stage.classList.toggle('paused', !running);
     });
