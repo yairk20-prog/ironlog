@@ -28,14 +28,7 @@ export async function render(ctx) {
   rot.days.forEach((key, i) => {
     const isNext = i === up.cursor % rot.days.length;
     if (key === 'rest') {
-      wrap.appendChild(el('div', { class: `day-card rest${isNext ? ' next' : ''}` }, [
-        el('div', { class: 'day-card-img rest-img' }, [icon(ICONS.timer, 30)]),
-        el('div', { class: 'day-card-body' }, [
-          el('span', { class: 'day-card-tag', style: { color: 'var(--text-3)' }, text: 'מנוחה' }),
-          el('h3', { text: 'יום מנוחה' }),
-          el('p', { text: isNext ? 'הבא בתור — השריר גדל היום' : 'התאוששות' })
-        ])
-      ]));
+      wrap.appendChild(restDayCard(isNext, isNext ? 'הבא בתור — השריר גדל היום' : 'התאוששות'));
       return;
     }
 
@@ -132,6 +125,18 @@ function rotationSheet(ctx) {
   });
 }
 
+
+/** Visual card for a rest day, matching dayCard's layout. */
+export function restDayCard(isNext, note) {
+  return el('div', { class: `day-card rest${isNext ? ' next' : ''}` }, [
+    el('div', { class: 'day-card-img rest-img' }, [icon(ICONS.timer, 30)]),
+    el('div', { class: 'day-card-body' }, [
+      el('span', { class: 'day-card-tag', style: { color: 'var(--text-3)' }, text: 'מנוחה' }),
+      el('h3', { text: 'יום מנוחה' }),
+      el('p', { text: note })
+    ])
+  ]);
+}
 
 /** Visual card for one day of the split, led by its first compound lift. */
 export function dayCard(ctx, tpl, isNext, onclick) {

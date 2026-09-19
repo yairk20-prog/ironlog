@@ -4,7 +4,8 @@
 
 import * as db from './db.js';
 import { el, icon, ICONS } from './ui.js';
-import { ROTATIONS, DAY_TYPES, TEMPLATES, restFor, goalList, resolveGoal } from './programs.js';
+import { DAY_TYPES, restFor, goalList, resolveGoal, templateForIndex } from './programs.js';
+import { dayCard, restDayCard } from './screen-plan.js';
 import { exerciseName } from './exercises.js';
 import { frameUrl, hasImages, thumb } from './media.js';
 import { fmtDuration, todayISO, HEB_DAYS } from './logic.js';
@@ -52,6 +53,14 @@ export async function render(ctx) {
       ]);
     })));
   }
+
+  /* A peek at tomorrow: the next slot in the split after the one that's
+     up now, so the plan never feels like a surprise. */
+  const tomorrowTpl = templateForIndex(settings.rotation, up.cursor + 1);
+  wrap.appendChild(el('div', { class: 'section-title', text: 'מחר' }));
+  wrap.appendChild(tomorrowTpl
+    ? dayCard(ctx, tomorrowTpl, false, () => ctx.go('plan'))
+    : restDayCard(false, 'יום מנוחה'));
 
   /* Everything below is a progress report, and a progress report with no
      progress in it is noise. It appears as there is something to say. */
