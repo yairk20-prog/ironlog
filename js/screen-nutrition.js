@@ -398,7 +398,11 @@ const sum = (items) => items.reduce((a, i) => ({
 function photoSheet(ctx, day, meal = { id: currentMeal(), name: 'ארוחה' }) {
   openSheet('ניתוח צלחת', (close) => {
     const box = el('div', { class: 'stack' });
-    const file = el('input', { type: 'file', accept: 'image/*', capture: 'environment' });
+    const file = el('input', { type: 'file', accept: 'image/*', capture: 'environment', style: { display: 'none' } });
+    const pick = el('button', {
+      type: 'button', class: 'btn photo-pick',
+      onclick: () => file.click()
+    }, [icon(ICONS.camera, 24), el('span', { text: 'צלם או בחר תמונה של הצלחת' })]);
     const hint = el('input', { type: 'text', placeholder: 'רמז אופציונלי (למשל: זו צלחת גדולה)' });
     const out = el('div', { class: 'stack' });
     let items = [];
@@ -406,14 +410,27 @@ function photoSheet(ctx, day, meal = { id: currentMeal(), name: 'ארוחה' }) 
     file.addEventListener('change', async () => {
       const f = file.files?.[0];
       if (!f) return;
+      pick.remove();
       out.innerHTML = '';
-      out.appendChild(el('div', { class: 'tiny dim', text: 'מנתח את התמונה…' }));
+
+      let dataUrl;
       try {
-        const dataUrl = await shrink(f, 1024);
-        out.innerHTML = '';
-        out.appendChild(el('img', { src: dataUrl, style: { width: '100%', borderRadius: '14px' } }));
+        dataUrl = await shrink(f, 1024);
+      } catch (err) {
+        out.appendChild(el('div', { class: 'tiny', style: { color: 'var(--bad)' }, text: err.message }));
+        return;
+      }
+      /* The photo stays on screen through analysis and stays put on failure
+         too — losing sight of what you photographed while reading an error
+         is its own small annoyance. */
+      out.appendChild(el('img', { src: dataUrl, style: { width: '100%', borderRadius: '14px' } }));
+      const status = el('div', { class: 'tiny dim', text: 'מנתח את התמונה…' });
+      out.appendChild(status);
+
+      try {
         const res = await ai.analyzeMealPhoto(dataUrl, hint.value);
         items = res.items || [];
+        status.remove();
         items.forEach((i) => out.appendChild(el('div', { class: 'ex-row' }, [
           el('div', { class: 'grow' }, [
             el('div', { class: 'ex-name', text: i.label }),
@@ -427,12 +444,13 @@ function photoSheet(ctx, day, meal = { id: currentMeal(), name: 'ארוחה' }) 
         ]));
         if (res.note) out.appendChild(el('div', { class: 'tiny dim', text: res.note }));
       } catch (err) {
-        out.innerHTML = '';
+        status.remove();
         out.appendChild(el('div', { class: 'tiny', style: { color: 'var(--bad)' }, text: err.message }));
       }
     });
 
     box.appendChild(hint);
+    box.appendChild(pick);
     box.appendChild(file);
     box.appendChild(out);
     box.appendChild(el('button', {

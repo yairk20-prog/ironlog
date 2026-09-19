@@ -188,18 +188,24 @@ function logSheet(ctx) {
 
     box.appendChild(el('div', { class: 'section-title', text: 'תמונת התקדמות (אופציונלי)' }));
     const preview = el('div');
-    const file = el('input', { type: 'file', accept: 'image/*' });
+    const file = el('input', { type: 'file', accept: 'image/*', style: { display: 'none' } });
+    const pick = el('button', {
+      type: 'button', class: 'btn photo-pick',
+      onclick: () => file.click()
+    }, [icon(ICONS.camera, 24), el('span', { text: 'צלם או בחר תמונה' })]);
     file.addEventListener('change', async () => {
       const f = file.files?.[0];
       if (!f) return;
       try {
         photo = await shrink(f, 720);
+        pick.remove();
         preview.innerHTML = '';
         preview.appendChild(el('img', { src: photo, style: { width: '100%', borderRadius: 'var(--r-m)' }, alt: '' }));
       } catch (err) {
         toast(err.message, 'bad');
       }
     });
+    box.appendChild(pick);
     box.appendChild(file);
     box.appendChild(preview);
 

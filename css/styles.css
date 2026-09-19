@@ -272,6 +272,14 @@ body.timer-on.no-tabs .view{padding-bottom:calc(var(--safe-b) + 130px)}
 .btn.sm{min-height:var(--btn-h-sm);padding:0 clamp(12px,3.4vw,18px);font-size:var(--fs-tiny)}
 .btn[disabled]{opacity:.35;pointer-events:none}
 
+/* A photo trigger reads as a placeholder, not a button, so it gets its own
+   shape: tall, dashed, icon over label — the native file input hides behind it. */
+.photo-pick{
+  flex-direction:column;gap:8px;min-height:120px;width:100%;
+  border-style:dashed;color:var(--text-2);font-weight:700;
+}
+.photo-pick svg{color:var(--text-3)}
+
 .chip{
   display:inline-flex;align-items:center;gap:7px;
   min-height:clamp(34px,9vw,40px);padding:0 clamp(11px,3.2vw,16px);
