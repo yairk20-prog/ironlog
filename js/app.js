@@ -59,12 +59,30 @@ async function loadSettings() {
   const stored = await db.settingsAll();
   ctx.settings = { ...DEFAULTS, ...stored };
   setHaptics(ctx.settings.vibrate !== false);
+  applyTheme(ctx.settings.themeColor);
 }
 
 async function saveSetting(key, value) {
   ctx.settings[key] = value;
   await db.setSetting(key, value);
   if (key === 'vibrate') setHaptics(value !== false);
+  if (key === 'themeColor') applyTheme(value);
+}
+
+/** The one accent colour, and everything derived from it, live as CSS custom
+    properties — every rule and inline style already reads var(--accent), so
+    changing the root variables re-themes the whole app with no re-render. */
+function applyTheme(hex) {
+  const color = hex || DEFAULTS.themeColor;
+  document.documentElement.style.setProperty('--accent', color);
+  document.documentElement.style.setProperty('--accent-dim', toRgba(color, 0.14));
+}
+
+function toRgba(hex, alpha) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!m) return `rgba(255,92,0,${alpha})`;
+  const [r, g, b] = m.slice(1).map((h) => parseInt(h, 16));
+  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 /* ---------- chrome ---------- */

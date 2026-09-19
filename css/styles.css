@@ -122,7 +122,7 @@ svg.solid{fill:currentColor;stroke:none}
 .rest-next,.rest-tip,.today-row,.ex-media,.set,.target-box{
   box-shadow:var(--lift-1);
 }
-.btn,.chip,.set-go,.step-btn,.glass,.plate-pick,.pick-tile,.pl-close,.rest-close{
+.btn,.chip,.set-go,.step-btn,.glass,.plate-pick,.pick-tile,.pl-close,.rest-close,.theme-pick{
   box-shadow:var(--lift-2);
 }
 .btn.primary{box-shadow:var(--lift-2),var(--glow-white)}
@@ -131,7 +131,7 @@ svg.solid{fill:currentColor;stroke:none}
 
 /* Pressing pushes the object into the page rather than just tinting it. */
 .btn:active,.chip:active,.set-go:active,.step-btn:active,.glass:active,
-.plate-pick:active,.pick-tile:active{
+.plate-pick:active,.pick-tile:active,.theme-pick:active{
   box-shadow:var(--lift-press);
   transform:translateY(2px) scale(.985);
 }
@@ -949,6 +949,15 @@ body.login-open{overflow:hidden}
   background:var(--plate);border-color:var(--plate);
   color:#000;text-shadow:0 1px 0 rgba(255,255,255,.35);
 }
+
+/* Each swatch is already its colour, so there's nothing to preview — tapping
+   one is instant and app-wide, which the checkmark on the active one confirms. */
+.theme-pick{
+  width:clamp(42px,11vw,52px);height:clamp(42px,11vw,52px);
+  display:grid;place-items:center;
+  background:var(--plate);border:2px solid var(--plate);color:transparent;
+}
+.theme-pick.on{color:#000}
 
 /* The day, as meals. The plus is the whole interaction. */
 .meal{

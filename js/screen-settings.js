@@ -100,6 +100,9 @@ export async function render(ctx) {
     ])
   ]));
 
+  /* ---- appearance ---- */
+  wrap.appendChild(section('עיצוב', 'צבע נושא', [themePicker(ctx, s)]));
+
   /* ---- behaviour ---- */
   wrap.appendChild(section('התנהגות', 'טיימר, רטט, חימום, RIR', [el('div', { class: 'card stack' }, [
     toggle('טיימר מנוחה אוטומטי', s.autoTimer !== false, (v) => ctx.saveSetting('autoTimer', v)),
@@ -529,6 +532,35 @@ function platePicker(ctx, s) {
     el('label', { class: 'field-label', text: 'אילו פלטות יש בחדר הכושר שלך?' }),
     row,
     el('div', { class: 'tiny dim', style: { marginTop: '6px' }, text: 'מחשבון הפלטות ועיגול המשקלים ישתמשו רק במה שסימנת.' })
+  ]);
+}
+
+const THEME_COLORS = ['#FF5C00', '#FF3B6B', '#4DA3FF', '#34D06A', '#B98BFF', '#FFC93D', '#2DD4CF'];
+
+/** The accent is a single CSS variable, so switching it re-themes the whole
+    app immediately — nothing here re-renders the screen. */
+function themePicker(ctx, s) {
+  const current = s.themeColor || DEFAULTS.themeColor;
+  const row = el('div', { class: 'plate-row' });
+
+  THEME_COLORS.forEach((color) => {
+    const node = el('button', {
+      class: `theme-pick${current.toLowerCase() === color.toLowerCase() ? ' on' : ''}`,
+      'aria-label': color,
+      style: { '--plate': color }
+    }, [icon(ICONS.check, 16)]);
+    node.addEventListener('click', async () => {
+      row.querySelectorAll('.theme-pick').forEach((n) => n.classList.remove('on'));
+      node.classList.add('on');
+      buzz(8);
+      await ctx.saveSetting('themeColor', color);
+    });
+    row.appendChild(node);
+  });
+
+  return el('div', {}, [
+    el('label', { class: 'field-label', text: 'צבע הדגשה' }),
+    row
   ]);
 }
 

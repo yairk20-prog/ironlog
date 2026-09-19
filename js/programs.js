@@ -172,6 +172,7 @@ export const DEFAULTS = {
   warmupOn: true,
   vibrate: true,
   autoTimer: true,
+  themeColor: '#FF5C00',
   /* RIR is a coach's tool, not a beginner's. Off by default so the set grid
      stays weight × reps × done. */
   trackRir: false,
