@@ -138,11 +138,13 @@ export function start(seconds, label = 'מנוחה') {
   /* The dock floats over the page, so the page has to make room for it —
      otherwise it sits on top of whatever is at the bottom of the card. */
   document.body.classList.add('timer-on');
+  keepAwake();
 }
 
 export function stop() {
   bind();
   state.endAt = 0;
+  releaseWake();
   state.fired = false;
   persist();
   clearInterval(state.tick);
@@ -213,9 +215,38 @@ function render() {
 function notify() {
   try {
     if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
-      new Notification('IRONLOG', { body: 'המנוחה הסתיימה — לסט הבא', silent: false, tag: 'rest' });
+      const n = new Notification('IRONLOG', { body: `${state.label} הסתיימה — לסט הבא`, silent: false, tag: 'rest' });
+      /* Only meaningful while the page/tab is still alive in the background —
+         which is the case this notification fires for in the first place
+         (document.hidden, not fully terminated). A page the OS has actually
+         killed needs a push server to wake back up, which this static site
+         does not have. */
+      n.onclick = () => { window.focus(); n.close(); };
     }
   } catch { /* not available */ }
+}
+
+/* ---------- keep the screen on during rest ----------
+   The point is not having to unlock the phone just to check the clock — so
+   keep the screen from timing out on its own for as long as a rest is
+   running. This cannot, and is not meant to, override someone deliberately
+   pressing the power button or switching apps; the Wake Lock spec releases
+   itself the moment the page is hidden either way, which is the platform's
+   call, not a bug here. Re-acquiring on the next visibilitychange is what
+   makes coming back to the app mid-rest resume the same protection. */
+let wakeLock = null;
+
+async function keepAwake() {
+  try {
+    if (!('wakeLock' in navigator) || document.hidden) return;
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; });
+  } catch { /* denied, unsupported, or backgrounded mid-request — fine either way */ }
+}
+
+function releaseWake() {
+  wakeLock?.release().catch(() => {});
+  wakeLock = null;
 }
 
 /** Restore a timer that was running before a reload. */
@@ -234,7 +265,12 @@ export function restore() {
     document.body.classList.add('timer-on');
     render();
     state.tick = setInterval(render, 250);
+    keepAwake();
   } catch { /* ignore */ }
 }
 
-document.addEventListener('visibilitychange', () => { if (!document.hidden && state.endAt) render(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden || !state.endAt) return;
+  render();
+  if (!wakeLock) keepAwake();
+});
