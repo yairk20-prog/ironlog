@@ -585,7 +585,7 @@ body.feed-open{overflow:hidden}
 .feed-progress i.now{background:var(--accent);border-color:var(--accent)}
 .feed-progress i.next{background:transparent;border-color:var(--accent)}
 .feed-track{
-  flex:1;min-height:0;
+  flex:1;min-height:0;touch-action:none;
   transition:transform .42s var(--spring);will-change:transform;
 }
 .feed-track.dragging{transition:none}
