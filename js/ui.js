@@ -85,6 +85,10 @@ export const ICONS = {
   camera: '<path d="M4 8h3l2-3h6l2 3h3v12H4z"/><circle cx="12" cy="13" r="4"/>',
   scale: '<path d="M5 7h14l2 13H3z"/><path d="M9 7a3 3 0 0 1 6 0"/>',
   glass: '<path d="M6 3h12l-1.5 17h-9z"/><path d="M6.6 10h10.8"/>',
+  /* A figure standing tall, and a figure folded over a reach: the two
+     off-plan sessions read instantly as what they are at 22px. */
+  posture: '<circle cx="12" cy="4" r="2"/><path d="M12 7v8M8 10h8M9.5 21l2.5-6 2.5 6"/>',
+  stretch: '<circle cx="7" cy="4.5" r="2"/><path d="M7 7v5l-2 9M7 12l4 9M7.5 9l8-2.5"/>',
   bottle: '<path d="M10 2h4v3l2 3v13H8V8l2-3z"/><path d="M8 12h8"/>',
   /* food categories — a shape per macro group, not a photo, so it stays on
      brand with everything else (no emoji, no stock imagery). */

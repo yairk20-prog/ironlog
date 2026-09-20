@@ -80,6 +80,9 @@ export function runLogin() {
 
     root.append(
       bg,
+      /* The mark itself, not just the word. It is the first thing anyone
+         sees of the app, and it is already on their home screen. */
+      el('img', { class: 'login-logo', src: 'icons/logo.svg', alt: '', width: 128, height: 128 }),
       el('div', { class: 'login-mark', text: 'IRONLOG' }),
       el('h1', { text: 'תתאמן. תתעד.\nתראה התקדמות.' }),
       el('p', { text: 'תוכנית PPL שמתעדכנת לפי הביצועים שלך, מעקב תזונה בעברית, והכל עובד גם בלי רשת.' }),

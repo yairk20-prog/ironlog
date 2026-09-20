@@ -300,6 +300,7 @@ body.timer-on.no-tabs .view{padding-bottom:calc(var(--safe-b) + 130px)}
 }
 .badge.accent{background:var(--accent);color:#000}
 .badge.ok{background:var(--ok);color:#00230F}
+.badge.dim{background:transparent;color:var(--text-3)}
 
 /* ---------- tab bar ---------- */
 .tabbar{
@@ -1199,3 +1200,36 @@ body.no-tabs .timer-dock{bottom:calc(var(--safe-b) + 14px)}
 /* A failed diagnosis or a mismatched build number has to read as a problem,
    not as another line of grey help text. */
 .tiny.bad,p.bad,b.bad{color:var(--bad)}
+
+
+/* ---------- off-plan quick starts ----------
+   Four tiles rather than one text link: this is the way into a stretch, a
+   posture session or a challenge on a day the plan says nothing about, and
+   as a link under the hero nobody ever found it. */
+.quick{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.quick-tile{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:5px;padding:13px 6px 11px;min-height:86px;
+  background:var(--surface-2);border:1px solid var(--line);
+  color:var(--text);box-shadow:var(--lift-1);
+  transition:transform .13s var(--spring),box-shadow .13s var(--ease),border-color .13s var(--ease);
+}
+.quick-tile svg{stroke:var(--accent);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.quick-tile b{font-size:13px;font-weight:800;letter-spacing:-.02em}
+.quick-tile small{font-size:10px;color:var(--text-3);font-weight:600;text-align:center;line-height:1.25}
+.quick-tile:active{transform:scale(.95);box-shadow:var(--lift-press);border-color:var(--accent)}
+
+/* Four across is tight on a small phone; two rows read better than four
+   columns of clipped words. */
+@media (max-width:359px){
+  .quick{grid-template-columns:repeat(2,1fr)}
+}
+
+
+/* The drawn mark above the wordmark on the login screen. Sized in vh so it
+   never crowds the buttons on a short phone. */
+.login-logo{
+  display:block;width:clamp(84px,17vh,124px);height:auto;
+  margin:0 auto 10px;border-radius:20px;
+  box-shadow:var(--lift-2);
+}

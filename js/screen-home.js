@@ -4,14 +4,14 @@
 
 import * as db from './db.js';
 import { el, icon, ICONS, openSheet } from './ui.js';
-import { DAY_TYPES, restFor, goalList, resolveGoal, templateForIndex } from './programs.js';
+import { DAY_TYPES, restFor, goalList, resolveGoal, templateForIndex, CHALLENGES } from './programs.js';
 import { dayCard, restDayCard } from './screen-plan.js';
 import { exerciseName, search, CATEGORIES } from './exercises.js';
 import { frameUrl, hasImages, thumb } from './media.js';
 import { fmtDuration, todayISO, HEB_DAYS } from './logic.js';
 import {
-  getActive, nextUp, createFromTemplate, createFreeWorkout, advanceRotation,
-  recentWorkouts, workoutSummary, streak
+  getActive, nextUp, createFromTemplate, createFreeWorkout, createChallenge,
+  challengeBest, advanceRotation, recentWorkouts, workoutSummary, streak
 } from './session.js';
 
 export async function render(ctx) {
@@ -36,14 +36,18 @@ export async function render(ctx) {
       : heroRest(ctx, up));
 
   /* A way out of the plan that doesn't require being on a rest day for it:
-     a stretch, an ab finisher, or whatever's free at the gym right now.
-     Off-plan by design, so it never touches the rotation. */
+     a stretch, a posture session, a challenge, or whatever machine is free
+     right now. All four are off-plan by design, so none of them moves the
+     rotation. This used to be one faint text link under the hero and was
+     effectively invisible — four labelled tiles is the whole fix. */
   if (!active) {
-    wrap.appendChild(el('button', {
-      class: 'linkish',
-      style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', width: '100%' },
-      onclick: () => spontaneousSheet(ctx)
-    }, [icon(ICONS.spark, 15), el('span', { text: 'אימון ספונטני — יציבה, מתיחות או משהו חופשי' })]));
+    wrap.appendChild(el('div', { class: 'section-title', text: 'בלי קשר לתוכנית' }));
+    wrap.appendChild(el('div', { class: 'quick' }, [
+      quickTile(ICONS.posture, 'יציבה', 'ניידות', () => startTemplate(ctx, 'posture')),
+      quickTile(ICONS.stretch, 'מתיחות', '5 דקות', () => startTemplate(ctx, 'stretch')),
+      quickTile(ICONS.flame, 'אתגר', 'שיא אישי', () => challengeSheet(ctx)),
+      quickTile(ICONS.search, 'חופשי', 'בחר תרגיל', () => freeSheet(ctx))
+    ]));
   }
 
   /* What is coming, as information rather than controls: the list answers
@@ -171,34 +175,73 @@ function heroRest(ctx, up) {
   ]);
 }
 
-/** A workout that isn't the plan: today's posture routine, or one exercise
-    picked freely with more addable once it's running (screen-workout.js's
-    "הוסף תרגיל לאימון"). Neither one moves the rotation. */
-function spontaneousSheet(ctx) {
-  openSheet('אימון ספונטני', (close) => {
+/* ---------- off-plan starts ----------
+   Every one of these passes offPlan, so finishing them never advances the
+   weekly rotation past a day that has not actually been trained. */
+
+const quickTile = (iconPath, title, sub, onclick) => el('button', { class: 'quick-tile', onclick }, [
+  icon(iconPath, 22),
+  el('b', { text: title }),
+  el('small', { text: sub })
+]);
+
+async function startTemplate(ctx, templateId) {
+  await createFromTemplate(templateId, ctx.settings, { offPlan: true });
+  ctx.go('workout');
+}
+
+/** One set, all out, against your own previous best for that movement. */
+function challengeSheet(ctx) {
+  openSheet('אתגר', (close) => {
     const box = el('div', { class: 'stack' });
+    box.appendChild(el('p', {
+      class: 'tiny dim', style: { margin: 0, lineHeight: '1.55' },
+      text: 'סט יחיד עד כישלון. התוצאה נשמרת כמו כל סט אחר, כך שבפעם הבאה יש מספר לשבור. לא משפיע על התוכנית השבועית.'
+    }));
 
-    box.appendChild(el('button', {
-      class: 'opt',
-      onclick: async () => {
-        await createFromTemplate('posture', ctx.settings, { offPlan: true });
-        close();
-        ctx.go('workout');
-      }
-    }, [
-      el('div', { class: 'grow' }, [
-        el('b', { text: 'יציבה ומתיחות' }),
-        el('small', { text: 'השגרה הקבועה — לא תזיז את הסבב השבועי' })
-      ])
-    ]));
+    for (const ch of CHALLENGES) {
+      const row = el('button', {
+        class: 'opt',
+        onclick: async () => {
+          await createChallenge(ch.id, ctx.settings);
+          close();
+          ctx.go('workout');
+        }
+      }, [
+        thumb(ch.ex, ''),
+        el('div', { class: 'grow' }, [
+          el('b', { text: ch.name }),
+          el('small', { text: ch.desc })
+        ]),
+        el('span', { class: 'badge', text: '…' })
+      ]);
+      box.appendChild(row);
 
-    box.appendChild(el('div', { class: 'section-title', text: 'או תרגיל חופשי' }));
-    const q = el('input', { type: 'search', placeholder: 'שם תרגיל… בטן, ריצה, כל דבר' });
+      /* The record is looked up per row rather than up front so the sheet
+         opens immediately; an empty badge simply becomes a dash. */
+      challengeBest(ch.ex).then((best) => {
+        const badge = row.querySelector('.badge');
+        if (!badge) return;
+        if (!best) { badge.textContent = '—'; badge.classList.add('dim'); return; }
+        badge.textContent = ch.metric === 'seconds' ? `${best.reps} שנ׳` : `${best.reps}`;
+        badge.classList.add('accent');
+      });
+    }
+    return box;
+  });
+}
+
+/** One exercise picked freely, with more addable once it is running
+    (screen-workout.js's "הוסף תרגיל לאימון"). */
+function freeSheet(ctx) {
+  openSheet('תרגיל חופשי', (close) => {
+    const box = el('div', { class: 'stack' });
+    const q = el('input', { type: 'search', placeholder: 'שם תרגיל… בטן, סקוואט, כל דבר' });
     const results = el('div');
-    q.addEventListener('input', () => {
+
+    const paint = (list) => {
       results.innerHTML = '';
-      if (q.value.trim().length < 2) return;
-      search(q.value).slice(0, 10).forEach((o) => {
+      list.slice(0, 12).forEach((o) => {
         results.appendChild(el('button', {
           class: 'opt',
           onclick: async () => {
@@ -214,9 +257,20 @@ function spontaneousSheet(ctx) {
           ])
         ]));
       });
+    };
+
+    q.addEventListener('input', () => {
+      const term = q.value.trim();
+      /* An empty search used to show an empty sheet, which reads as broken.
+         Bodyweight movements need no equipment and are what someone reaching
+         for a spontaneous exercise most often wants. */
+      paint(term.length < 2 ? search('', { cat: 'Bodyweight' }) : search(term));
     });
+
     box.appendChild(q);
+    box.appendChild(el('div', { class: 'section-title', text: 'ללא ציוד' }));
     box.appendChild(results);
+    paint(search('', { cat: 'Bodyweight' }));
     return box;
   });
 }

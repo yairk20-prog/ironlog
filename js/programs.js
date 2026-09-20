@@ -135,8 +135,39 @@ export const TEMPLATES = {
       { ex: 'thoracic_ext', s: 2, seconds: 45 },
       { ex: 'side_plank', s: 2, seconds: 30 }
     ]
+  },
+
+  /* Stretching is not the posture routine with the strength work removed —
+     it is what you want after a session or on a stiff evening: holds only,
+     no activation drills, no core. Five minutes, nothing to think about. */
+  stretch: {
+    id: 'stretch', type: 'Mobility', name: 'מתיחות',
+    slots: [
+      { ex: 'hip_flexor_stretch', s: 2, seconds: 45 },
+      { ex: 'hamstring_stretch', s: 2, seconds: 45 },
+      { ex: 'pigeon_stretch', s: 2, seconds: 45 },
+      { ex: 'thoracic_ext', s: 2, seconds: 45 },
+      { ex: 'wall_angel', s: 2, seconds: 30 }
+    ]
   }
 };
+
+/* ==========================================================================
+   Challenges — one set, all out, and a number to beat next time.
+
+   Deliberately bodyweight and equipment-free: the point is that it can be
+   done anywhere, on a rest day, without planning. The score is the rep count
+   (or the hold in seconds), so the app's existing set log is the record book
+   and no new storage is needed.
+   ========================================================================== */
+export const CHALLENGES = [
+  { id: 'max_pushups', ex: 'pushup', name: 'שכיבות סמיכה מקסימום', metric: 'reps', desc: 'סט אחד עד כישלון טכני' },
+  { id: 'max_pullups', ex: 'pullup', name: 'מתח מקסימום', metric: 'reps', desc: 'סט אחד, בלי קיפינג' },
+  { id: 'max_plank', ex: 'plank', name: 'פלאנק מקסימלי', metric: 'seconds', desc: 'אחיזה אחת עד שהגב מתחיל לשקוע' },
+  { id: 'max_leg_raise', ex: 'hanging_leg_raise', name: 'הרמות רגליים בתלייה', metric: 'reps', desc: 'סט אחד, רגליים ישרות' }
+];
+
+export const challengeById = (id) => CHALLENGES.find((c) => c.id === id) || null;
 
 /** Weekly rotations the user can pick. Each entry is a template id or 'rest'. */
 export const ROTATIONS = {

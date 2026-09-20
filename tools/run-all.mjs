@@ -18,7 +18,7 @@ const PORT = Number(process.env.PORT || 8777);
 
 /* Each group is [server mode, suites…]. '' means no hosted coach at all. */
 const GROUPS = [
-  ['1', ['e2e', 'e2e2', 'e2e3', 'e2e4', 'e2e5', 'e2e6', 'e2e8', 'e2e9']],
+  ['1', ['e2e', 'e2e2', 'e2e3', 'e2e4', 'e2e5', 'e2e6', 'e2e8', 'e2e9', 'e2e11']],
   ['1', ['e2e7', 'e2e10']],
   ['', ['e2e7']],
   ['fail', ['e2e10']]

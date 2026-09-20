@@ -5,7 +5,7 @@
    ========================================================================== */
 
 import * as db from './db.js';
-import { TEMPLATES, ROTATIONS, repRange, restFor, goalList } from './programs.js';
+import { TEMPLATES, ROTATIONS, repRange, restFor, goalList, challengeById } from './programs.js';
 import { getExercise, isAllowed, substitutes, sameMuscle } from './exercises.js';
 import { nextTarget, oneRM, volume, todayISO } from './logic.js';
 
@@ -143,6 +143,64 @@ export async function createFreeWorkout(exerciseId, settings) {
   await db.put('workouts', workout);
   await db.setSetting('activeWorkoutId', workout.id);
   return workout;
+}
+
+/**
+ * A challenge: one exercise, one set, all out, and a number to beat.
+ * Off-plan like every spontaneous session, and deliberately without a target
+ * weight or rep goal — the whole point is that the result is the result.
+ */
+export async function createChallenge(challengeId, settings) {
+  const ch = challengeById(challengeId);
+  if (!ch) throw new Error('אתגר לא נמצא');
+  const ex = getExercise(ch.ex);
+  if (!ex) throw new Error('תרגיל לא נמצא');
+
+  const workout = {
+    id: db.uid('w'),
+    date: todayISO(),
+    type: 'Challenge',
+    template_id: null,
+    challenge: ch.id,
+    name: ch.name,
+    started_at: Date.now(),
+    finished_at: null,
+    duration_seconds: 0,
+    completed: 0,
+    cursor: 0,
+    offPlan: true,
+    slots: [{
+      ex: ch.ex,
+      sets: 1,
+      seconds: ch.metric === 'seconds' ? 0 : null,
+      targetWeight: 0,
+      targetReps: null,
+      action: 'challenge',
+      note: ch.desc,
+      rest: restFor(goalList(settings), ex),
+      done: false
+    }]
+  };
+
+  await db.put('workouts', workout);
+  await db.setSetting('activeWorkoutId', workout.id);
+  return workout;
+}
+
+/**
+ * The best single set ever logged for an exercise, scored by reps rather than
+ * by estimated 1RM — for a bodyweight challenge the rep count *is* the score,
+ * and personalBest()'s e1rm is meaningless at zero added weight.
+ * @returns {Promise<{reps:number, date:string}|null>}
+ */
+export async function challengeBest(exerciseId) {
+  const rows = await db.byIndex('set_logs', 'exercise_id', IDBKeyRange.only(exerciseId));
+  let best = null;
+  for (const r of rows) {
+    if (r.is_warmup) continue;
+    if (!best || r.reps > best.reps) best = { reps: r.reps, date: r.timestamp };
+  }
+  return best;
 }
 
 /** One ad-hoc slot: 3 working sets, target from that exercise's own history. */

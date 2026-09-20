@@ -9,6 +9,7 @@ import { streak, recentWorkouts } from './session.js';
 import { todayISO } from './logic.js';
 import { ROTATIONS } from './programs.js';
 import { EXERCISES } from './exercises.js';
+import { BUILD } from './version.js';
 
 export async function render(ctx) {
   ctx.setTitle('עוד');
@@ -60,7 +61,7 @@ export async function render(ctx) {
 
   wrap.appendChild(el('p', {
     class: 'tiny dim', style: { textAlign: 'center', padding: '16px 0' },
-    text: 'IRONLOG · גרסה 1.0'
+    text: `IRONLOG · גרסה ${BUILD}`
   }));
 
   return wrap;
