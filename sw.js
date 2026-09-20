@@ -1,5 +1,16 @@
-/* IRONLOG service worker — offline-first shell cache */
-const VERSION = 'ironlog-v5.1.0';
+/* IRONLOG service worker — offline-first shell cache.
+
+   Keep VERSION in step with BUILD in js/version.js; tools/e2e10.mjs fails the
+   build if they drift, because the number shown in Settings is the only way
+   anyone can tell from a phone whether an update actually landed. */
+const VERSION = 'ironlog-v5.2.0';
+
+/* Every request for code goes out with the browser's HTTP cache bypassed.
+   Without this the service worker's "network-first" rule is a lie: fetch()
+   is answered by the HTTP cache first, so a phone that once stored app.js
+   under a long max-age keeps running last month's build no matter how many
+   times it reloads. Revalidating costs one 304. */
+const fresh = (url) => new Request(url, { cache: 'reload', credentials: 'same-origin' });
 const IMG_INDEX = './img/ex/index.json';
 const SHELL = [
   './',
@@ -22,6 +33,7 @@ const SHELL = [
   './js/media.js',
   './js/ex-images.js',
   './js/figure.js',
+  './js/version.js',
   './js/chart.js',
   './js/onboarding.js',
   './js/gdrive.js',
@@ -51,7 +63,7 @@ const SHELL = [
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(VERSION)
-      .then((c) => c.addAll(SHELL))
+      .then((c) => c.addAll(SHELL.map(fresh)))
       .then(() => self.skipWaiting())
       .catch((err) => console.warn('[sw] precache partial', err))
   );
@@ -93,6 +105,10 @@ async function warmImages() {
 
 self.addEventListener('message', (e) => {
   if (e.data === 'skipWaiting') self.skipWaiting();
+  /* Settings asks the *running worker* what it is, rather than trusting the
+     page's own constant: if the two disagree the update is half-applied, and
+     that is exactly the state worth being able to see from a phone. */
+  if (e.data === 'version') e.source?.postMessage({ swVersion: VERSION });
 });
 
 self.addEventListener('fetch', (e) => {
@@ -109,7 +125,7 @@ self.addEventListener('fetch', (e) => {
   // Navigation: network-first with cached shell fallback (keeps app usable offline).
   if (req.mode === 'navigate') {
     e.respondWith(
-      fetch(req)
+      fetch(fresh(req.url))
         .then((res) => {
           const copy = res.clone();
           caches.open(VERSION).then((c) => c.put('./index.html', copy));
@@ -125,7 +141,7 @@ self.addEventListener('fetch', (e) => {
      what's actually new-and-unreachable falls back to cache. */
   if (/\.(?:js|css|webmanifest|html)$/.test(url.pathname) || url.pathname === '/') {
     e.respondWith(
-      fetch(req)
+      fetch(fresh(req.url))
         .then((res) => {
           if (res && res.status === 200 && res.type === 'basic') {
             const copy = res.clone();

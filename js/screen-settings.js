@@ -9,6 +9,7 @@ import { proteinTarget, PLATE_COLORS } from './logic.js';
 import * as ai from './ai.js';
 import * as gdrive from './gdrive.js';
 import * as cloud from './cloud.js';
+import { BUILD, swVersion } from './version.js';
 
 /**
  * A settings screen that shows everything at once is a wall. Each group is a
@@ -142,6 +143,12 @@ export async function render(ctx) {
      stays available only as an override for a personal key. */
   const aiNodes = [];
   if (hostedCoach) {
+    /* A key being *set* on the server and the API actually answering are two
+       different things, and the gap between them is where "שגיאת AI (400)"
+       lives. This runs one real call and prints what came back, so the cause
+       is readable from the phone instead of from Netlify's function logs. */
+    const verdict = el('p', { class: 'tiny dim', style: { margin: 0, lineHeight: '1.6', whiteSpace: 'pre-wrap' } });
+
     aiNodes.push(el('div', { class: 'card stack' }, [
       el('div', { class: 'row', style: { gap: '9px' } }, [
         icon(ICONS.check, 18),
@@ -150,7 +157,22 @@ export async function render(ctx) {
       el('p', {
         class: 'tiny dim', style: { margin: 0, lineHeight: '1.55' },
         text: 'האתר הזה מריץ את המאמן דרך שרת משלו, כך שהצ׳אט וניתוח התמונות עובדים לכל מי שנכנס. יש מכסת הודעות יומית כדי למנוע שימוש לרעה.'
-      })
+      }),
+      el('button', {
+        class: 'btn sm full', id: 'aiDiagnose',
+        onclick: async (e) => {
+          const btn = e.currentTarget;
+          btn.disabled = true; btn.textContent = 'בודק…';
+          verdict.textContent = '';
+          const out = await ai.checkHosted();
+          verdict.textContent = out.ok
+            ? `החיבור תקין. מודל: ${out.model}`
+            : `${out.error || 'השרת לא הצליח לענות'}${out.detail ? `\n\n${out.detail}` : ''}`;
+          verdict.classList.toggle('bad', !out.ok);
+          btn.disabled = false; btn.textContent = 'בדוק חיבור לשרת ה-AI';
+        }
+      }, [icon(ICONS.sync, 16), 'בדוק חיבור לשרת ה-AI']),
+      verdict
     ]));
   }
 
@@ -205,6 +227,8 @@ export async function render(ctx) {
     }, [icon(ICONS.trash, 18), 'מחיקת כל הנתונים'])
   ])]));
 
+  wrap.appendChild(section('גרסה ועדכונים', `גרסה ${BUILD}`, [versionCard()]));
+
   wrap.appendChild(el('p', {
     class: 'tiny dim',
     style: { textAlign: 'center', marginTop: '18px' },
@@ -212,6 +236,61 @@ export async function render(ctx) {
   }));
 
   return wrap;
+}
+
+/* ---------- version, and a way out of a stuck cache ---------- */
+
+/**
+ * "The app didn't update" is unanswerable without a number to compare. This
+ * shows the build the page is running, the build the service worker reports,
+ * and a button that throws away every cache and reloads — the manual version
+ * of what the worker is supposed to do by itself.
+ */
+function versionCard() {
+  const swLine = el('div', { class: 'row between' }, [
+    el('span', { class: 'tiny dim', text: 'Service worker' }),
+    el('b', { class: 'tiny', text: '…' })
+  ]);
+  swVersion().then((v) => {
+    const b = swLine.querySelector('b');
+    b.textContent = v ? v.replace('ironlog-v', '') : 'לא פעיל';
+    /* A worker reporting a different build than the page means the update is
+       half-applied: new worker, page still running the old modules. */
+    if (v && !v.endsWith(BUILD)) b.classList.add('bad');
+  });
+
+  return el('div', { class: 'card stack' }, [
+    el('div', { class: 'row between' }, [
+      el('span', { class: 'tiny dim', text: 'גרסת האפליקציה' }),
+      el('b', { class: 'tiny', text: BUILD })
+    ]),
+    swLine,
+    el('p', {
+      class: 'tiny dim', style: { margin: 0, lineHeight: '1.55' },
+      text: 'האפליקציה בודקת עדכון בכל פתיחה ומתעדכנת לבד. אם המספר כאן נמוך מזה שפורסם, הכפתור מנקה את כל המטמון ומוריד הכל מחדש. הנתונים שלך לא נמחקים.'
+    }),
+    el('button', {
+      class: 'btn full',
+      onclick: async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true; btn.textContent = 'מרענן…';
+        try {
+          const regs = await navigator.serviceWorker?.getRegistrations?.() || [];
+          await Promise.all(regs.map((r) => r.unregister()));
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+        } catch { /* nothing cached is still a clean state */ }
+        /* A query string the browser has never seen cannot come from its
+           HTTP cache, which is the whole point on a device that stored the
+           old files as long-lived. */
+        location.replace(`${location.pathname}?fresh=${Date.now()}${location.hash}`);
+      }
+    }, [icon(ICONS.sync, 18), 'אלץ עדכון מלא']),
+    el('p', {
+      class: 'tiny dim', style: { margin: 0 },
+      text: 'הנתונים נשמרים ב-IndexedDB ולא במטמון, ולכן ריענון לא מוחק אימונים.'
+    })
+  ]);
 }
 
 /* ---------- account-free cloud backup ---------- */

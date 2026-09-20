@@ -25,18 +25,31 @@
     Cache-Control = "public, max-age=0, must-revalidate"
     Content-Type = "application/manifest+json; charset=utf-8"
 
+# The source files are NOT fingerprinted — js/app.js keeps that name across
+# every deploy. Marking them `immutable` told every phone that already loaded
+# the app to keep its copy for a year and never ask again, which defeated the
+# service worker's network-first rule: `fetch()` was answered by the browser's
+# own HTTP cache before it ever reached the network. That is why updates
+# stopped arriving on installed phones. They must revalidate; ETags keep the
+# cost of doing so at one 304.
 [[headers]]
   for = "/js/*"
   [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 [[headers]]
   for = "/css/*"
   [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# Icons and exercise photos genuinely never change once shipped.
+[[headers]]
+  for = "/icons/*"
+  [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
 [[headers]]
-  for = "/icons/*"
+  for = "/img/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 

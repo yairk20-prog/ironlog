@@ -8,7 +8,8 @@ import path from 'node:path';
 
 const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const PORT = Number(process.argv[2] || 8777);
-const COACH = process.env.COACH === '1';
+/* '1' = the coach answers; 'fail' = a key is set but the API refuses. */
+const COACH = process.env.COACH === 'fail' ? 'fail' : (process.env.COACH === '1' ? '1' : '');
 
 /** In-memory stand-in for Netlify Blobs, so the backup flow can be tested. */
 const BACKUPS = new Map();
@@ -59,6 +60,21 @@ http.createServer((req, res) => {
   if (pathname === '/api/coach') {
     if (!COACH) return send(res, 200, fs.readFileSync(path.join(ROOT, 'index.html')), TYPES['.html']);
     if (req.method === 'GET') {
+      /* COACH=fail stands in for the state that actually bit us in production:
+         a key is configured, so the app believes the coach is hosted, but the
+         API refuses every call. The diagnosis must say why. */
+      if (url.searchParams.has('check')) {
+        return send(res, 200, JSON.stringify(COACH === 'fail'
+          ? {
+            ok: false,
+            model: 'stub',
+            error: 'אין יתרת קרדיט בחשבון ה-API. היכנס ל-console.anthropic.com ← Plans & Billing וטען קרדיט.',
+            detail: 'Your credit balance is too low to access the Anthropic API.',
+            kind: 'invalid_request_error',
+            upstream: 400
+          }
+          : { ok: true, model: 'stub' }), TYPES['.json']);
+      }
       return send(res, 200, JSON.stringify({ available: true, model: 'stub' }), TYPES['.json']);
     }
     return send(res, 200, JSON.stringify({

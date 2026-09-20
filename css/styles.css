@@ -1195,3 +1195,7 @@ body.no-tabs .timer-dock{bottom:calc(var(--safe-b) + 14px)}
   .plate-pick:active,.pick-tile:active{transform:none}
   *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
 }
+
+/* A failed diagnosis or a mismatched build number has to read as a problem,
+   not as another line of grey help text. */
+.tiny.bad,p.bad,b.bad{color:var(--bad)}

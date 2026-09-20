@@ -60,6 +60,7 @@ async function loadSettings() {
   ctx.settings = { ...DEFAULTS, ...stored };
   setHaptics(ctx.settings.vibrate !== false);
   setSoundAlert(ctx.settings.soundAlert !== false);
+  timer.setBgNotify(ctx.settings.bgNotify === true);
   applyTheme(ctx.settings.themeColor);
 }
 
@@ -68,6 +69,7 @@ async function saveSetting(key, value) {
   await db.setSetting(key, value);
   if (key === 'vibrate') setHaptics(value !== false);
   if (key === 'soundAlert') setSoundAlert(value !== false);
+  if (key === 'bgNotify') timer.setBgNotify(value === true);
   if (key === 'themeColor') applyTheme(value);
 }
 
@@ -222,9 +224,14 @@ function registerServiceWorker() {
      opened before the update, especially a PWA left running for days, keeps
      executing the JS modules it already loaded until something reloads it.
      One reload per new controller closes that gap. */
+  /* On a first visit there is no controller yet, and the one that installs is
+     serving exactly the code this page already loaded — reloading then buys
+     nothing and can interrupt someone halfway through the questionnaire. Only
+     a controller *replacing* an earlier one means the page is now stale. */
+  const hadController = !!navigator.serviceWorker.controller;
   let reloaded = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloaded) return;
+    if (reloaded || !hadController) return;
     reloaded = true;
     location.reload();
   });

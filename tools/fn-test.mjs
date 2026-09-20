@@ -44,9 +44,14 @@ const ok = await handler(post({ ...MSG, max_tokens: 99999, temperature: 7, model
 check('proxied200', ok.status === 200);
 check('keyNeverInResponse', !(await ok.clone().text()).includes('sk-ant'));
 check('keySentUpstream', seen.init.headers['x-api-key'] === 'sk-ant-test-key-do-not-use');
-check('modelPinnedServerSide', seen.body.model === 'claude-sonnet-4-5');
+/* Pinned to whatever the function decides, and never to what the caller
+   asked for — the point is that a visitor cannot pick a costlier model. */
+check('modelPinnedServerSide', /^claude-/.test(seen.body.model) && seen.body.model !== 'some-expensive-model');
 check('maxTokensClamped', seen.body.max_tokens === 1500);
-check('temperatureClamped', seen.body.temperature === 1);
+/* No sampling parameters are sent at all: they are not part of the current
+   Messages API surface, and a caller must not be able to smuggle one in. */
+check('noSamplingParamsSent',
+  seen.body.temperature === undefined && seen.body.top_p === undefined && seen.body.top_k === undefined);
 check('deviceNotForwarded', seen.body.device === undefined);
 
 /* ---------- guards ---------- */
@@ -64,10 +69,30 @@ const huge = 'x'.repeat(1_600_000);
 check('oversizeRejected', (await handler(post({ ...MSG, blob: huge }))).status === 413);
 
 /* ---------- upstream failures are masked ---------- */
-globalThis.fetch = async () => new Response('{"error":{"message":"invalid x-api-key sk-ant-real"}}', { status: 401 });
+/* The reason has to reach the browser — "AI error (400)" with nothing else is
+   what made this unfixable from a phone — but never a key, and never an error
+   shape the function has not accounted for. */
+globalThis.fetch = async () => new Response(
+  '{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key sk-ant-real-secret-value"}}',
+  { status: 401 });
 const masked = await handler(post({ ...MSG, device: 'dev_mask' }));
 out.maskedBody = await masked.text();
-check('upstreamErrorMasked', masked.status === 502 && !out.maskedBody.includes('sk-ant'));
+check('upstreamStatusNotLeakedAsOurOwn', masked.status === 502);
+check('keyScrubbedFromUpstreamError', !out.maskedBody.includes('sk-ant-real'));
+check('upstreamReasonExplained', /ANTHROPIC_API_KEY/.test(out.maskedBody));
+
+globalThis.fetch = async () => new Response(
+  '{"type":"error","error":{"type":"some_future_error","message":"internal detail nobody vetted"}}',
+  { status: 400 });
+out.unknownBody = await (await handler(post({ ...MSG, device: 'dev_unknown' }))).text();
+check('unknownErrorTypeNotRelayed', !out.unknownBody.includes('nobody vetted'));
+
+/* A low balance is the 400 that actually bit us, and it must name itself. */
+globalThis.fetch = async () => new Response(
+  '{"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API."}}',
+  { status: 400 });
+out.creditBody = await (await handler(post({ ...MSG, device: 'dev_credit' }))).text();
+check('lowCreditNamed', /קרדיט/.test(out.creditBody));
 
 /* ---------- daily quota ---------- */
 globalThis.fetch = async () => new Response(JSON.stringify({ content: [] }), { status: 200 });

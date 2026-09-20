@@ -212,8 +212,16 @@ function render() {
   listeners.forEach((fn) => fn(remain, state.total));
 }
 
+/* Off by default and only ever turned on from Settings. Browser permission on
+   its own is not consent: a site-wide grant made for something else must not
+   silently switch this on, and switching the setting back off has to actually
+   stop the notifications. */
+let bgNotifyOn = false;
+export const setBgNotify = (on) => { bgNotifyOn = on === true; };
+
 function notify() {
   try {
+    if (!bgNotifyOn) return;
     if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
       const n = new Notification('IRONLOG', { body: `${state.label} הסתיימה — לסט הבא`, silent: false, tag: 'rest' });
       /* Only meaningful while the page/tab is still alive in the background —

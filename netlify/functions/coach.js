@@ -62,6 +62,56 @@ async function overQuota(key, cap) {
   }
 }
 
+/* An API key never appears in an upstream error body — but a bug upstream, or
+   a future field, could put one there, and this text is about to be shown on
+   someone's phone. Scrub anything key-shaped before it leaves the server. */
+const scrub = (s) => String(s || '').replace(/sk-ant-[A-Za-z0-9_-]+/g, 'sk-ant-***');
+
+/**
+ * Turn an upstream failure into something the person reading it can act on.
+ * Hiding the reason behind a bare status code is what made "AI error (400)"
+ * unfixable from the outside: 400 covers a malformed request, an exhausted
+ * credit balance and a hit spend limit, and they need opposite responses.
+ */
+function explain(status, rawBody) {
+  let type = '';
+  let message = '';
+  try {
+    const parsed = JSON.parse(rawBody);
+    type = parsed?.error?.type || '';
+    message = parsed?.error?.message || '';
+  } catch { /* not JSON — fall back to the status alone */ }
+
+  const m = message.toLowerCase();
+  let hebrew;
+  if (/credit balance/.test(m)) {
+    hebrew = 'אין יתרת קרדיט בחשבון ה-API. היכנס ל-console.anthropic.com ← Plans & Billing וטען קרדיט.';
+  } else if (/spend limit|usage limit/.test(m)) {
+    hebrew = 'הגעת לתקרת ההוצאה שהוגדרה בחשבון ה-API. אפשר להעלות אותה ב-console.anthropic.com ← Limits.';
+  } else if (status === 401 || type === 'authentication_error') {
+    hebrew = 'המפתח שהוגדר בשרת אינו תקין. בדוק את ANTHROPIC_API_KEY בהגדרות Netlify.';
+  } else if (status === 402 || type === 'billing_error') {
+    hebrew = 'בעיית חיוב בחשבון ה-API. בדוק את אמצעי התשלום ב-console.anthropic.com.';
+  } else if (status === 404 || type === 'not_found_error') {
+    hebrew = `שם המודל אינו מוכר לשרת (${MODEL}). אפשר לשנות אותו במשתנה הסביבה COACH_MODEL.`;
+  } else if (status === 429) {
+    hebrew = 'חרגת ממגבלת הקצב של ה-API. נסה שוב בעוד רגע.';
+  } else if (status >= 500) {
+    hebrew = 'שירות ה-AI אינו זמין כרגע. נסה שוב בעוד כמה דקות.';
+  } else {
+    hebrew = `שגיאת AI (${status}).`;
+  }
+
+  /* The API's own wording is passed on only for the error types that describe
+     the request or the account — the ones where the sentence is the fix. An
+     unrecognised type gets the status and nothing else, so a future error
+     shape cannot relay anything unexamined to a browser. */
+  const SAFE = ['invalid_request_error', 'authentication_error', 'billing_error', 'not_found_error', 'rate_limit_error', 'permission_error'];
+  const detail = SAFE.includes(type) ? scrub(message).slice(0, 300) : '';
+
+  return { error: hebrew, detail, kind: type, upstream: status };
+}
+
 /** Only our own pages may call this; a stolen endpoint is a stolen budget. */
 function sameOrigin(req) {
   const origin = req.headers.get('origin');
@@ -76,8 +126,35 @@ function sameOrigin(req) {
 export default async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204 });
   if (req.method === 'GET') {
+    const wantsCheck = new URL(req.url).searchParams.has('check');
     /* Lets the app discover, on load, whether a hosted coach exists here. */
-    return json(200, { available: !!process.env.ANTHROPIC_API_KEY, model: MODEL });
+    if (!wantsCheck) return json(200, { available: !!process.env.ANTHROPIC_API_KEY, model: MODEL });
+
+    /* ?check runs one real, one-token call. Reading a function log from a
+       phone is not something anyone will do, so the diagnosis has to be
+       available from inside the app. It costs a fraction of a cent. */
+    if (!sameOrigin(req)) return json(403, { error: 'cross-origin requests are not accepted' });
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return json(200, { ok: false, model: MODEL, error: 'לא הוגדר ANTHROPIC_API_KEY בהגדרות Netlify.' });
+    }
+    let probe;
+    try {
+      probe = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({ model: MODEL, max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] })
+      });
+    } catch {
+      return json(200, { ok: false, model: MODEL, error: 'השרת לא הצליח להגיע ל-api.anthropic.com.' });
+    }
+    const probeBody = await probe.text();
+    if (probe.ok) return json(200, { ok: true, model: MODEL });
+    console.error(`coach check: upstream ${probe.status}`, probeBody.slice(0, 1000));
+    return json(200, { ok: false, model: MODEL, ...explain(probe.status, probeBody) });
   }
   if (req.method !== 'POST') return json(405, { error: 'method not allowed' });
   if (!sameOrigin(req)) return json(403, { error: 'cross-origin requests are not accepted' });
@@ -136,7 +213,7 @@ export default async (req) => {
      see *why* a call failed without reading source on every report. */
   if (!upstream.ok) {
     console.error(`coach: upstream ${upstream.status}`, body.slice(0, 1000));
-    return json(upstream.status === 429 ? 429 : 502, { error: `שגיאת AI (${upstream.status})` });
+    return json(upstream.status === 429 ? 429 : 502, explain(upstream.status, body));
   }
 
   return new Response(body, {

@@ -1,6 +1,8 @@
 /* v4: animated loops, several goals at once, steppers and plate pickers,
    water in glasses, filter chips that show their state, and the rest screen. */
 import pw from 'playwright';
+import { LAUNCH, localOnly } from './launch.mjs';
+
 const { chromium } = pw;
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -15,13 +17,21 @@ async function openSection(page, label) {
 }
 
 async function main() {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+  const browser = await chromium.launch(LAUNCH);
   const ctx = await browser.newContext({
     viewport: { width: 414, height: 896 }, deviceScaleFactor: 2,
     locale: 'he-IL', hasTouch: true, isMobile: true
   });
+  await localOnly(ctx);
+
   const page = await ctx.newPage();
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
+  /* A blocked web font or a sandbox with no route to Google is an artefact of
+     where the suite runs, not a regression in the app. */
+  page.on('console', (m) => {
+    if (m.type() !== 'error') return;
+    if (/ERR_TUNNEL_CONNECTION_FAILED|ERR_INTERNET_DISCONNECTED|ERR_NAME_NOT_RESOLVED|fonts\.googleapis\.com|fonts\.gstatic\.com|accounts\.google\.com/.test(m.text())) return;
+    errors.push(`console: ${m.text()}`);
+  });
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 
   await page.goto(BASE, { waitUntil: 'load' });
@@ -210,8 +220,10 @@ async function main() {
     process.env.COACH === '1' && !out.codeLooksRandom && 'the recovery code is not random enough',
     process.env.COACH === '1' && out.backedUp !== 1 && 'the cloud backup did not record a time'
   ].filter(Boolean);
-  if (fatal.length) { console.error('FAIL:', fatal.join(' | ')); process.exit(1); }
+  if (fatal.length) { console.error('FAIL:', fatal.join(' | ')); process.exitCode = 1; return; }
   console.log('PASS');
 }
 
-main().catch((e) => { console.error('FATAL', e); process.exit(2); });
+/* process.exit() truncates a pipe mid-write, which silently ate the one
+   line explaining the failure whenever a suite ran under the runner. */
+main().catch((e) => { console.error('FATAL', e); process.exitCode = 2; });

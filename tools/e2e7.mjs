@@ -2,6 +2,8 @@
    from the user, and with none present it must fall back to asking for one.
    Run twice — once against `COACH=1 node tools/serve.mjs`, once without. */
 import pw from 'playwright';
+import { LAUNCH, localOnly } from './launch.mjs';
+
 const { chromium } = pw;
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -24,13 +26,21 @@ async function dismissRest(page) {
 }
 
 async function main() {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+  const browser = await chromium.launch(LAUNCH);
   const ctx = await browser.newContext({
     viewport: { width: 414, height: 896 }, deviceScaleFactor: 2,
     locale: 'he-IL', hasTouch: true, isMobile: true
   });
+  await localOnly(ctx);
+
   const page = await ctx.newPage();
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
+  /* A blocked web font or a sandbox with no route to Google is an artefact of
+     where the suite runs, not a regression in the app. */
+  page.on('console', (m) => {
+    if (m.type() !== 'error') return;
+    if (/ERR_TUNNEL_CONNECTION_FAILED|ERR_INTERNET_DISCONNECTED|ERR_NAME_NOT_RESOLVED|fonts\.googleapis\.com|fonts\.gstatic\.com|accounts\.google\.com/.test(m.text())) return;
+    errors.push(`console: ${m.text()}`);
+  });
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 
   /* The proxy must never receive an API key from the browser. */
@@ -94,8 +104,10 @@ async function main() {
     !HOSTED && out.hostedNotice !== 0 && 'settings claimed a hosted coach that is not there',
     !HOSTED && out.proxyPosts !== 0 && 'called the proxy with no hosted coach'
   ].filter(Boolean);
-  if (fatal.length) { console.error('FAIL:', fatal.join(' | ')); process.exit(1); }
+  if (fatal.length) { console.error('FAIL:', fatal.join(' | ')); process.exitCode = 1; return; }
   console.log('PASS');
 }
 
-main().catch((e) => { console.error('FATAL', e); process.exit(2); });
+/* process.exit() truncates a pipe mid-write, which silently ate the one
+   line explaining the failure whenever a suite ran under the runner. */
+main().catch((e) => { console.error('FATAL', e); process.exitCode = 2; });

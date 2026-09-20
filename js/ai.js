@@ -34,6 +34,22 @@ export function hosted() {
 /** Re-ask on the next call — used after settings change. */
 export const forgetHosted = () => { hostedPromise = null; };
 
+/**
+ * Ask the server to make one real, one-token call and report what came back.
+ * This is the answer to "the AI says 400 and I can't see why" — nobody is
+ * going to open Netlify's function logs from a phone.
+ * @returns {Promise<{ok:boolean, model?:string, error?:string, detail?:string}>}
+ */
+export async function checkHosted() {
+  try {
+    const res = await fetch(`${PROXY}?check=1`, { method: 'GET', cache: 'no-store' });
+    if (!res.ok) return { ok: false, error: `השרת החזיר ${res.status}` };
+    return await res.json();
+  } catch {
+    return { ok: false, error: 'אין חיבור לשרת. האם האתר פרוס ב-Netlify עם פונקציות?' };
+  }
+}
+
 export async function hasKey() {
   if (await hosted()) return true;
   const k = await db.setting('apiKey', '');
@@ -77,8 +93,13 @@ async function call(messages, { system, maxTokens = 1200 } = {}) {
       return call(messages, { system, maxTokens });
     }
     if (!res.ok) {
-      const msg = await res.json().then((j) => j.error).catch(() => '');
-      throw new Error(msg || `שגיאת AI ${res.status}`);
+      /* The proxy already turned the upstream failure into a sentence worth
+         reading; `detail` is the API's own wording, kept because "credit
+         balance too low" and "malformed request" both arrive as a 400 and
+         only the text tells them apart. */
+      const j = await res.json().catch(() => null);
+      const msg = j?.error || `שגיאת AI ${res.status}`;
+      throw new Error(j?.detail ? `${msg}\n(${j.detail})` : msg);
     }
   } else {
     const key = await getKey();
@@ -95,7 +116,9 @@ async function call(messages, { system, maxTokens = 1200 } = {}) {
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      throw new Error(`שגיאת API ${res.status}: ${text.slice(0, 160)}`);
+      let detail = text.slice(0, 200);
+      try { detail = JSON.parse(text)?.error?.message || detail; } catch { /* keep raw */ }
+      throw new Error(`שגיאת API ${res.status}: ${detail}`);
     }
   }
 
@@ -145,10 +168,18 @@ export async function analyzeMealText(text) {
  * @param {string} dataUrl base64 data URL of the photo
  */
 export async function analyzeMealPhoto(dataUrl, hint = '') {
-  const m = /^data:(image\/[a-z]+);base64,(.+)$/i.exec(dataUrl);
+  const m = /^data:(image\/[a-z+]+);base64,(.+)$/i.exec(dataUrl);
   if (!m) throw new Error('פורמט תמונה לא נתמך');
+
+  /* The API accepts exactly four media types, and rejects anything else with
+     a 400 that says nothing useful on a phone. `image/jpg` in particular is
+     what several cameras report and is not one of them. */
+  const ALLOWED = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+  const type = m[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : m[1].toLowerCase();
+  if (!ALLOWED.includes(type)) throw new Error(`סוג התמונה (${type}) לא נתמך — צלם מחדש או בחר קובץ JPEG/PNG`);
+
   const content = [
-    { type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } },
+    { type: 'image', source: { type: 'base64', media_type: type, data: m[2] } },
     { type: 'text', text: `זהה את המרכיבים בצלחת והערך כמויות וערכים תזונתיים.${hint ? ` רמז מהמשתמש: ${hint}` : ''}` }
   ];
   const out = await call([{ role: 'user', content }], {
