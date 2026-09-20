@@ -24,6 +24,7 @@ Run:  python3 tools/build-icon.py
 """
 import math
 import pathlib
+import re
 import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -154,15 +155,35 @@ DETAIL = [
 ]
 
 
-def hatch(clip_id, angle_deg, spacing, width, colour, opacity):
+def bbox(path_d):
+    """The bounding box of a path built only from absolute M/L/C coordinate
+       pairs — which is all of them here, by construction."""
+    nums = [float(n) for n in re.findall(r'-?\d+(?:\.\d+)?', path_d)]
+    xs, ys = nums[0::2], nums[1::2]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def hatch(clip_id, region_d, angle_deg, spacing, width, colour, opacity):
+    """Parallel strokes across one clipped region.
+
+    The lines are generated over the region's own bounding box rather than the
+    whole canvas. Sweeping the full canvas for every region is simpler but
+    emits roughly ten times as many lines, nearly all of them clipped away
+    immediately — and the file still has to carry them. That was the difference
+    between a 277 KB logo and one small enough to put on the login screen.
+    """
+    x0, y0, x1, y1 = bbox(region_d)
+    cx0, cy0 = (x0 + x1) / 2, (y0 + y1) / 2
+    reach = math.hypot(x1 - x0, y1 - y0) / 2 + spacing
+
     a = math.radians(angle_deg)
     dx, dy = math.cos(a), math.sin(a)
     nx, ny = -dy, dx
-    reach = 780
     out = []
-    for i in range(int(reach * 2 / spacing)):
+    steps = int(reach * 2 / spacing) + 1
+    for i in range(steps):
         off = -reach + i * spacing
-        cx, cy = 256 + nx * off, 256 + ny * off
+        cx, cy = cx0 + nx * off, cy0 + ny * off
         out.append(f'<line x1="{cx - dx * reach:.0f}" y1="{cy - dy * reach:.0f}" '
                    f'x2="{cx + dx * reach:.0f}" y2="{cy + dy * reach:.0f}"/>')
     return (f'<g clip-path="url(#{clip_id})" stroke="{colour}" stroke-width="{width}" '
@@ -182,7 +203,7 @@ def study(theme='light', ground=True):
     # The vest sits behind the arm, in a lighter register so it never competes.
     for name, d in (('strap', STRAP), ('vest', VEST)):
         b.append(f'<path d="{d}" fill="{P["wash"]}" opacity="0.26"/>')
-        b.append(hatch(f'c-{name}', -74, 9.0, 1.4, P['tone'], 0.34))
+        b.append(hatch(f'c-{name}', d, -74, 9.0, 1.4, P['tone'], 0.34))
         b.append(f'<path d="{d}" fill="none" stroke="{P["ink"]}" stroke-width="2.8" '
                  f'stroke-linejoin="round" opacity="0.62"/>')
 
@@ -194,14 +215,14 @@ def study(theme='light', ground=True):
     # Everything from here to the contour is clipped to the arm.
     b.append('<g clip-path="url(#c-arm)">')
 
-    b.append(hatch('c-arm', -68, 7.0, 1.6, P['tone'], 0.40))
-    for name, _, ang in MASSES:
-        b.append(hatch(f'c-{name}', ang, 6.2, 1.9, P['tone'], 0.52))
-        b.append(hatch(f'c-{name}', ang + 40, 12.0, 1.3, P['tone'], 0.26))
+    b.append(hatch('c-arm', ARM, -68, 7.0, 1.6, P['tone'], 0.40))
+    for name, d, ang in MASSES:
+        b.append(hatch(f'c-{name}', d, ang, 6.2, 1.9, P['tone'], 0.52))
+        b.append(hatch(f'c-{name}', d, ang + 40, 12.0, 1.3, P['tone'], 0.26))
 
-    for i in range(len(SHADOWS)):
-        b.append(hatch(f'c-sh{i}', -26, 5.0, 2.0, P['deep'], 0.40))
-        b.append(hatch(f'c-sh{i}', 20, 6.5, 1.6, P['deep'], 0.30))
+    for i, d in enumerate(SHADOWS):
+        b.append(hatch(f'c-sh{i}', d, -26, 5.0, 2.0, P['deep'], 0.40))
+        b.append(hatch(f'c-sh{i}', d, 20, 6.5, 1.6, P['deep'], 0.30))
 
     for d, op in HIGHLIGHTS:
         b.append(f'<path d="{d}" fill="{P["lift"]}" opacity="{op * P["lift_op"]:.2f}"/>')
