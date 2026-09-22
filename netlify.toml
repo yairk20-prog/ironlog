@@ -42,11 +42,16 @@
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
 
-# Icons and exercise photos genuinely never change once shipped.
+# Exercise photos are fingerprint-free but never overwritten in place — a
+# changed photo gets a new filename. The app icon and login logo are not:
+# this session's icon redraw shipped under the *same* filenames as before,
+# and `immutable` told every browser and CDN edge to keep serving last
+# month's bytes for a year without ever asking again. Same bug as /js/*,
+# same fix — these few files are worth a revalidation round trip.
 [[headers]]
   for = "/icons/*"
   [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 [[headers]]
   for = "/img/*"

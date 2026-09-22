@@ -3,7 +3,7 @@
    Keep VERSION in step with BUILD in js/version.js; tools/e2e10.mjs fails the
    build if they drift, because the number shown in Settings is the only way
    anyone can tell from a phone whether an update actually landed. */
-const VERSION = 'ironlog-v5.4.0';
+const VERSION = 'ironlog-v5.5.0';
 
 /* Every request for code goes out with the browser's HTTP cache bypassed.
    Without this the service worker's "network-first" rule is a lie: fetch()

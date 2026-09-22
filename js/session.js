@@ -5,7 +5,7 @@
    ========================================================================== */
 
 import * as db from './db.js';
-import { TEMPLATES, ROTATIONS, repRange, restFor, goalList, challengeById } from './programs.js';
+import { TEMPLATES, ROTATIONS, repRange, restFor, goalList, challengeById, durationFor } from './programs.js';
 import { getExercise, isAllowed, substitutes, sameMuscle } from './exercises.js';
 import { nextTarget, oneRM, volume, todayISO } from './logic.js';
 
@@ -51,11 +51,12 @@ export function resolveExercise(id, settings, taken = new Set()) {
     ?? id;
 }
 
-/** Working-set count adjusted for training age. */
+/** Working-set count adjusted for training age and the session-length setting. */
 function setsFor(base, settings) {
-  if (settings.experience === 'beginner') return Math.max(2, base - 1);
-  if (settings.experience === 'advanced') return Math.min(6, base + 1);
-  return base;
+  let n = base;
+  if (settings.experience === 'beginner') n = Math.max(2, n - 1);
+  else if (settings.experience === 'advanced') n = Math.min(6, n + 1);
+  return Math.max(1, n + durationFor(settings.duration).setDelta);
 }
 
 /**
@@ -66,10 +67,16 @@ export async function createFromTemplate(templateId, settings, { offPlan = false
   const tpl = TEMPLATES[templateId];
   if (!tpl) throw new Error('תבנית לא נמצאה');
 
+  const dur = durationFor(settings.duration);
+  /* Templates list compounds first for exactly this: trimming to a shorter
+     session drops isolation work off the end, never the exercise the split
+     is built around. */
+  const rawSlots = tpl.slots.slice(0, dur.slots);
+
   const goals = goalList(settings);
   const slots = [];
-  const taken = new Set(tpl.slots.map((x) => x.ex));
-  for (const raw of tpl.slots) {
+  const taken = new Set(rawSlots.map((x) => x.ex));
+  for (const raw of rawSlots) {
     const exId = resolveExercise(raw.ex, settings, taken);
     /* A swap that lands on something already in the session adds nothing —
        five distinct exercises beat six with one repeated. */
@@ -90,7 +97,7 @@ export async function createFromTemplate(templateId, settings, { offPlan = false
       targetReps: slot.seconds ? 0 : (target.reps || range.min),
       action: target.action,
       note: swapped ? `הוחלף אוטומטית לפי הציוד והמגבלות שלך · ${target.note}` : target.note,
-      rest: restFor(goals, ex),
+      rest: dur.restCap ? Math.min(restFor(goals, ex), dur.restCap) : restFor(goals, ex),
       done: false
     });
   }
@@ -143,6 +150,19 @@ export async function createFreeWorkout(exerciseId, settings) {
   await db.put('workouts', workout);
   await db.setSetting('activeWorkoutId', workout.id);
   return workout;
+}
+
+/**
+ * The "אימון זריז" tile: whatever's next in the rotation, built at 'quick'
+ * duration regardless of the user's usual setting, and off-plan so it never
+ * eats the day it borrowed from — the full version is still there waiting
+ * whenever there's time for it. Falls back to stretching on a rest day,
+ * since there's no "next" template to shrink.
+ */
+export async function createQuickWorkout(settings) {
+  const up = await nextUp(settings);
+  const templateId = up.template ? up.template.id : 'stretch';
+  return createFromTemplate(templateId, { ...settings, duration: 'quick' }, { offPlan: true });
 }
 
 /**

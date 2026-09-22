@@ -57,6 +57,7 @@ export const EXERCISES = [
   { id: 'bb_ohp', name: 'לחיצת כתפיים במוט', muscle: 'shoulders', secondary: ['triceps', 'core'], cat: 'FreeWeights', pattern: 'vert_push', bar: true, rest: 180, compound: true, yt: 'overhead press barbell form' },
   { id: 'db_shoulder_press', name: 'לחיצת כתפיים משקולות', muscle: 'shoulders', secondary: ['triceps'], cat: 'FreeWeights', pattern: 'vert_push', rest: 150, compound: true, yt: 'dumbbell shoulder press seated' },
   { id: 'machine_shoulder_press', name: 'לחיצת כתפיים במכונה', muscle: 'shoulders', cat: 'Machine', pattern: 'vert_push', rest: 120, compound: true, yt: 'machine shoulder press' },
+  { id: 'pike_pushup', name: 'פייק פושאפ (כתפיים)', muscle: 'shoulders', secondary: ['triceps'], cat: 'Bodyweight', pattern: 'vert_push', rest: 90, compound: true, yt: 'pike push up form', cue: 'ישבן גבוה, כמעט ׳V׳ הפוך' },
 
   { id: 'db_lateral', name: 'הרחקת זרועות לצדדים', muscle: 'shoulders', cat: 'FreeWeights', pattern: 'lateral_raise', rest: 75, compound: false, yt: 'dumbbell lateral raise form' },
   { id: 'cable_lateral', name: 'הרחקה לצד בכבל', muscle: 'shoulders', cat: 'Cable', pattern: 'lateral_raise', rest: 75, compound: false, yt: 'cable lateral raise' },
@@ -87,6 +88,7 @@ export const EXERCISES = [
   { id: 'cable_row', name: 'חתירה בפולי תחתון', muscle: 'back', secondary: ['biceps'], cat: 'Cable', pattern: 'horiz_pull', rest: 120, compound: true, yt: 'seated cable row form' },
   { id: 'machine_row', name: 'חתירה במכונה', muscle: 'back', cat: 'Machine', pattern: 'horiz_pull', rest: 120, compound: true, yt: 'chest supported row machine' },
   { id: 'tbar_row', name: 'חתירת T-Bar', muscle: 'back', cat: 'FreeWeights', pattern: 'horiz_pull', rest: 150, compound: true, yt: 't bar row form' },
+  { id: 'inverted_row', name: 'חתירה הפוכה', muscle: 'back', secondary: ['lats', 'biceps'], cat: 'Bodyweight', pattern: 'horiz_pull', rest: 120, compound: true, yt: 'inverted row bodyweight', cue: 'מוט נמוך בפארק, או שולחן יציב בבית' },
 
   { id: 'straight_arm_pulldown', name: 'משיכת פולי זרוע ישרה', muscle: 'lats', cat: 'Cable', pattern: 'lat_iso', rest: 75, compound: false, yt: 'straight arm pulldown' },
   { id: 'db_shrug', name: 'משיכת כתפיים (שראגס)', muscle: 'traps', cat: 'FreeWeights', pattern: 'shrug', rest: 90, compound: false, yt: 'dumbbell shrug form' },
@@ -105,8 +107,10 @@ export const EXERCISES = [
   { id: 'hack_squat', name: 'האק סקוואט', muscle: 'quads', cat: 'Machine', pattern: 'squat', rest: 180, compound: true, yt: 'hack squat machine' },
   { id: 'leg_press', name: 'לחיצת רגליים', muscle: 'quads', secondary: ['glutes'], cat: 'Machine', pattern: 'squat', rest: 180, compound: true, yt: 'leg press form' },
   { id: 'goblet_squat', name: 'גובלט סקוואט', muscle: 'quads', cat: 'FreeWeights', pattern: 'squat', rest: 120, compound: true, yt: 'goblet squat form' },
+  { id: 'bw_squat', name: 'סקוואט משקל גוף', muscle: 'quads', secondary: ['glutes'], cat: 'Bodyweight', pattern: 'squat', rest: 90, compound: true, yt: 'bodyweight squat form', cue: 'ירכיים מתחת לברכיים, עקבים על הרצפה' },
   { id: 'bulgarian_split', name: 'סקוואט בולגרי', muscle: 'quads', secondary: ['glutes'], cat: 'FreeWeights', pattern: 'lunge', rest: 120, compound: true, yt: 'bulgarian split squat' },
   { id: 'walking_lunge', name: 'מכרעים בהליכה', muscle: 'quads', secondary: ['glutes'], cat: 'FreeWeights', pattern: 'lunge', rest: 120, compound: true, yt: 'walking lunge form' },
+  { id: 'bw_lunge', name: 'מכרעים משקל גוף', muscle: 'quads', secondary: ['glutes'], cat: 'Bodyweight', pattern: 'lunge', rest: 90, compound: true, yt: 'bodyweight walking lunge' },
   { id: 'step_up', name: 'עליית מדרגה', muscle: 'glutes', secondary: ['quads'], cat: 'Bodyweight', pattern: 'lunge', rest: 90, compound: true, yt: 'step up exercise form' },
 
   { id: 'rdl', name: 'דדליפט רומני', muscle: 'hamstrings', secondary: ['glutes', 'spine'], cat: 'FreeWeights', pattern: 'hinge', bar: true, rest: 180, compound: true, yt: 'romanian deadlift form', cue: 'ירכיים אחורה, מוט צמוד לרגל' },

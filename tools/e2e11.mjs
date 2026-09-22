@@ -96,7 +96,7 @@ async function main() {
 
   await boot(page);
 
-  /* ---------- the four ways in ---------- */
+  /* ---------- the off-plan ways in ---------- */
   out.tiles = await page.locator('.quick-tile').allInnerTexts();
   out.tileCount = out.tiles.length;
   await shot(page, '01-home');
@@ -161,9 +161,12 @@ async function main() {
     !out.hasMaskable && 'the manifest has no maskable icon',
     !out.appleTouch && 'no apple-touch-icon at 180px',
     !out.iconInShell && 'the icons are not precached',
-    out.tileCount !== 4 && `expected four off-plan tiles, found ${out.tileCount}`,
+    out.tileCount !== 7 && `expected seven off-plan tiles, found ${out.tileCount}`,
     !/יציבה/.test(out.tiles.join(' ')) && 'no posture tile',
     !/מתיחות/.test(out.tiles.join(' ')) && 'no stretching tile',
+    !/פארק/.test(out.tiles.join(' ')) && 'no park tile',
+    !/בית/.test(out.tiles.join(' ')) && 'no home tile',
+    !/זריז/.test(out.tiles.join(' ')) && 'no quick-workout tile',
     !/אתגר/.test(out.tiles.join(' ')) && 'no challenge tile',
     !/חופשי/.test(out.tiles.join(' ')) && 'no free-exercise tile',
     out.stretchExercises < 1 && 'the stretching session started empty',

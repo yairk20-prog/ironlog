@@ -89,6 +89,9 @@ export const ICONS = {
      off-plan sessions read instantly as what they are at 22px. */
   posture: '<circle cx="12" cy="4" r="2"/><path d="M12 7v8M8 10h8M9.5 21l2.5-6 2.5 6"/>',
   stretch: '<circle cx="7" cy="4.5" r="2"/><path d="M7 7v5l-2 9M7 12l4 9M7.5 9l8-2.5"/>',
+  park: '<path d="M12 3l4 7h-3l4 6h-4v5h-2v-5H7l4-6H8z"/>',
+  home: '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h5v-6h2v6h5V10"/>',
+  bolt: '<path d="M13 2L5 14h5l-1 8 8-12h-5z"/>',
   bottle: '<path d="M10 2h4v3l2 3v13H8V8l2-3z"/><path d="M8 12h8"/>',
   /* food categories — a shape per macro group, not a photo, so it stays on
      brand with everything else (no emoji, no stock imagery). */

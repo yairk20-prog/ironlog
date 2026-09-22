@@ -53,6 +53,8 @@ export const DAY_TYPES = {
   Pull: { name: 'משיכה', short: 'B', color: '#4DA3FF' },
   Legs: { name: 'רגליים', short: 'C', color: '#34D06A' },
   Posture: { name: 'יציבה', short: 'Y', color: '#B98BFF' },
+  Park: { name: 'פארק', short: 'P', color: '#2FD9C4' },
+  Home: { name: 'בית', short: 'H', color: '#FF6FA8' },
   Custom: { name: 'מותאם', short: '★', color: '#FFC93D' }
 };
 
@@ -149,6 +151,36 @@ export const TEMPLATES = {
       { ex: 'thoracic_ext', s: 2, seconds: 45 },
       { ex: 'wall_angel', s: 2, seconds: 30 }
     ]
+  },
+
+  /* Same reasoning as stretch vs. posture: a park workout is not "the gym
+     split with the machines removed" — it's built around what a park
+     actually has (a pull-up bar, dip bars, a bench or ledge) so nothing in
+     it silently swaps to something that isn't there. */
+  park: {
+    id: 'park', type: 'Park', name: 'אימון בפארק',
+    slots: [
+      { ex: 'pullup', s: 3 },
+      { ex: 'dips', s: 3 },
+      { ex: 'bw_squat', s: 3 },
+      { ex: 'step_up', s: 3 },
+      { ex: 'hanging_leg_raise', s: 3 },
+      { ex: 'plank', s: 2, seconds: 45 }
+    ]
+  },
+
+  /* No bar, no bench — a table and a wall are what most living rooms
+     actually offer. */
+  home: {
+    id: 'home', type: 'Home', name: 'אימון בבית',
+    slots: [
+      { ex: 'pushup', s: 3 },
+      { ex: 'inverted_row', s: 3 },
+      { ex: 'bw_squat', s: 3 },
+      { ex: 'bw_lunge', s: 3 },
+      { ex: 'glute_bridge', s: 3 },
+      { ex: 'plank', s: 2, seconds: 45 }
+    ]
   }
 };
 
@@ -168,6 +200,22 @@ export const CHALLENGES = [
 ];
 
 export const challengeById = (id) => CHALLENGES.find((c) => c.id === id) || null;
+
+/* ==========================================================================
+   Session length — how much of a template actually gets built.
+
+   Trimming a template to fewer exercises always keeps the exercises the
+   template lists first, which is why every template is written compounds
+   first: a short session drops the isolation work, not a compound.
+   ========================================================================== */
+export const DURATIONS = {
+  quick: { id: 'quick', name: 'זריז', desc: '2 תרגילים, מנוחות קצרות · כ-10 דקות', slots: 2, setDelta: -2, restCap: 45 },
+  short: { id: 'short', name: 'קצר', desc: 'עד 4 תרגילים · כ-25 דקות', slots: 4, setDelta: -1, restCap: null },
+  medium: { id: 'medium', name: 'בינוני', desc: 'האימון המלא כפי שתוכנן · כ-45 דקות', slots: Infinity, setDelta: 0, restCap: null },
+  long: { id: 'long', name: 'ארוך', desc: 'האימון המלא ועוד סט לכל תרגיל · כ-65 דקות', slots: Infinity, setDelta: 1, restCap: null }
+};
+
+export const durationFor = (id) => DURATIONS[id] || DURATIONS.medium;
 
 /** Weekly rotations the user can pick. Each entry is a template id or 'rest'. */
 export const ROTATIONS = {
@@ -196,6 +244,7 @@ export const DEFAULTS = {
   /* Several goals can run at once; `goal` stays for older saved settings. */
   goals: ['hypertrophy'],
   rotation: 'ppl6',
+  duration: 'medium',
   barWeight: 20,
   plates: [25, 20, 15, 10, 5, 2.5, 1.25],
   increment: 2.5,

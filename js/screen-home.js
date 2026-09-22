@@ -4,14 +4,14 @@
 
 import * as db from './db.js';
 import { el, icon, ICONS, openSheet } from './ui.js';
-import { DAY_TYPES, restFor, goalList, resolveGoal, templateForIndex, CHALLENGES } from './programs.js';
+import { DAY_TYPES, restFor, goalList, resolveGoal, templateForIndex, durationFor, CHALLENGES } from './programs.js';
 import { dayCard, restDayCard } from './screen-plan.js';
 import { exerciseName, search, CATEGORIES } from './exercises.js';
 import { frameUrl, hasImages, thumb } from './media.js';
 import { fmtDuration, todayISO, HEB_DAYS } from './logic.js';
 import {
   getActive, nextUp, createFromTemplate, createFreeWorkout, createChallenge,
-  challengeBest, advanceRotation, recentWorkouts, workoutSummary, streak
+  createQuickWorkout, challengeBest, advanceRotation, recentWorkouts, workoutSummary, streak
 } from './session.js';
 
 export async function render(ctx) {
@@ -36,23 +36,32 @@ export async function render(ctx) {
       : heroRest(ctx, up));
 
   /* A way out of the plan that doesn't require being on a rest day for it:
-     a stretch, a posture session, a challenge, or whatever machine is free
-     right now. All four are off-plan by design, so none of them moves the
-     rotation. This used to be one faint text link under the hero and was
-     effectively invisible — four labelled tiles is the whole fix. */
+     a stretch, a posture session, a park or home workout when there's no
+     gym around, a challenge, a really quick pass at whatever's next, or
+     whatever machine is free right now. Every one of these is off-plan by
+     design, so none of them moves the rotation. This used to be one faint
+     text link under the hero and was effectively invisible — labelled tiles
+     is the whole fix. */
   if (!active) {
     wrap.appendChild(el('div', { class: 'section-title', text: 'בלי קשר לתוכנית' }));
     wrap.appendChild(el('div', { class: 'quick' }, [
       quickTile(ICONS.posture, 'יציבה', 'ניידות', () => startTemplate(ctx, 'posture')),
       quickTile(ICONS.stretch, 'מתיחות', '5 דקות', () => startTemplate(ctx, 'stretch')),
+      quickTile(ICONS.park, 'פארק', 'משקל גוף', () => startTemplate(ctx, 'park')),
+      quickTile(ICONS.home, 'בית', 'בלי ציוד', () => startTemplate(ctx, 'home')),
+      quickTile(ICONS.bolt, 'זריז', 'כ-10 דקות', () => quickWorkout(ctx)),
       quickTile(ICONS.flame, 'אתגר', 'שיא אישי', () => challengeSheet(ctx)),
       quickTile(ICONS.search, 'חופשי', 'בחר תרגיל', () => freeSheet(ctx))
     ]));
   }
 
   /* What is coming, as information rather than controls: the list answers
-     "what am I doing today" without adding a single thing to tap. */
-  const preview = active?.slots || up.template?.slots;
+     "what am I doing today" without adding a single thing to tap. A workout
+     already under way is already trimmed to size; one not yet started is
+     shown trimmed too, so this list never promises more than "start" will
+     actually build. */
+  const preview = active?.slots
+    || up.template?.slots.slice(0, durationFor(settings.duration).slots);
   if (preview?.length) {
     wrap.appendChild(el('div', { class: 'section-title', text: 'התרגילים היום' }));
     wrap.appendChild(el('div', { class: 'today-list' }, preview.map((slot, i) => {
@@ -133,15 +142,17 @@ function heroResume(ctx, active) {
 
 function heroStart(ctx, tpl, settings) {
   /* The exercises are listed below in full, so the hero says how big the
-     session is instead of repeating the first three names. */
-  const sets = tpl.slots.reduce((n, x) => n + (x.s || 3), 0);
+     session is instead of repeating the first three names — trimmed to
+     what "start" will actually build, per the session-length setting. */
+  const slots = tpl.slots.slice(0, durationFor(settings.duration).slots);
+  const sets = slots.reduce((n, x) => n + (x.s || 3), 0);
   const mins = Math.round((sets * (restFor(goalList(settings), null) + 45)) / 60 / 5) * 5;
-  const lead = tpl.slots.find((s) => hasImages(s.ex))?.ex;
+  const lead = slots.find((s) => hasImages(s.ex))?.ex;
   return el('div', { class: 'hero' }, [
     lead ? el('img', { class: 'hero-bg', src: frameUrl(lead, 0), alt: '', loading: 'lazy' }) : null,
     el('div', { class: 'hero-kicker', text: `${DAY_TYPES[tpl.type]?.name || ''} · ${resolveGoal(goalList(settings)).name}` }),
     el('h2', { text: tpl.name }),
-    el('p', { text: `${tpl.slots.length} תרגילים · ${sets} סטים · כ-${mins} דקות` }),
+    el('p', { text: `${slots.length} תרגילים · ${sets} סטים · כ-${mins} דקות` }),
     el('button', {
       class: 'btn primary full',
       onclick: async () => {
@@ -187,6 +198,11 @@ const quickTile = (iconPath, title, sub, onclick) => el('button', { class: 'quic
 
 async function startTemplate(ctx, templateId) {
   await createFromTemplate(templateId, ctx.settings, { offPlan: true });
+  ctx.go('workout');
+}
+
+async function quickWorkout(ctx) {
+  await createQuickWorkout(ctx.settings);
   ctx.go('workout');
 }
 

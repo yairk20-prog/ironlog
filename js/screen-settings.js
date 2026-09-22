@@ -4,7 +4,7 @@
 
 import * as db from './db.js';
 import { el, icon, ICONS, toast, buzz, openSheet, confirmSheet } from './ui.js';
-import { GOALS, ROTATIONS, DEFAULTS, goalList, resolveGoal } from './programs.js';
+import { GOALS, ROTATIONS, DURATIONS, DEFAULTS, goalList, resolveGoal, durationFor } from './programs.js';
 import { proteinTarget, PLATE_COLORS } from './logic.js';
 import * as ai from './ai.js';
 import * as gdrive from './gdrive.js';
@@ -86,6 +86,23 @@ export async function render(ctx) {
     ]));
   });
   wrap.appendChild(section('פיצול שבועי', ROTATIONS[s.rotation]?.name || '', splitNodes));
+
+  /* ---- session length ---- */
+  const durationNodes = Object.values(DURATIONS).map((d) => el('button', {
+    class: `opt${(s.duration || 'medium') === d.id ? ' on' : ''}`,
+    onclick: async () => { await ctx.saveSetting('duration', d.id); ctx.reload(); }
+  }, [
+    el('div', { class: 'grow' }, [
+      el('b', { text: d.name }),
+      el('small', { text: d.desc })
+    ]),
+    (s.duration || 'medium') === d.id ? icon(ICONS.check, 18) : null
+  ]));
+  durationNodes.push(el('p', {
+    class: 'tiny dim', style: { margin: '4px 2px 0', lineHeight: '1.5' },
+    text: 'קובע כמה תרגילים וסטים ייכנסו לכל אימון שנבנה מהתוכנית. יש גם "זריז" — כפתור נפרד במסך הבית לאימון קצר ברגע זה, בלי לשנות את ההגדרה הזו.'
+  }));
+  wrap.appendChild(section('אורך אימון', durationFor(s.duration).name, durationNodes));
 
   /* ---- body & gym: chosen, not typed ---- */
   wrap.appendChild(section('גוף וציוד', `${s.bodyweight} ק״ג · מוט ${s.barWeight} ק״ג`, [
