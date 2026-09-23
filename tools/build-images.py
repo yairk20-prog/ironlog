@@ -65,6 +65,7 @@ MAP = {
     'tbar_row': 'T-Bar_Row_with_Handle',
     'straight_arm_pulldown': 'Straight-Arm_Pulldown',
     'db_shrug': 'Dumbbell_Shrug',
+    'inverted_row': 'Inverted_Row',
 
     # pull · biceps
     'bb_curl': 'Barbell_Curl',
@@ -82,6 +83,8 @@ MAP = {
     'goblet_squat': 'Goblet_Squat',
     'bulgarian_split': 'Split_Squat_with_Dumbbells',
     'walking_lunge': 'Bodyweight_Walking_Lunge',
+    'bw_lunge': 'Bodyweight_Walking_Lunge',
+    'bw_squat': 'Bodyweight_Squat',
     'step_up': 'Step-up_with_Knee_Raise',
     'rdl': 'Romanian_Deadlift',
     'deadlift': 'Barbell_Deadlift',

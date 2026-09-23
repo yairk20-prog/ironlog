@@ -57,7 +57,6 @@ export const EXERCISES = [
   { id: 'bb_ohp', name: 'לחיצת כתפיים במוט', muscle: 'shoulders', secondary: ['triceps', 'core'], cat: 'FreeWeights', pattern: 'vert_push', bar: true, rest: 180, compound: true, yt: 'overhead press barbell form' },
   { id: 'db_shoulder_press', name: 'לחיצת כתפיים משקולות', muscle: 'shoulders', secondary: ['triceps'], cat: 'FreeWeights', pattern: 'vert_push', rest: 150, compound: true, yt: 'dumbbell shoulder press seated' },
   { id: 'machine_shoulder_press', name: 'לחיצת כתפיים במכונה', muscle: 'shoulders', cat: 'Machine', pattern: 'vert_push', rest: 120, compound: true, yt: 'machine shoulder press' },
-  { id: 'pike_pushup', name: 'פייק פושאפ (כתפיים)', muscle: 'shoulders', secondary: ['triceps'], cat: 'Bodyweight', pattern: 'vert_push', rest: 90, compound: true, yt: 'pike push up form', cue: 'ישבן גבוה, כמעט ׳V׳ הפוך' },
 
   { id: 'db_lateral', name: 'הרחקת זרועות לצדדים', muscle: 'shoulders', cat: 'FreeWeights', pattern: 'lateral_raise', rest: 75, compound: false, yt: 'dumbbell lateral raise form' },
   { id: 'cable_lateral', name: 'הרחקה לצד בכבל', muscle: 'shoulders', cat: 'Cable', pattern: 'lateral_raise', rest: 75, compound: false, yt: 'cable lateral raise' },
