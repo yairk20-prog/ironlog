@@ -92,6 +92,7 @@ export const ICONS = {
   park: '<path d="M12 3l4 7h-3l4 6h-4v5h-2v-5H7l4-6H8z"/>',
   home: '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h5v-6h2v6h5V10"/>',
   bolt: '<path d="M13 2L5 14h5l-1 8 8-12h-5z"/>',
+  run: '<circle cx="15" cy="4" r="2"/><path d="M6 11l3.5-3H14l2 3.5h3.5M14 8l-2.5 6M11.5 14l3 3-1 4.5M11.5 14L8 17.5H4.5"/>',
   bottle: '<path d="M10 2h4v3l2 3v13H8V8l2-3z"/><path d="M8 12h8"/>',
   /* food categories — a shape per macro group, not a photo, so it stays on
      brand with everything else (no emoji, no stock imagery). */

@@ -10,6 +10,7 @@ import { exerciseName, getExercise, EXERCISES } from './exercises.js';
 import { thumb, exerciseDetail } from './media.js';
 import { oneRM, fmtW, fmtDuration, round2, todayISO } from './logic.js';
 import { recentWorkouts, workoutSummary, setsOf } from './session.js';
+import { cardioLine, cardioPic, paceOf, weeklyCardioMinutes, WEEKLY_CARDIO_TARGET } from './cardio.js';
 
 export async function render(ctx) {
   ctx.setTitle('היסטוריה');
@@ -31,6 +32,19 @@ export async function render(ctx) {
     ]),
     barChart(weeks)
   ]));
+
+  /* Lifting volume says nothing about a run, so cardio gets its own line —
+     only once there is some, so a lifting-only history stays uncluttered. */
+  if (workouts.some((w) => w.cardio)) {
+    const mins = weeklyCardioMinutes(workouts);
+    wrap.appendChild(el('div', { class: 'card stack', style: { gap: '8px' } }, [
+      el('div', { class: 'row between' }, [
+        el('h3', { style: { margin: 0 }, text: 'אירובי · 7 ימים' }),
+        el('b', { class: 'num', text: `${mins} מתוך ${WEEKLY_CARDIO_TARGET} דק׳` })
+      ]),
+      el('div', { class: 'meter-track' }, [el('i', { style: { width: `${Math.min(100, Math.round((mins / WEEKLY_CARDIO_TARGET) * 100))}%` } })])
+    ]));
+  }
 
   /* ---- records ---- */
   const records = await topRecords();
@@ -65,7 +79,9 @@ export async function render(ctx) {
       el('div', { class: 'grow' }, [
         el('b', { text: w.name }),
         el('small', {
-          text: `${new Date(w.finished_at).toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'short' })} · ${sum.sets} סטים · ${Math.round(sum.volume)} ק״ג · ${fmtDuration(w.duration_seconds)}`
+          text: `${new Date(w.finished_at).toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'short' })} · ${w.cardio
+            ? cardioLine(w)
+            : `${sum.sets} סטים · ${sum.volume ? `${Math.round(sum.volume)} ק״ג` : `${sum.reps} חזרות`} · ${fmtDuration(w.duration_seconds)}`}`
         })
       ]),
       icon(ICONS.chevron, 18)
@@ -84,6 +100,22 @@ function sessionSheet(w, ctx) {
       class: 'tiny dim', style: { margin: 0 },
       text: `${new Date(w.finished_at).toLocaleString('he-IL')} · ${fmtDuration(w.duration_seconds)}`
     }));
+
+    if (w.cardio) {
+      const c = w.cardio;
+      const pace = paceOf(w.duration_seconds, c.distance_km);
+      const rows = [
+        ['מרחק', c.distance_km ? `${c.distance_km} ק״מ` : '—'],
+        ['קצב ממוצע', pace ? `${pace} לק״מ` : '—'],
+        ['קלוריות (הערכה)', `${c.kcal || 0} קק״ל`],
+        ['מאמץ', { 2: 'קל מאוד', 4: 'קל', 6: 'בינוני', 8: 'קשה', 10: 'מקסימלי' }[c.rpe] || '—']
+      ];
+      box.appendChild(el('div', { class: 'card stack', style: { gap: '7px' } }, [
+        el('div', { class: 'row', style: { gap: '10px' } }, [thumb(cardioPic(c), ''), el('h3', { text: w.name })]),
+        ...rows.map(([k, v]) => el('div', { class: 'row between tiny' }, [el('span', { class: 'dim', text: k }), el('b', { text: v })]))
+      ]));
+      return box;
+    }
 
     setsOf(w.id).then((logs) => {
       const byEx = new Map();

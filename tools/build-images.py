@@ -120,6 +120,29 @@ MAP = {
     'thoracic_ext': 'Cat_Stretch',
     'pigeon_stretch': 'Seated_Glute',
     'hamstring_stretch': 'Hamstring_Stretch',
+
+    # bodyweight variants for training at the park / at home
+    'decline_pushup': 'Decline_Push-Up',
+    'diamond_pushup': 'Push-Ups_-_Close_Triceps_Position',
+    'bench_dips': 'Bench_Dips',
+    'chin_up': 'Chin-Up',
+    'single_leg_bridge': 'Single_Leg_Glute_Bridge',
+    'crunches': 'Crunches',
+
+    # conditioning moves (HIIT)
+    'jump_squat': 'Freehand_Jump_Squat',
+    'mountain_climbers': 'Mountain_Climbers',
+    'star_jump': 'Star_Jump',
+    'split_jump': 'Split_Jump',
+
+    # cardio — not exercises in the catalogue, just the photo per activity
+    'cardio_run': 'Trail_Running_Walking',
+    'cardio_treadmill': 'Running_Treadmill',
+    'cardio_walk': 'Walking_Treadmill',
+    'cardio_bike': 'Bicycling_Stationary',
+    'cardio_elliptical': 'Elliptical_Trainer',
+    'cardio_rope': 'Rope_Jumping',
+    'cardio_rower': 'Rowing_Stationary',
 }
 
 

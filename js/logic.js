@@ -8,6 +8,7 @@
    ========================================================================== */
 
 import { GOALS, repRange, resolveGoal } from './programs.js';
+import { bodyFatPct } from './body.js';
 
 /* ---------- rounding ---------- */
 
@@ -171,13 +172,65 @@ export function movingAverage(series, window = 7) {
   return out;
 }
 
-/** Daily protein target in grams, 1.6–2.2 g/kg, higher on training days. */
-export function proteinTarget(bodyweightKg, isTrainingDay, goal = 'hypertrophy') {
-  /* A deficit is when protein matters most, so any cut in the mix wins. */
-  const ids = Array.isArray(goal) ? goal : [goal];
-  const base = ids.includes('cut') ? 2.0 : 1.6;
-  const perKg = isTrainingDay ? base + 0.2 : base;
-  return Math.round(bodyweightKg * Math.min(2.2, perKg));
+/* Grams of protein per kg of *lean* mass, by goal. Per-kg-of-bodyweight
+   rules (the usual 1.6–2.2) over-feed protein to someone carrying a lot of
+   fat and under-feed a lean lifter; lean mass is what protein is for.
+   A cut needs the most — protein is what keeps muscle in a deficit. */
+const PROTEIN_PER_LEAN_KG = { cut: 2.6, hypertrophy: 2.4, abs: 2.4, strength: 2.3, endurance: 1.9 };
+
+/**
+ * The daily protein target and how it was reached.
+ * @param {{bodyweight:number, height?:number, age?:number, sex?:string, bodyType?:number|null, goals?:string[], goal?:string}} p
+ * @param {boolean} isTrainingDay
+ * @returns {{grams:number, leanKg:number, bodyFat:number, perLeanKg:number, fromPicture:boolean}}
+ */
+export function proteinPlan(p, isTrainingDay = true) {
+  const bw = p.bodyweight || 75;
+  const bodyFat = bodyFatPct(p);
+  const leanKg = bw * (1 - bodyFat / 100);
+  const goals = Array.isArray(p.goals) && p.goals.length ? p.goals : [p.goal || 'hypertrophy'];
+  const perLeanKg = Math.max(...goals.map((g) => PROTEIN_PER_LEAN_KG[g] ?? 2.2));
+
+  let grams = leanKg * perLeanKg;
+  /* Rest days still need protein — muscle is built the day after — but
+     a little less of it. */
+  if (!isTrainingDay) grams *= 0.9;
+  /* Past 50 the same meal builds less muscle (anabolic resistance), so the
+     target goes up rather than down with age. */
+  if ((p.age || 30) >= 50) grams *= 1.1;
+  /* Guard rails, per kg of total bodyweight: never below the 1.2 g/kg that
+     preserves muscle for anyone training, never past 2.6 g/kg where more
+     stops doing anything. */
+  grams = Math.min(bw * 2.6, Math.max(bw * 1.2, grams));
+
+  return {
+    grams: Math.round(grams / 5) * 5,
+    leanKg: Math.round(leanKg * 10) / 10,
+    bodyFat: Math.round(bodyFat),
+    perLeanKg,
+    fromPicture: p.bodyType != null
+  };
+}
+
+export const proteinTarget = (p, isTrainingDay = true) => proteinPlan(p, isTrainingDay).grams;
+
+/**
+ * Daily calories. With a body-fat estimate from the picture, Katch-McArdle
+ * (from lean mass) is the better resting rate; without one, Mifflin-St Jeor
+ * from weight, height, age and sex.
+ */
+export function calorieTarget(p, isTrainingDay = true) {
+  const bw = p.bodyweight || 75;
+  const sexTerm = p.sex === 'female' ? -161 : p.sex === 'other' ? -78 : 5;
+  const bmr = p.bodyType != null
+    ? 370 + 21.6 * (bw * (1 - bodyFatPct(p) / 100))
+    : 10 * bw + 6.25 * (p.height || 175) - 5 * (p.age || 30) + sexTerm;
+  const tdee = bmr * (isTrainingDay ? 1.55 : 1.35);
+  /* A deficit wins over a surplus when both are selected — you cannot eat
+     above and below maintenance at the same time. */
+  const goals = Array.isArray(p.goals) && p.goals.length ? p.goals : [p.goal || 'hypertrophy'];
+  const adj = goals.includes('cut') ? -0.18 : goals.includes('hypertrophy') ? 0.1 : 0;
+  return Math.round(tdee * (1 + adj));
 }
 
 /* ---------- helpers ---------- */

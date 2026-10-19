@@ -21,6 +21,7 @@ import { render as renderPosture } from './screen-posture.js';
 import { render as renderSummary } from './screen-summary.js';
 import { render as renderLibrary } from './screen-library.js';
 import { render as renderBody } from './screen-body.js';
+import { render as renderCardio, cleanup as cleanupCardio } from './screen-cardio.js';
 
 const ROUTES = {
   home: { render: renderHome, title: 'היום' },
@@ -29,6 +30,7 @@ const ROUTES = {
   history: { render: renderHistory, title: 'היסטוריה' },
   more: { render: renderMore, title: 'עוד' },
   workout: { render: renderWorkout, cleanup: cleanupWorkout, title: 'אימון', chrome: false },
+  cardio: { render: renderCardio, cleanup: cleanupCardio, title: 'אירובי', chrome: false },
   settings: { render: renderSettings, title: 'הגדרות', back: 'more' },
   coach: { render: renderCoach, title: 'מאמן אישי', back: 'more' },
   posture: { render: renderPosture, title: 'יציבה', back: 'more' },
@@ -123,8 +125,13 @@ export function reload() {
   mount(currentRoute, { keepScroll: true });
 }
 
+/* A navigation that arrives mid-render is kept, not dropped — otherwise two
+   quick taps leave the URL on one screen and the view on another. Only the
+   latest one matters, so it simply replaces any earlier one waiting. */
+let queued = null;
+
 async function mount(route, { keepScroll = false } = {}) {
-  if (rendering) return;
+  if (rendering) { queued = { route, keepScroll }; return; }
   rendering = true;
   const def = ROUTES[route] || ROUTES.home;
   if (currentRoute !== route) ROUTES[currentRoute]?.cleanup?.();
@@ -156,6 +163,11 @@ async function mount(route, { keepScroll = false } = {}) {
     rendering = false;
     view.hidden = false;
     window.scrollTo({ top: keepScroll ? scrollY : 0, behavior: 'auto' });
+    if (queued) {
+      const q = queued;
+      queued = null;
+      mount(q.route, { keepScroll: q.keepScroll });
+    }
   }
 }
 

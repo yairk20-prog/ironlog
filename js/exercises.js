@@ -43,6 +43,7 @@ export const EXERCISES = [
   { id: 'machine_chest_press', name: 'לחיצת חזה במכונה', muscle: 'chest', secondary: ['triceps'], cat: 'Machine', pattern: 'horiz_push', rest: 120, compound: true, yt: 'machine chest press form' },
   { id: 'smith_bench', name: 'לחיצת חזה בסמית׳', muscle: 'chest', secondary: ['triceps'], cat: 'Machine', pattern: 'horiz_push', rest: 150, compound: true, yt: 'smith machine bench press' },
   { id: 'pushup', name: 'שכיבות סמיכה', muscle: 'chest', secondary: ['triceps', 'core'], cat: 'Bodyweight', pattern: 'horiz_push', rest: 90, compound: true, yt: 'push up proper form' },
+  { id: 'decline_pushup', name: 'שכיבות סמיכה ברגליים מוגבהות', muscle: 'chest', secondary: ['shoulders', 'triceps'], cat: 'Bodyweight', pattern: 'incline_push', rest: 90, compound: true, yt: 'decline push up form', cue: 'רגליים על ספסל או כיסא — מעביר את העומס לחזה העליון ולכתפיים' },
 
   { id: 'bb_incline', name: 'לחיצת חזה עליון במוט', muscle: 'chest', secondary: ['shoulders'], cat: 'FreeWeights', pattern: 'incline_push', bar: true, rest: 180, compound: true, yt: 'incline barbell bench press' },
   { id: 'db_incline', name: 'לחיצת חזה עליון משקולות', muscle: 'chest', secondary: ['shoulders'], cat: 'FreeWeights', pattern: 'incline_push', rest: 150, compound: true, yt: 'incline dumbbell press form' },
@@ -74,10 +75,13 @@ export const EXERCISES = [
   { id: 'skullcrusher', name: 'מכסחי גולגולת', muscle: 'triceps', cat: 'FreeWeights', pattern: 'tri_ext', bar: true, rest: 90, compound: false, yt: 'skull crusher ez bar' },
   { id: 'db_overhead_tri', name: 'פשיטת מרפק מעל הראש', muscle: 'triceps', cat: 'FreeWeights', pattern: 'tri_ext', rest: 90, compound: false, yt: 'overhead dumbbell triceps extension' },
   { id: 'dips', name: 'מקבילים (דיפס)', muscle: 'triceps', secondary: ['chest'], cat: 'Bodyweight', pattern: 'tri_ext', rest: 120, compound: true, yt: 'triceps dips form' },
+  { id: 'bench_dips', name: 'מקבילים על ספסל / כיסא', muscle: 'triceps', secondary: ['chest'], cat: 'Bodyweight', pattern: 'tri_ext', rest: 75, compound: false, yt: 'bench dips form', cue: 'כיסא יציב שלא זז; ירידה עד זווית ישרה במרפק' },
+  { id: 'diamond_pushup', name: 'שכיבות סמיכה צרות', muscle: 'triceps', secondary: ['chest'], cat: 'Bodyweight', pattern: 'tri_ext', rest: 75, compound: true, yt: 'close grip push up triceps', cue: 'ידיים מתחת לחזה, מרפקים צמודים לגוף' },
   { id: 'close_grip_bench', name: 'לחיצת חזה אחיזה צרה', muscle: 'triceps', secondary: ['chest'], cat: 'FreeWeights', pattern: 'tri_ext', bar: true, rest: 150, compound: true, yt: 'close grip bench press' },
 
   /* ================= PULL — back ================= */
   { id: 'pullup', name: 'מתח', muscle: 'lats', secondary: ['biceps'], cat: 'Bodyweight', pattern: 'vert_pull', rest: 180, compound: true, yt: 'pull up form' },
+  { id: 'chin_up', name: 'מתח באחיזה הפוכה', muscle: 'biceps', secondary: ['lats'], cat: 'Bodyweight', pattern: 'vert_pull', rest: 150, compound: true, yt: 'chin up form', cue: 'כפות ידיים אליך — יותר ביצפס מאשר מתח רגיל' },
   { id: 'lat_pulldown', name: 'פולי עליון', muscle: 'lats', secondary: ['biceps'], cat: 'Cable', pattern: 'vert_pull', rest: 150, compound: true, yt: 'lat pulldown form' },
   { id: 'neutral_pulldown', name: 'פולי עליון אחיזה ניטרלית', muscle: 'lats', cat: 'Cable', pattern: 'vert_pull', rest: 150, compound: true, yt: 'neutral grip lat pulldown' },
   { id: 'assisted_pullup', name: 'מתח בעזרת מכונה', muscle: 'lats', cat: 'Machine', pattern: 'vert_pull', rest: 150, compound: true, yt: 'assisted pull up machine' },
@@ -125,6 +129,7 @@ export const EXERCISES = [
 
   { id: 'hip_thrust', name: 'הרמת אגן (היפ ת׳רסט)', muscle: 'glutes', secondary: ['hamstrings'], cat: 'FreeWeights', pattern: 'hip_ext', bar: true, rest: 150, compound: true, yt: 'barbell hip thrust form' },
   { id: 'glute_bridge', name: 'גשר ישבן', muscle: 'glutes', cat: 'Bodyweight', pattern: 'hip_ext', rest: 90, compound: false, yt: 'glute bridge form' },
+  { id: 'single_leg_bridge', name: 'גשר ישבן על רגל אחת', muscle: 'glutes', secondary: ['hamstrings'], cat: 'Bodyweight', pattern: 'hip_ext', rest: 60, compound: false, yt: 'single leg glute bridge', cue: 'אגן ישר, לא נוטה לצד — הרגל באוויר ישרה' },
   { id: 'cable_kickback', name: 'בעיטה אחורה בכבל', muscle: 'glutes', cat: 'Cable', pattern: 'hip_ext', rest: 75, compound: false, yt: 'cable glute kickback' },
   { id: 'band_abduction', name: 'הרחקת ירך ברצועה', muscle: 'glutes', cat: 'Bands', pattern: 'hip_abd', rest: 60, compound: false, yt: 'banded hip abduction' },
   { id: 'machine_abduction', name: 'הרחקת ירך במכונה', muscle: 'glutes', cat: 'Machine', pattern: 'hip_abd', rest: 75, compound: false, yt: 'hip abduction machine' },
@@ -137,10 +142,19 @@ export const EXERCISES = [
   { id: 'hanging_leg_raise', name: 'הרמת רגליים בתלייה', muscle: 'abs', secondary: ['hipflexors'], cat: 'Bodyweight', pattern: 'ab_flex', rest: 75, compound: false, yt: 'hanging leg raise form' },
   { id: 'cable_crunch', name: 'כפיפות בטן בכבל', muscle: 'abs', cat: 'Cable', pattern: 'ab_flex', rest: 75, compound: false, yt: 'cable crunch form' },
   { id: 'reverse_crunch', name: 'כפיפת בטן הפוכה', muscle: 'abs', cat: 'Bodyweight', pattern: 'ab_flex', rest: 60, compound: false, yt: 'reverse crunch form' },
+  { id: 'crunches', name: 'כפיפות בטן', muscle: 'abs', cat: 'Bodyweight', pattern: 'ab_flex', rest: 45, compound: false, yt: 'crunch proper form' },
   { id: 'plank', name: 'פלאנק', muscle: 'core', cat: 'Bodyweight', pattern: 'ab_brace', rest: 60, compound: false, yt: 'plank proper form' },
   { id: 'dead_bug', name: 'דד באג', muscle: 'core', cat: 'Bodyweight', pattern: 'ab_brace', rest: 45, compound: false, yt: 'dead bug exercise', cue: 'גב תחתון צמוד לרצפה' },
   { id: 'pallof_press', name: 'לחיצת פאלוף', muscle: 'core', cat: 'Cable', pattern: 'ab_brace', rest: 60, compound: false, yt: 'pallof press form' },
   { id: 'side_plank', name: 'פלאנק צד', muscle: 'core', cat: 'Bodyweight', pattern: 'ab_brace', rest: 45, compound: false, yt: 'side plank form' },
+
+  /* ================= CONDITIONING =================
+     Their own pattern on purpose: a jump squat is not a substitute for a
+     loaded squat, so the swap logic must never offer one for the other. */
+  { id: 'star_jump', name: 'קפיצות כוכב', muscle: 'quads', secondary: ['calves', 'shoulders'], cat: 'Bodyweight', pattern: 'conditioning', rest: 30, compound: true, yt: 'star jump exercise' },
+  { id: 'mountain_climbers', name: 'מטפסי הרים', muscle: 'core', secondary: ['quads', 'shoulders'], cat: 'Bodyweight', pattern: 'conditioning', rest: 30, compound: true, yt: 'mountain climbers exercise', cue: 'ירכיים נמוכות, ברך לחזה בקצב' },
+  { id: 'jump_squat', name: 'סקוואט קפיצה', muscle: 'quads', secondary: ['glutes', 'calves'], cat: 'Bodyweight', pattern: 'conditioning', rest: 30, compound: true, yt: 'jump squat form', cue: 'נחיתה רכה על כל כף הרגל' },
+  { id: 'split_jump', name: 'מכרעים בקפיצה', muscle: 'quads', secondary: ['glutes'], cat: 'Bodyweight', pattern: 'conditioning', rest: 30, compound: true, yt: 'split jump lunge' },
 
   /* ================= POSTURE / MOBILITY ================= */
   { id: 'hip_flexor_stretch', name: 'מתיחת כופפי ירך', muscle: 'hipflexors', cat: 'Bodyweight', pattern: 'mobility', rest: 30, compound: false, yt: 'couch stretch hip flexor', cue: 'הטיית אגן אחורה לפני המתיחה' },
@@ -160,10 +174,10 @@ const BY_ID = new Map(EXERCISES.map((e) => [e.id, e]));
  * still be chosen by hand from the library.
  */
 export const LIMIT_BLOCKS = {
-  shoulder: ['bb_ohp', 'db_shoulder_press', 'dips', 'db_fly', 'bb_incline'],
-  knee: ['bb_squat', 'front_squat', 'walking_lunge', 'bulgarian_split', 'step_up', 'hack_squat'],
+  shoulder: ['bb_ohp', 'db_shoulder_press', 'dips', 'bench_dips', 'db_fly', 'bb_incline'],
+  knee: ['bb_squat', 'front_squat', 'walking_lunge', 'bw_lunge', 'bulgarian_split', 'step_up', 'hack_squat', 'jump_squat', 'split_jump'],
   back: ['deadlift', 'bb_row', 'rdl', 'tbar_row', 'bb_squat'],
-  wrist: ['bb_curl', 'skullcrusher', 'front_squat', 'pushup', 'close_grip_bench']
+  wrist: ['bb_curl', 'skullcrusher', 'front_squat', 'pushup', 'decline_pushup', 'diamond_pushup', 'close_grip_bench']
 };
 
 /** True when this exercise is allowed under the user's equipment and limits. */

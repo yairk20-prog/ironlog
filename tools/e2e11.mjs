@@ -161,11 +161,13 @@ async function main() {
     !out.hasMaskable && 'the manifest has no maskable icon',
     !out.appleTouch && 'no apple-touch-icon at 180px',
     !out.iconInShell && 'the icons are not precached',
-    out.tileCount !== 7 && `expected seven off-plan tiles, found ${out.tileCount}`,
+    /* Park and home left this row on purpose: a day away from the gym is
+       the venue choice on today's planned workout, which keeps the
+       rotation moving, not an off-plan extra. */
+    out.tileCount !== 6 && `expected six off-plan tiles, found ${out.tileCount}`,
     !/יציבה/.test(out.tiles.join(' ')) && 'no posture tile',
     !/מתיחות/.test(out.tiles.join(' ')) && 'no stretching tile',
-    !/פארק/.test(out.tiles.join(' ')) && 'no park tile',
-    !/בית/.test(out.tiles.join(' ')) && 'no home tile',
+    !/אירובי/.test(out.tiles.join(' ')) && 'no cardio tile',
     !/זריז/.test(out.tiles.join(' ')) && 'no quick-workout tile',
     !/אתגר/.test(out.tiles.join(' ')) && 'no challenge tile',
     !/חופשי/.test(out.tiles.join(' ')) && 'no free-exercise tile',

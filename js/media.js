@@ -40,7 +40,7 @@ const placeholder = () => el('div', { class: 'ex-thumb', style: { display: 'grid
  * an instruction, which is the point of a demo.
  * @returns {{node, stop, play, pause, isRunning}}
  */
-function photoDemo(id, { period = 2600 } = {}) {
+export function photoDemo(id, { period = 2600 } = {}) {
   const frameStyle = {
     position: 'absolute', inset: '0', width: '100%', height: '100%',
     objectFit: 'contain', opacity: '0', transition: 'opacity .38s ease'

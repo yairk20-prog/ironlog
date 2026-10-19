@@ -112,7 +112,7 @@ async function main() {
 
     out.meal = food.parseMeal('שתי ביצים וסקופ חלבון');
     out.meal2 = food.parseMeal('150 גרם חזה עוף, כוס אורז ובננה');
-    out.protein = logic.proteinTarget(80, true, 'hypertrophy');
+    out.protein = logic.proteinTarget({ bodyweight: 80, height: 180, age: 30, sex: 'male', goals: ['hypertrophy'] }, true);
 
     out.posture = posture.scoreAssessment([2, 2, 1, 0, 0, 0, 1]);
 

@@ -5,7 +5,9 @@
    ========================================================================== */
 
 import * as db from './db.js';
-import { TEMPLATES, ROTATIONS, repRange, restFor, goalList, challengeById, durationFor } from './programs.js';
+import {
+  TEMPLATES, ROTATIONS, VENUE_DAYS, repRange, restFor, goalList, challengeById, durationFor, planSlots, sessionName
+} from './programs.js';
 import { getExercise, isAllowed, substitutes, sameMuscle } from './exercises.js';
 import { nextTarget, oneRM, volume, todayISO } from './logic.js';
 
@@ -63,21 +65,25 @@ function setsFor(base, settings) {
  * Build a workout from a template, resolving each slot's target from the
  * previous session of that exercise (progressive overload).
  */
-export async function createFromTemplate(templateId, settings, { offPlan = false } = {}) {
+export async function createFromTemplate(templateId, settings, { offPlan = false, venue = 'gym' } = {}) {
   const tpl = TEMPLATES[templateId];
   if (!tpl) throw new Error('תבנית לא נמצאה');
 
   const dur = durationFor(settings.duration);
+  const away = venue !== 'gym' && VENUE_DAYS[venue]?.[tpl.type];
   /* Templates list compounds first for exactly this: trimming to a shorter
      session drops isolation work off the end, never the exercise the split
      is built around. */
-  const rawSlots = tpl.slots.slice(0, dur.slots);
+  const rawSlots = planSlots(tpl, settings, venue)
+    /* The venue list is already equipment-free, so the gym's equipment swap
+       must not run on it — but a sore knee is a sore knee anywhere. */
+    .filter((raw) => !away || isAllowed(raw.ex, { limits: settings.limits || [] }));
 
   const goals = goalList(settings);
   const slots = [];
   const taken = new Set(rawSlots.map((x) => x.ex));
   for (const raw of rawSlots) {
-    const exId = resolveExercise(raw.ex, settings, taken);
+    const exId = away ? raw.ex : resolveExercise(raw.ex, settings, taken);
     /* A swap that lands on something already in the session adds nothing —
        five distinct exercises beat six with one repeated. */
     if (exId !== raw.ex && slots.some((x) => x.ex === exId)) continue;
@@ -107,7 +113,8 @@ export async function createFromTemplate(templateId, settings, { offPlan = false
     date: todayISO(),
     type: tpl.type,
     template_id: tpl.id,
-    name: tpl.name,
+    name: sessionName(tpl, venue),
+    venue: away ? venue : 'gym',
     started_at: Date.now(),
     finished_at: null,
     duration_seconds: 0,
@@ -159,10 +166,10 @@ export async function createFreeWorkout(exerciseId, settings) {
  * whenever there's time for it. Falls back to stretching on a rest day,
  * since there's no "next" template to shrink.
  */
-export async function createQuickWorkout(settings) {
+export async function createQuickWorkout(settings, venue = 'gym') {
   const up = await nextUp(settings);
   const templateId = up.template ? up.template.id : 'stretch';
-  return createFromTemplate(templateId, { ...settings, duration: 'quick' }, { offPlan: true });
+  return createFromTemplate(templateId, { ...settings, duration: 'quick' }, { offPlan: true, venue });
 }
 
 /**

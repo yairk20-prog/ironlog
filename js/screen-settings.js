@@ -5,7 +5,8 @@
 import * as db from './db.js';
 import { el, icon, ICONS, toast, buzz, openSheet, confirmSheet } from './ui.js';
 import { GOALS, ROTATIONS, DURATIONS, DEFAULTS, goalList, resolveGoal, durationFor } from './programs.js';
-import { proteinTarget, PLATE_COLORS } from './logic.js';
+import { proteinPlan, PLATE_COLORS } from './logic.js';
+import { BODY_TYPES, silhouette } from './body.js';
 import * as ai from './ai.js';
 import * as gdrive from './gdrive.js';
 import * as cloud from './cloud.js';
@@ -105,12 +106,28 @@ export async function render(ctx) {
   wrap.appendChild(section('אורך אימון', durationFor(s.duration).name, durationNodes));
 
   /* ---- body & gym: chosen, not typed ---- */
+  /* The protein line is rebuilt on every change below, so the effect of a
+     kilo, a centimetre, a birthday or a different body type shows at once. */
+  const proteinLine = el('div', { class: 'tiny dim', style: { lineHeight: '1.6' } });
+  const paintProtein = () => {
+    const p = { ...ctx.settings, goals: goalList(ctx.settings) };
+    const train = proteinPlan(p, true);
+    proteinLine.textContent = `יעד חלבון: ${train.grams} גרם ביום אימון · ${proteinPlan(p, false).grams} ביום מנוחה. `
+      + `מחושב לפי מסת גוף רזה של ~${train.leanKg} ק״ג (שומן ~${train.bodyFat}%, ${train.fromPicture ? 'לפי מבנה הגוף שבחרת' : 'הערכה לפי משקל, גובה, גיל ומין'}).`;
+  };
+  paintProtein();
+  const saveBody = (k) => async (v) => { await ctx.saveSetting(k, v); paintProtein(); };
+  const bodyType = bodyTypePicker(ctx, paintProtein);
+
   wrap.appendChild(section('גוף וציוד', `${s.bodyweight} ק״ג · מוט ${s.barWeight} ק״ג`, [
     el('div', { class: 'stack' }, [
-      stepper('משקל גוף', s.bodyweight, 0.5, 30, 250, 'ק״ג', (v) => ctx.saveSetting('bodyweight', v)),
-      stepper('גובה', s.height || 175, 1, 120, 230, 'ס״מ', (v) => ctx.saveSetting('height', v)),
-      stepper('גיל', s.age || 30, 1, 12, 100, 'שנים', (v) => ctx.saveSetting('age', v)),
-      el('div', { class: 'tiny dim', text: `יעד חלבון ביום אימון: ${proteinTarget(s.bodyweight, true, chosen)} גרם · ביום מנוחה: ${proteinTarget(s.bodyweight, false, chosen)} גרם` }),
+      /* the figures follow the sex */
+      sexPicker(ctx, () => { paintProtein(); bodyType.paint(); }),
+      stepper('משקל גוף', s.bodyweight, 0.5, 30, 250, 'ק״ג', saveBody('bodyweight')),
+      stepper('גובה', s.height || 175, 1, 120, 230, 'ס״מ', saveBody('height')),
+      stepper('גיל', s.age || 30, 1, 12, 100, 'שנים', saveBody('age')),
+      bodyType.node,
+      proteinLine,
       el('div', { class: 'divider' }),
       barPicker(ctx, s),
       platePicker(ctx, s),
@@ -582,6 +599,50 @@ function stepper(label, value, step, min, max, unit, onSave) {
     hold(-1),
     hold(1)
   ]);
+}
+
+const SEXES = [{ id: 'male', name: 'גבר' }, { id: 'female', name: 'אישה' }, { id: 'other', name: 'לא לציין' }];
+
+function sexPicker(ctx, onChange) {
+  const row = el('div', { class: 'row', style: { gap: '7px' } });
+  const paint = () => row.replaceChildren(...SEXES.map((x) => el('button', {
+    class: `chip grow${(ctx.settings.sex || 'male') === x.id ? ' on' : ''}`,
+    style: { justifyContent: 'center' },
+    text: x.name,
+    onclick: async () => {
+      await ctx.saveSetting('sex', x.id);
+      paint();
+      onChange();
+    }
+  })));
+  paint();
+  return el('div', {}, [el('label', { class: 'field-label', text: 'מין' }), row]);
+}
+
+/** The same five figures as onboarding, small, in a scrollable row. */
+function bodyTypePicker(ctx, onChange) {
+  const row = el('div', { class: 'bt-grid compact' });
+  const paint = () => row.replaceChildren(...BODY_TYPES.map((b) => el('button', {
+    class: `bt${ctx.settings.bodyType === b.id ? ' on' : ''}`,
+    'aria-pressed': String(ctx.settings.bodyType === b.id),
+    onclick: async () => {
+      buzz(8);
+      await ctx.saveSetting('bodyType', ctx.settings.bodyType === b.id ? null : b.id);
+      paint();
+      onChange();
+    }
+  }, [
+    el('div', { class: 'bt-art', html: silhouette(b.id, ctx.settings.sex) }),
+    el('b', { text: b.name })
+  ])));
+  paint();
+  return {
+    paint,
+    node: el('div', {}, [
+      el('label', { class: 'field-label', text: 'מבנה גוף (לחיצה נוספת מבטלת)' }),
+      row
+    ])
+  };
 }
 
 /** Bars come in two lengths in almost every gym; the picture says which. */

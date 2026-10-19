@@ -9,7 +9,7 @@ import { el, icon, ICONS, toast, openSheet, confirmSheet, emptyState, buzz } fro
 import { parseMeal } from './food.js';
 import * as ai from './ai.js';
 import { goalList } from './programs.js';
-import { proteinTarget, todayISO, round2 } from './logic.js';
+import { proteinTarget, calorieTarget, todayISO, round2 } from './logic.js';
 import { recentWorkouts } from './session.js';
 
 /* A shape and a colour per macro group — not a photo (none exist for
@@ -34,8 +34,9 @@ export async function render(ctx) {
 
   const day = await loadDay(date);
   const trainedToday = (await recentWorkouts(10)).some((w) => w.date === date);
-  const pTarget = proteinTarget(s.bodyweight, trainedToday, goalList(s));
-  const kcalTarget = s.calorieTarget || estimateCalories(s, trainedToday);
+  const profile = { ...s, goals: goalList(s) };
+  const pTarget = proteinTarget(profile, trainedToday);
+  const kcalTarget = s.calorieTarget || calorieTarget(profile, trainedToday);
 
   const wrap = el('div', { class: 'stack' });
 
@@ -296,17 +297,6 @@ function meter(label, value, target, unit, color) {
       el('i', { style: { display: 'block', height: '100%', width: `${pct}%`, background: color, borderRadius: '8px', transition: 'width .3s' } })
     ])
   ]);
-}
-
-function estimateCalories(s, trainedToday) {
-  // Mifflin-St Jeor with a moderate activity factor; adjusted by goal.
-  const bmr = 10 * s.bodyweight + 6.25 * (s.height || 175) - 5 * (s.age || 30) + 5;
-  const tdee = bmr * (trainedToday ? 1.55 : 1.35);
-  /* A deficit wins over a surplus when both are selected — you cannot eat
-     above and below maintenance at the same time. */
-  const goals = goalList(s);
-  const adj = goals.includes('cut') ? -0.18 : goals.includes('hypertrophy') ? 0.1 : 0;
-  return Math.round(tdee * (1 + adj));
 }
 
 /* ---------- meal entry ---------- */

@@ -45,6 +45,19 @@ export const GOALS = {
     incCompound: 0.025,
     incIsolation: 0.05,
     rirTarget: 2
+  },
+  /* Cardiovascular fitness is mostly built outside the weight room, so this
+     goal's main effect is the aerobic sessions it puts on rest days. In the
+     gym it means lighter, higher-rep work on short rests. */
+  endurance: {
+    id: 'endurance',
+    name: 'כושר לב-ריאה',
+    desc: 'אירובי בימי המנוחה, חזרות גבוהות ומנוחות קצרות',
+    reps: { compound: [10, 15], isolation: [15, 20] },
+    restMul: 0.7,
+    incCompound: 0.025,
+    incIsolation: 0.05,
+    rirTarget: 2
   }
 };
 
@@ -55,6 +68,7 @@ export const DAY_TYPES = {
   Posture: { name: 'יציבה', short: 'Y', color: '#B98BFF' },
   Park: { name: 'פארק', short: 'P', color: '#2FD9C4' },
   Home: { name: 'בית', short: 'H', color: '#FF6FA8' },
+  Cardio: { name: 'אירובי', short: 'R', color: '#FF4D6D' },
   Custom: { name: 'מותאם', short: '★', color: '#FFC93D' }
 };
 
@@ -151,38 +165,103 @@ export const TEMPLATES = {
       { ex: 'thoracic_ext', s: 2, seconds: 45 },
       { ex: 'wall_angel', s: 2, seconds: 30 }
     ]
-  },
+  }
+};
 
-  /* Same reasoning as stretch vs. posture: a park workout is not "the gym
-     split with the machines removed" — it's built around what a park
-     actually has (a pull-up bar, dip bars, a bench or ledge) so nothing in
-     it silently swaps to something that isn't there. */
+/* ==========================================================================
+   Where today's session happens.
+
+   Not at the gym is not a reason to lose the day. A park or living-room
+   session is today's *planned* day — push stays push, pull stays pull —
+   rebuilt from what that place actually has, and it counts: the rotation
+   advances and the streak holds, exactly as if the gym had been open.
+
+   These are explicit lists rather than the equipment-swap logic, because
+   "closest movement pattern that needs no equipment" picks wall angels for
+   lateral raises. A push day at the park is push-ups and dips, on purpose.
+   ========================================================================== */
+export const VENUES = {
+  gym: { id: 'gym', name: 'חדר כושר', short: 'חדר כושר', desc: 'התוכנית כפי שהיא' },
+  park: { id: 'park', name: 'פארק', short: 'פארק', desc: 'מתח, מקבילים וספסל', suffix: 'בפארק' },
+  home: { id: 'home', name: 'בית', short: 'בית', desc: 'רצפה, כיסא ושולחן', suffix: 'בבית' }
+};
+
+export const VENUE_DAYS = {
   park: {
-    id: 'park', type: 'Park', name: 'אימון בפארק',
-    slots: [
-      { ex: 'pullup', s: 3 },
+    Push: [
+      { ex: 'pushup', s: 4 },
       { ex: 'dips', s: 3 },
-      { ex: 'bw_squat', s: 3 },
-      { ex: 'step_up', s: 3 },
-      { ex: 'hanging_leg_raise', s: 3 },
+      { ex: 'decline_pushup', s: 3 },
+      { ex: 'diamond_pushup', s: 3 },
       { ex: 'plank', s: 2, seconds: 45 }
+    ],
+    Pull: [
+      { ex: 'pullup', s: 4 },
+      { ex: 'inverted_row', s: 3 },
+      { ex: 'chin_up', s: 3 },
+      { ex: 'hanging_leg_raise', s: 3 },
+      { ex: 'side_plank', s: 2, seconds: 30 }
+    ],
+    Legs: [
+      { ex: 'bw_squat', s: 4 },
+      { ex: 'step_up', s: 3 },
+      { ex: 'bw_lunge', s: 3 },
+      { ex: 'single_leg_bridge', s: 3 },
+      { ex: 'bw_calf', s: 4 },
+      { ex: 'hanging_leg_raise', s: 3 }
     ]
   },
-
-  /* No bar, no bench — a table and a wall are what most living rooms
-     actually offer. */
+  /* No bar at home, so there is no vertical pull: the table row carries the
+     back work, and the rest of a pull day becomes core rather than nothing. */
   home: {
-    id: 'home', type: 'Home', name: 'אימון בבית',
-    slots: [
-      { ex: 'pushup', s: 3 },
-      { ex: 'inverted_row', s: 3 },
-      { ex: 'bw_squat', s: 3 },
-      { ex: 'bw_lunge', s: 3 },
-      { ex: 'glute_bridge', s: 3 },
+    Push: [
+      { ex: 'pushup', s: 4 },
+      { ex: 'decline_pushup', s: 3 },
+      { ex: 'bench_dips', s: 3 },
+      { ex: 'diamond_pushup', s: 3 },
       { ex: 'plank', s: 2, seconds: 45 }
+    ],
+    Pull: [
+      { ex: 'inverted_row', s: 4 },
+      { ex: 'reverse_crunch', s: 3 },
+      { ex: 'dead_bug', s: 3 },
+      { ex: 'crunches', s: 3 },
+      { ex: 'side_plank', s: 2, seconds: 30 }
+    ],
+    Legs: [
+      { ex: 'bw_squat', s: 4 },
+      { ex: 'bw_lunge', s: 3 },
+      { ex: 'step_up', s: 3 },
+      { ex: 'single_leg_bridge', s: 3 },
+      { ex: 'glute_bridge', s: 3 },
+      { ex: 'bw_calf', s: 4 }
     ]
   }
 };
+
+/** "דחיפה A · בפארק" — the gym template's emphasis ("חזה מוביל") describes
+    the gym version, so an away session keeps only the day and its letter. */
+export function sessionName(tpl, venue = 'gym') {
+  if (venue === 'gym' || !VENUE_DAYS[venue]?.[tpl.type]) return tpl.name;
+  return `${tpl.name.split(' · ')[0]} · ${VENUES[venue].suffix}`;
+}
+
+/** The venue picked for today; any other day's pick has expired. */
+export const venueToday = (settings, today) =>
+  (settings?.venueToday?.date === today && VENUES[settings.venueToday.venue])
+    ? settings.venueToday.venue
+    : 'gym';
+
+/**
+ * The slots a session of this template will actually contain: the venue's
+ * version of the day when there is one (posture days are already
+ * equipment-free and stay as they are), cut to the session-length setting.
+ * Shared by the preview and by createFromTemplate so the two never disagree.
+ */
+export function planSlots(tpl, settings, venue = 'gym') {
+  const base = (venue !== 'gym' && VENUE_DAYS[venue]?.[tpl.type]) || tpl.slots;
+  return base.slice(0, durationFor(settings?.duration).slots);
+}
 
 /* ==========================================================================
    Challenges — one set, all out, and a number to beat next time.

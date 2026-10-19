@@ -83,6 +83,11 @@ async function main() {
   await page.locator('.onb-foot .btn.primary').click();
   await page.waitForTimeout(350);
 
+  // body type — optional; left unpicked so the estimate falls back to BMI
+  await page.locator('.onb .bt').first().waitFor();
+  await page.locator('.onb-foot .btn.primary').click();
+  await page.waitForTimeout(350);
+
   // experience → intermediate
   await page.locator('.onb .pick').nth(1).click();
   await page.waitForTimeout(250);

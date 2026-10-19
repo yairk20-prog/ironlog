@@ -11,6 +11,7 @@ import { getExercise, exerciseName, MUSCLES } from './exercises.js';
 import { thumb } from './media.js';
 import { fmtDuration, oneRM, round2 } from './logic.js';
 import { setsOf, recentWorkouts } from './session.js';
+import { paceOf, weeklyCardioMinutes, WEEKLY_CARDIO_TARGET } from './cardio.js';
 
 export async function render(ctx) {
   ctx.setTitle('סיכום אימון');
@@ -18,6 +19,7 @@ export async function render(ctx) {
   const id = await db.setting('lastFinishedWorkout', null);
   const w = id ? await db.get('workouts', id) : (await recentWorkouts(1))[0];
   if (!w) return emptyState('אין אימון להצגה', 'סיים אימון וסיכום יופיע כאן');
+  if (w.cardio) return cardioSummary(ctx, w);
 
   const logs = (await setsOf(w.id)).filter((l) => !l.is_warmup);
   const volume = logs.reduce((s, l) => s + (l.weight_kg || 0) * (l.reps || 0), 0);
@@ -35,7 +37,10 @@ export async function render(ctx) {
   wrap.appendChild(el('div', { class: 'summary-grid' }, [
     tile(fmtDuration(w.duration_seconds), 'משך', ICONS.timer),
     tile(String(logs.length), 'סטים', ICONS.dumbbell),
-    tile(volume >= 1000 ? `${(volume / 1000).toFixed(1)} טון` : `${Math.round(volume)} ק״ג`, 'נפח כולל', ICONS.trend),
+    /* A bodyweight day lifts no added load; "0 kg" would read as nothing done. */
+    volume
+      ? tile(volume >= 1000 ? `${(volume / 1000).toFixed(1)} טון` : `${Math.round(volume)} ק״ג`, 'נפח כולל', ICONS.trend)
+      : tile('משקל גוף', 'עומס', ICONS.trend),
     tile(String(reps), 'חזרות', ICONS.spark)
   ]));
 
@@ -102,7 +107,49 @@ export async function render(ctx) {
   return wrap;
 }
 
-const tile = (value, label, iconPath) => el('div', { class: 'card', style: { padding: '13px' } }, [
+/** A run has no sets or muscle map; what it has is time, distance, pace and
+    where it leaves the week against the 150-minute guideline. */
+async function cardioSummary(ctx, w) {
+  const c = w.cardio;
+  const mins = weeklyCardioMinutes(await recentWorkouts(60));
+  const pct = Math.min(100, Math.round((mins / WEEKLY_CARDIO_TARGET) * 100));
+  const pace = paceOf(w.duration_seconds, c.distance_km);
+  const effort = { 2: 'קל מאוד', 4: 'קל', 6: 'בינוני', 8: 'קשה', 10: 'מקסימלי' }[c.rpe];
+
+  return el('div', { class: 'stack' }, [
+    el('div', { class: 'summary-hero' }, [
+      el('div', { class: 's-mark' }, [icon(ICONS.run, 30)]),
+      el('h2', { text: 'אירובי הושלם' }),
+      el('p', { text: `${w.name} · ${new Date(w.finished_at).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}` })
+    ]),
+    /* Distance and pace only mean something when there was a distance —
+       an indoor session shows how hard it was instead of two dashes. */
+    el('div', { class: 'summary-grid' }, [
+      tile(fmtDuration(w.duration_seconds), 'זמן תנועה', ICONS.timer),
+      tile(String(c.kcal || 0), 'קק״ל (הערכה)', ICONS.flame),
+      ...(c.distance_km
+        ? [tile(`${c.distance_km} ק״מ`, 'מרחק', ICONS.ruler), tile(pace || '—', 'קצב לק״מ', ICONS.trend)]
+        : [tile(effort || '—', 'מאמץ', ICONS.spark), tile(String(mins), 'דקות השבוע', ICONS.trend)])
+    ]),
+    el('div', { class: 'card stack', style: { gap: '8px' } }, [
+      el('div', { class: 'row between' }, [
+        el('b', { text: 'אירובי השבוע' }),
+        el('b', { class: 'num', text: `${mins} מתוך ${WEEKLY_CARDIO_TARGET} דק׳` })
+      ]),
+      el('div', { class: 'meter-track' }, [el('i', { style: { width: `${pct}%` } })]),
+      el('p', {
+        class: 'tiny dim', style: { margin: 0 },
+        text: mins >= WEEKLY_CARDIO_TARGET
+          ? 'עברת את היעד השבועי — הלב שלך מודה לך.'
+          : `עוד ${WEEKLY_CARDIO_TARGET - mins} דקות כדי לסגור את השבוע.${effort ? ` המאמץ היום: ${effort}.` : ''}`
+      })
+    ]),
+    el('button', { class: 'btn primary full', style: { marginTop: '10px' }, onclick: () => ctx.go('home') },
+      [icon(ICONS.check, 18), 'סיימתי'])
+  ]);
+}
+
+export const tile = (value, label, iconPath) => el('div', { class: 'card', style: { padding: '13px' } }, [
   el('div', { class: 'row', style: { gap: '7px', marginBottom: '5px', color: 'var(--text-3)' } }, [
     icon(iconPath, 15),
     el('span', { class: 'tiny', text: label })
