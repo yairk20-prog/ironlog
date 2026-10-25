@@ -1,12 +1,16 @@
 /* ==========================================================================
    screen-nutrition.js — daily calories, protein and water.
-   Text entry works offline through food.js; the photo path and the smarter
-   text path are added only when an API key exists.
+   Food is added four ways — database search, saved foods, a photo, free
+   text. Search, saved foods and text work offline through food.js; the
+   photo, the smarter text pass and lookups of unknown foods need the AI.
    ========================================================================== */
 
 import * as db from './db.js';
-import { el, icon, ICONS, toast, openSheet, confirmSheet, emptyState, buzz } from './ui.js';
-import { parseMeal } from './food.js';
+import { el, icon, ICONS, toast, openSheet, closeSheet, confirmSheet, buzz } from './ui.js';
+import {
+  parseMeal, searchFoods, foodById, foodCount, POPULAR, norm, unitsFor, defaultPortion,
+  portion, portionForGrams, foodFromItem, makeFood
+} from './food.js';
 import * as ai from './ai.js';
 import { goalList } from './programs.js';
 import { proteinTarget, calorieTarget, todayISO, round2 } from './logic.js';
@@ -20,7 +24,10 @@ const FOOD_CAT = {
   dairy: { ico: ICONS.carton, color: '#4DA3FF' },
   carb: { ico: ICONS.grain, color: 'var(--warn)' },
   produce: { ico: ICONS.leaf, color: 'var(--ok)' },
-  fat: { ico: ICONS.drop, color: '#B98BFF' }
+  fat: { ico: ICONS.drop, color: '#B98BFF' },
+  sweet: { ico: ICONS.candy, color: '#FF6FAE' },
+  drink: { ico: ICONS.glass, color: '#5AC8FA' },
+  dish: { ico: ICONS.plate, color: 'var(--text-2)' }
 };
 const foodIcon = (cat) => {
   const c = FOOD_CAT[cat] || { ico: ICONS.plate, color: 'var(--text-3)' };
@@ -47,7 +54,11 @@ export async function render(ctx) {
       el('span', { class: 'badge accent', text: `${day.items.length} רישומים` })
     ]),
     meter('חלבון', day.protein_grams, pTarget, 'גרם', 'var(--accent)'),
-    meter('קלוריות', day.calories_consumed, kcalTarget, 'קק״ל', 'var(--ok)')
+    meter('קלוריות', day.calories_consumed, kcalTarget, 'קק״ל', 'var(--ok)'),
+    el('div', { class: 'macro-strip' }, [
+      el('span', {}, ['פחמימות ', el('b', { class: 'num', text: `${Math.round(day.carbs_grams)} ג׳` })]),
+      el('span', {}, ['שומן ', el('b', { class: 'num', text: `${Math.round(day.fat_grams)} ג׳` })])
+    ])
   ]));
 
   /* ---- water, counted the way people drink it ---- */
@@ -134,11 +145,15 @@ function mealCard(ctx, day, meal) {
 
   const rows = items.map((it) => {
     const index = day.items.indexOf(it);
+    /* Tapping a logged food reopens its portion: "it was two, not one" is
+       the commonest correction, and deleting and re-adding is the long way. */
     return el('div', { class: 'meal-item' }, [
-      foodIcon(it.cat),
-      el('div', { class: 'grow' }, [
-        el('b', { text: it.label }),
-        el('small', { text: `${it.amount || ''} · ${Math.round(it.kcal)} קק״ל · ${round2(it.p)} ג׳ חלבון` })
+      el('button', { class: 'meal-item-main', 'aria-label': `ערוך ${it.label}`, onclick: () => editItem(ctx, day, index) }, [
+        foodIcon(it.cat),
+        el('div', { class: 'grow' }, [
+          el('b', { text: it.label }),
+          el('small', { text: `${it.amount || ''} · ${Math.round(it.kcal)} קק״ל · ${round2(it.p)} ג׳ חלבון` })
+        ])
       ]),
       el('button', {
         class: 'meal-del', 'aria-label': `מחק ${it.label}`,
@@ -299,195 +314,683 @@ function meter(label, value, target, unit, color) {
   ]);
 }
 
-/* ---------- meal entry ---------- */
+/* ---------- adding food ----------
+   Four ways in, because people remember a meal in four different ways: by
+   name ("קוטג׳"), by habit (the same breakfast every day), by looking at it
+   (a photo), or as a sentence. Every one of them ends in the same item
+   shape, with calories, protein, carbs and fat computed from per-100 g
+   values — so the day's totals mean the same thing whichever way was used. */
 
-function mealSheet(ctx, day, meal = { id: currentMeal(), name: 'ארוחה' }) {
-  openSheet(`הוסף ל${meal.name}`, (close) => {
+/** The user's own foods: saved favourites and foods they defined. */
+const savedFoods = () => db.setting('savedFoods', []);
+const customFoods = () => db.setting('customFoods', []);
+
+async function myFoods() {
+  const [saved, custom] = await Promise.all([savedFoods(), customFoods()]);
+  const seen = new Set();
+  return [...custom, ...saved].filter((f) => (seen.has(f.id) ? false : seen.add(f.id)));
+}
+
+/** Resolve a food id: the database first, so a fixed value is never stale. */
+const resolver = (mine) => (id) => foodById(id) || mine.find((f) => f.id === id) || null;
+
+async function isSaved(food) {
+  return (await savedFoods()).some((f) => f.id === food.id);
+}
+
+async function toggleSaved(food) {
+  const list = await savedFoods();
+  const on = list.some((f) => f.id === food.id);
+  const next = on ? list.filter((f) => f.id !== food.id) : [{ ...food }, ...list].slice(0, 60);
+  await db.setSetting('savedFoods', next);
+  return !on;
+}
+
+async function addCustomFood(food) {
+  const list = await customFoods();
+  const same = list.find((f) => norm(f.name) === norm(food.name));
+  const keep = same ? { ...food, id: same.id } : food;
+  await db.setSetting('customFoods', [keep, ...list.filter((f) => f.id !== keep.id)].slice(0, 200));
+  return keep;
+}
+
+/**
+ * Foods eaten lately, most often first — the list that makes the third
+ * identical breakfast a single tap.
+ */
+async function recentFoods(limit = 12) {
+  const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const days = (await db.all('nutrition_logs')).filter((d) => d.date >= since)
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+  const map = new Map();
+  for (const d of days) {
+    for (const it of d.items || []) {
+      if (!it.label || it.amount === 'ידני') continue;
+      const key = it.fid || `${it.label}|${it.amount}`;
+      const row = map.get(key);
+      if (row) row.count++;
+      else map.set(key, { item: it, count: 1, date: d.date });
+    }
+  }
+  return [...map.values()]
+    .sort((a, b) => b.count - a.count || (a.date < b.date ? 1 : -1))
+    .slice(0, limit)
+    .map((r) => r.item);
+}
+
+const macroLine = (i) => `${Math.round(i.kcal)} קק״ל · ${round1(i.p)} ג׳ חלבון`;
+const round1 = (n) => Math.round((n || 0) * 10) / 10;
+
+/** Put items on the meal, keep the day's totals true, and say so. */
+async function addItems(flow, items) {
+  if (!items.length) return;
+  flow.day.items.push(...items.map((i) => ({ ...i, meal: flow.meal.id })));
+  recompute(flow.day);
+  await saveDay(flow.day);
+  flow.added.push(...items);
+  buzz(12);
+  toast(items.length === 1 ? `נוסף: ${items[0].label}` : `נוספו ${items.length} פריטים`, 'ok');
+  flow.ctx.reload();
+}
+
+/**
+ * One page of the add-food flow: a way back to the four options on top, and
+ * — once something has been added — a running total and a way out below.
+ */
+function page(flow, title, build, { back = () => mealSheet(flow.ctx, flow.day, flow.meal, flow) } = {}) {
+  openSheet(title, (close) => {
     const box = el('div', { class: 'stack' });
+    box.appendChild(el('button', { class: 'linkish add-back', onclick: back }, [icon(ICONS.chevron, 16), 'חזרה']));
+    const body = build(close);
+    (Array.isArray(body) ? body : [body]).filter(Boolean).forEach((n) => box.appendChild(n));
+    if (flow.added.length) box.appendChild(doneBar(flow, close));
+    return box;
+  });
+}
 
-    let aiAvailable = false;
-    ai.hasKey().then((keyed) => {
-      aiAvailable = keyed;
-      if (!keyed) return;
-      box.insertBefore(el('button', {
-        class: 'btn full',
-        onclick: () => { close(); photoSheet(ctx, day, meal); }
-      }, [icon(ICONS.camera, 18), 'צלם את הצלחת במקום']), box.firstChild);
-      draw();
-    });
-    const ta = el('textarea', { rows: '3', placeholder: 'לדוגמה: שתי ביצים, 150 גרם חזה עוף וכוס אורז' });
-    const preview = el('div', { class: 'stack' });
+function doneBar(flow, close) {
+  const t = sum(flow.added);
+  return el('div', { class: 'add-done' }, [
+    el('div', { class: 'grow' }, [
+      el('b', { text: `נוספו ל${flow.meal.name}: ${flow.added.length}` }),
+      el('small', { text: `${Math.round(t.kcal)} קק״ל · ${round1(t.p)} ג׳ חלבון` })
+    ]),
+    el('button', { class: 'btn sm primary', text: 'סיום', onclick: close })
+  ]);
+}
 
-    let parsed = { items: [], total: { kcal: 0, p: 0, c: 0, f: 0 }, unmatched: [] };
+function mealSheet(ctx, day, meal = MEALS.find((m) => m.id === currentMeal()), flow = null) {
+  flow = flow || { ctx, day, meal, added: [] };
+  openSheet(`הוספת מאכל · ${meal.name}`, (close) => {
+    const box = el('div', { class: 'stack' });
+    const tile = (ico, title, sub, onclick) => el('button', { class: 'add-tile', onclick }, [
+      el('span', { class: 'add-tile-ico' }, [icon(ico, 26)]),
+      el('b', { text: title }),
+      el('small', { text: sub })
+    ]);
+    box.appendChild(el('div', { class: 'add-grid' }, [
+      tile(ICONS.search, 'חיפוש במאגר', `${foodCount} מאכלים, ועוד עם AI`, () => searchSheet(flow)),
+      tile(ICONS.heart, 'מאכלים שמורים', 'מועדפים ואחרונים', () => savedSheet(flow)),
+      tile(ICONS.camera, 'צילום', 'AI מזהה מה בצלחת', () => photoSheet(flow)),
+      tile(ICONS.pen, 'תיאור חופשי', 'כתוב מה אכלת', () => textSheet(flow))
+    ]));
 
-    /* The offline dictionary knows ~70 common foods; everything else needs
-       the AI pass. Rather than a dead-end "not found" toast, point straight
-       at the button that actually handles the rest. */
-    const draw = () => {
-      preview.innerHTML = '';
-      if (!parsed.items.length) {
-        if (parsed.unmatched?.length) {
-          preview.appendChild(el('div', { class: 'tiny dim' }, aiAvailable
-            ? [`"${parsed.unmatched.join(', ')}" לא נמצא ברשימה המקומית. לחץ `, el('b', { text: '"דיוק בעזרת AI"' }), ' למטה כדי שהוא ינותח.']
-            : [`"${parsed.unmatched.join(', ')}" לא נמצא ברשימה המקומית. אפשר להזין ידנית למטה, או להגדיר מפתח API בהגדרות כדי שה-AI ינתח כל מאכל.`]));
-        }
-        return;
-      }
-      parsed.items.forEach((i) => preview.appendChild(el('div', { class: 'ex-row' }, [
-        foodIcon(i.cat),
-        el('div', { class: 'grow' }, [
-          el('div', { class: 'ex-name', text: i.label }),
-          el('div', { class: 'ex-meta', text: `${i.amount} · ${Math.round(i.kcal)} קק״ל · ${i.p} ג׳ חלבון` })
-        ])
+    /* The last few things eaten, one tap each — most meals repeat. */
+    const quick = el('div', { class: 'stack' });
+    box.appendChild(quick);
+    recentFoods(4).then((list) => {
+      if (!list.length) return;
+      quick.appendChild(el('div', { class: 'section-title', text: 'שוב אותו דבר?' }));
+      const rows = el('div', { class: 'food-list' });
+      list.forEach((it) => rows.appendChild(el('div', { class: 'food-row' }, [
+        foodIcon(it.cat),
+        el('div', { class: 'grow' }, [el('b', { text: it.label }), el('small', { text: `${it.amount} · ${macroLine(it)}` })]),
+        el('button', {
+          class: 'food-quick', 'aria-label': `הוסף שוב ${it.label}`,
+          onclick: async (e) => {
+            const btn = e.currentTarget;   // gone once the handler awaits
+            btn.disabled = true;
+            const { meal: _m, ...copy } = it;
+            await addItems(flow, [copy]);
+            btn.replaceChildren(icon(ICONS.check, 18));
+          }
+        }, [icon(ICONS.plus, 18)])
       ])));
-      preview.appendChild(el('div', { class: 'target-box' }, [
-        el('div', { class: 't-lbl', text: 'סה״כ' }),
-        el('div', { class: 't-val num', text: `${Math.round(parsed.total.kcal)} קק״ל · ${parsed.total.p} ג׳` })
-      ]));
-      if (parsed.unmatched?.length) {
-        preview.appendChild(el('div', { class: 'tiny', style: { color: 'var(--warn)' }, text: `לא זוהו: ${parsed.unmatched.join(', ')}` }));
-      }
-    };
+      quick.appendChild(rows);
+    });
 
-    ta.addEventListener('input', () => { parsed = parseMeal(ta.value); draw(); });
+    if (flow.added.length) box.appendChild(doneBar(flow, close));
+    return box;
+  });
+}
 
-    const save = async () => {
-      if (!parsed.items.length) { toast('לא זוהה אוכל בטקסט — נסה AI או הזנה ידנית', 'bad'); return; }
-      day.items.push(...parsed.items.map((i) => ({ ...i, meal: meal.id })));
-      recompute(day);
-      await saveDay(day);
-      close();
-      toast('נרשם', 'ok');
-      ctx.reload();
-    };
+/* ---------- 1. search the database ---------- */
 
-    box.appendChild(ta);
-    box.appendChild(preview);
-    box.appendChild(el('button', { class: 'btn primary full', text: 'הוסף ליום', onclick: save }));
-    box.appendChild(el('button', {
-      class: 'btn full',
-      text: 'דיוק בעזרת AI',
-      onclick: async (e) => {
-        if (!(await ai.hasKey())) { toast('הגדר מפתח API בהגדרות', 'bad'); return; }
-        const btn = e.currentTarget;
-        btn.disabled = true; btn.textContent = 'מנתח…';
+function foodRow(food, onclick, extra = null) {
+  const def = defaultPortion(food);
+  const it = portion(food, def.unit, def.qty);
+  return el('div', { class: 'food-row' }, [
+    el('button', { class: 'food-row-main', onclick }, [
+      foodIcon(food.cat),
+      el('div', { class: 'grow' }, [
+        el('b', { text: food.name }),
+        el('small', { text: `${it.amount} · ${macroLine(it)}` })
+      ]),
+      food.custom ? el('span', { class: 'badge', text: food.src === 'ai' ? 'AI' : 'שלי' }) : null
+    ]),
+    extra
+  ]);
+}
+
+function searchSheet(flow) {
+  page(flow, 'חיפוש במאגר', () => {
+    const input = el('input', { type: 'search', placeholder: 'חפש מאכל — קוטג׳, פיתה, שקדים…', enterkeyhint: 'search' });
+    input.value = flow.query || '';
+    const list = el('div', { class: 'food-list' });
+    const more = el('div', { class: 'stack' });
+    let mine = [];
+
+    const draw = () => {
+      const q = input.value.trim();
+      flow.query = q;
+      list.replaceChildren();
+      more.replaceChildren();
+      const found = q ? searchFoods(q, mine) : POPULAR;
+      if (!q) list.appendChild(el('div', { class: 'section-title', text: 'נפוצים' }));
+      found.forEach((f) => list.appendChild(foodRow(f, () => portionSheet(flow, f, { back: () => searchSheet(flow) }))));
+      if (!q) return;
+
+      if (!found.length) more.appendChild(el('div', { class: 'tiny dim', text: `"${q}" לא נמצא במאגר.` }));
+      /* Not in the database is not a dead end: ask the AI for its label
+         values, or type them off the package. Either way it is kept, so the
+         next search finds it offline. */
+      const aiBtn = el('button', { class: 'btn full' }, [icon(ICONS.spark, 18), `חפש "${q}" עם AI`]);
+      aiBtn.addEventListener('click', async () => {
+        if (!(await ai.hasKey())) {
+          toast('חיפוש AI דורש חיבור — הגדר מפתח API בהגדרות, או צור את המאכל ידנית', 'bad');
+          return;
+        }
+        aiBtn.disabled = true;
+        aiBtn.replaceChildren(icon(ICONS.spark, 18), 'מחפש ערכים…');
         try {
-          const out = await ai.analyzeMealText(ta.value);
-          parsed = { items: out.items || [], total: sum(out.items || []), unmatched: [] };
-          draw();
-          if (out.note) toast(out.note);
+          const r = await ai.lookupFood(q);
+          const food = await addCustomFood(makeFood({
+            name: r.name, cat: r.cat, kcal: r.kcal, p: r.p, c: r.c, f: r.f,
+            g: r.unitG, ul: r.unitLabel, d: r.defG, src: 'ai'
+          }));
+          if (r.note) toast(r.note);
+          portionSheet(flow, food, { back: () => searchSheet(flow) });
         } catch (err) {
           toast(err.message, 'bad');
-        } finally {
-          btn.disabled = false; btn.textContent = 'דיוק בעזרת AI';
+          aiBtn.disabled = false;
+          aiBtn.replaceChildren(icon(ICONS.spark, 18), `חפש "${q}" עם AI`);
         }
-      }
-    }));
+      });
+      more.appendChild(aiBtn);
+      more.appendChild(el('button', {
+        class: 'btn full ghost', onclick: () => customFoodSheet(flow, q)
+      }, [icon(ICONS.plus, 18), 'צור מאכל חדש מהתווית']));
+    };
 
-    /* manual override */
-    box.appendChild(el('div', { class: 'section-title', text: 'או הזנה ידנית' }));
-    const kc = el('input', { type: 'number', inputmode: 'numeric', placeholder: 'קלוריות' });
-    const pr = el('input', { type: 'number', inputmode: 'decimal', placeholder: 'חלבון (גרם)' });
+    input.addEventListener('input', draw);
+    myFoods().then((m) => { mine = m; draw(); });
+    draw();
+    requestAnimationFrame(() => input.focus({ preventScroll: true }));
+    return [input, list, more];
+  });
+}
+
+/* ---------- the portion picker ---------- */
+
+/**
+ * Choose how much, see what it comes to. Every number on the page is
+ * computed from the food's per-100 g values as the amount changes.
+ * @param {object} opts back: where "חזרה" goes; grams: start amount;
+ *                      onSave: replace an existing item instead of adding.
+ */
+function portionSheet(flow, food, { back, grams = null, onSave = null } = {}) {
+  page(flow, food.name, (close) => {
+    const units = unitsFor(food);
+    let { unit, qty } = grams ? portionForGrams(food, grams) : defaultPortion(food);
+
+    /* The title already names the food; the head says what the numbers
+       are per, so the label on the package can be checked against it. */
+    const perTitle = food.serving ? `מנה · ${food.serving}` : `ערכים ל-100 ${food.ml ? 'מ״ל' : 'גרם'}`;
+    const per = `${Math.round(food.kcal)} קק״ל · חלבון ${round1(food.p)} · פחמימות ${round1(food.c)} · שומן ${round1(food.f)}`;
+
+    const chips = el('div', { class: 'unit-chips' });
+    const qtyIn = el('input', { type: 'number', inputmode: 'decimal', min: '0', step: 'any', class: 'qty-in', 'aria-label': 'כמות' });
+    const unitLbl = el('span', { class: 'qty-unit' });
+    const grid = el('div', { class: 'macro-grid' });
+    const grams_ = el('div', { class: 'tiny dim' });
+
+    const step = () => (unit.id === 'g' ? (qty >= 100 ? 10 : 5) : 0.5);
+    const draw = () => {
+      chips.replaceChildren(...units.map((u) => el('button', {
+        class: `chip${u.id === unit.id ? ' on' : ''}`, text: u.label,
+        onclick: () => {
+          if (u.id === unit.id) return;
+          /* Switching measure keeps the amount on the plate the same,
+             rounded to something you could actually serve. */
+          const g = unit.g * qty;
+          unit = u;
+          qty = u.id === 'g' ? Math.round(g) : Math.max(0.5, Math.round((g / u.g) * 2) / 2);
+          qtyIn.value = qty;
+          draw();
+        }
+      })));
+      unitLbl.textContent = unit.label;
+      const it = portion(food, unit, qty || 0);
+      grid.replaceChildren(
+        cell('קלוריות', Math.round(it.kcal), 'קק״ל', 'kcal'),
+        cell('חלבון', round1(it.p), 'ג׳', 'p'),
+        cell('פחמימות', round1(it.c), 'ג׳', 'c'),
+        cell('שומן', round1(it.f), 'ג׳', 'f')
+      );
+      grams_.textContent = food.serving || unit.id === 'g' ? '' : `= ${Math.round(it.grams)} ${food.ml ? 'מ״ל' : 'גרם'}`;
+    };
+    const cell = (label, value, unitText, cls) => el('div', { class: `macro-cell ${cls}` }, [
+      el('small', { text: label }), el('b', { class: 'num', text: String(value) }), el('span', { text: unitText })
+    ]);
+
+    qtyIn.value = qty;
+    qtyIn.addEventListener('input', () => { qty = Math.max(0, Number(qtyIn.value) || 0); draw(); });
+    const nudge = (dir) => {
+      qty = Math.max(unit.id === 'g' ? 5 : 0.5, Math.round((qty + dir * step()) * 10) / 10);
+      qtyIn.value = qty;
+      draw();
+    };
+
+    const heart = el('button', { class: 'btn sm ghost heart-btn', 'aria-pressed': 'false' });
+    const paintHeart = (on) => {
+      heart.classList.toggle('on', on);
+      heart.setAttribute('aria-pressed', String(on));
+      heart.replaceChildren(icon(ICONS.heart, 16), on ? 'שמור במועדפים' : 'שמור למועדפים');
+    };
+    isSaved(food).then(paintHeart);
+    heart.addEventListener('click', async () => {
+      const on = await toggleSaved(food);
+      paintHeart(on);
+      buzz(8);
+      toast(on ? 'נשמר במאכלים השמורים' : 'הוסר מהשמורים');
+    });
+
+    const go = el('button', {
+      class: 'btn primary full',
+      text: onSave ? 'עדכן' : `הוסף ל${flow.meal.name}`,
+      onclick: async () => {
+        if (!(qty > 0)) { toast('בחר כמות', 'bad'); return; }
+        const item = portion(food, unit, qty);
+        if (onSave) { await onSave(item); close(); return; }
+        await addItems(flow, [item]);
+        back();
+      }
+    });
+
+    draw();
+    return [
+      el('div', { class: 'portion-head' }, [
+        foodIcon(food.cat),
+        el('div', { class: 'grow' }, [el('b', { text: perTitle }), el('small', { text: per })]),
+        heart
+      ]),
+      chips,
+      el('div', { class: 'qty-row' }, [
+        el('button', { class: 'qty-btn', 'aria-label': 'פחות', onclick: () => nudge(-1) }, [icon(ICONS.minus, 18)]),
+        qtyIn, unitLbl,
+        el('button', { class: 'qty-btn', 'aria-label': 'יותר', onclick: () => nudge(1) }, [icon(ICONS.plus, 18)])
+      ]),
+      grams_,
+      grid,
+      go
+    ];
+  }, { back });
+}
+
+/* ---------- a food from the package label ---------- */
+
+const CATS = [
+  ['protein', 'חלבון'], ['dairy', 'חלב'], ['carb', 'פחמימה'], ['produce', 'פרי / ירק'],
+  ['fat', 'שומן'], ['sweet', 'מתוק / חטיף'], ['drink', 'משקה'], ['dish', 'מנה']
+];
+
+function customFoodSheet(flow, name = '') {
+  page(flow, 'מאכל חדש', () => {
+    let cat = 'dish';
+    const nm = el('input', { type: 'text', placeholder: 'שם המאכל', value: name });
+    nm.value = name;
+    const num = (ph) => el('input', { type: 'number', inputmode: 'decimal', min: '0', step: 'any', placeholder: ph });
+    const kc = num('קלוריות'), pr = num('חלבון'), cb = num('פחמימות'), ft = num('שומן');
+    const ug = num('משקל יחידה (גרם)');
+    const ul = el('input', { type: 'text', placeholder: 'שם היחידה (חטיף, פרוסה…)' });
+    const chips = el('div', { class: 'unit-chips' });
+    const drawCats = () => chips.replaceChildren(...CATS.map(([id, label]) => el('button', {
+      class: `chip${id === cat ? ' on' : ''}`, text: label, onclick: () => { cat = id; drawCats(); }
+    })));
+    drawCats();
+
+    const save = el('button', {
+      class: 'btn primary full', text: 'שמור והמשך לכמות',
+      onclick: async () => {
+        const p = Number(pr.value) || 0, c = Number(cb.value) || 0, f = Number(ft.value) || 0;
+        /* No calories on the label (or not typed)? They follow from the
+           macros: 4 per gram of protein and carbs, 9 per gram of fat. */
+        const kcal = Number(kc.value) || Math.round(p * 4 + c * 4 + f * 9);
+        if (!nm.value.trim()) { toast('תן שם למאכל', 'bad'); return; }
+        if (!kcal) { toast('הזן לפחות קלוריות או ערכי מאקרו', 'bad'); return; }
+        const food = await addCustomFood(makeFood({
+          name: nm.value, cat, kcal, p, c, f, g: Number(ug.value) || null, ul: ul.value.trim() || null
+        }));
+        portionSheet(flow, food, { back: () => searchSheet(flow) });
+      }
+    });
+
+    return [
+      el('p', { class: 'tiny dim', style: { margin: 0 }, text: 'הערכים כמו בטבלה התזונתית על האריזה — ל-100 גרם. המאכל נשמר ויופיע בחיפוש הבא, גם בלי אינטרנט.' }),
+      nm,
+      chips,
+      el('div', { class: 'field-label', text: 'ל-100 גרם' }),
+      el('div', { class: 'grid-2' }, [kc, pr, cb, ft]),
+      el('div', { class: 'field-label', text: 'יחידה (לא חובה)' }),
+      el('div', { class: 'grid-2' }, [ug, ul]),
+      save
+    ];
+  }, { back: () => searchSheet(flow) });
+}
+
+/* ---------- 2. saved and recent ---------- */
+
+function savedSheet(flow) {
+  page(flow, 'מאכלים שמורים', () => {
+    const box = el('div', { class: 'stack' });
+    const here = () => savedSheet(flow);
+    Promise.all([savedFoods(), customFoods(), recentFoods(15)]).then(([saved, custom, recent]) => {
+      const mine = [...custom, ...saved];
+      const lookup = resolver(mine);
+      const section = (title) => box.appendChild(el('div', { class: 'section-title', text: title }));
+
+      section('מועדפים');
+      if (!saved.length) {
+        box.appendChild(el('p', { class: 'tiny dim', style: { margin: 0 }, text: 'עוד אין מועדפים. בכל מאכל יש כפתור לב — מה שמסומן בו מחכה כאן.' }));
+      } else {
+        const list = el('div', { class: 'food-list' });
+        saved.forEach((s) => {
+          const food = lookup(s.id) || s;
+          list.appendChild(foodRow(food, () => portionSheet(flow, food, { back: here }), el('button', {
+            class: 'food-quick on', 'aria-label': `הסר ${food.name} מהמועדפים`,
+            onclick: async () => { await toggleSaved(food); here(); }
+          }, [icon(ICONS.heart, 18)])));
+        });
+        box.appendChild(list);
+      }
+
+      if (recent.length) {
+        section('אכלת לאחרונה');
+        const list = el('div', { class: 'food-list' });
+        recent.forEach((it) => {
+          const { food, grams } = foodFromItem(it, lookup);
+          list.appendChild(el('div', { class: 'food-row' }, [
+            el('button', { class: 'food-row-main', onclick: () => portionSheet(flow, food, { back: here, grams }) }, [
+              foodIcon(it.cat),
+              el('div', { class: 'grow' }, [el('b', { text: it.label }), el('small', { text: `${it.amount} · ${macroLine(it)}` })])
+            ]),
+            el('button', {
+              class: 'food-quick', 'aria-label': `הוסף שוב ${it.label}`,
+              onclick: async (e) => {
+                const btn = e.currentTarget;
+                btn.disabled = true;
+                const { meal: _m, ...copy } = it;
+                await addItems(flow, [copy]);
+                btn.replaceChildren(icon(ICONS.check, 18));
+              }
+            }, [icon(ICONS.plus, 18)])
+          ]));
+        });
+        box.appendChild(list);
+      }
+
+      if (custom.length) {
+        section('מאכלים שהגדרת');
+        const list = el('div', { class: 'food-list' });
+        custom.forEach((food) => list.appendChild(foodRow(food, () => portionSheet(flow, food, { back: here }), el('button', {
+          class: 'food-quick', 'aria-label': `מחק ${food.name}`,
+          onclick: async () => {
+            if (!(await confirmSheet('מחיקת מאכל', `למחוק את "${food.name}" מהמאכלים שלך? מה שכבר נרשם ביומן נשאר.`, 'מחק'))) { here(); return; }
+            await db.setSetting('customFoods', (await customFoods()).filter((f) => f.id !== food.id));
+            await db.setSetting('savedFoods', (await savedFoods()).filter((f) => f.id !== food.id));
+            here();
+          }
+        }, [icon(ICONS.trash, 16)]))));
+        box.appendChild(list);
+      }
+    });
+    return box;
+  });
+}
+
+/* ---------- 3. photo ---------- */
+
+function photoSheet(flow) {
+  page(flow, 'צילום הצלחת', () => {
+    const box = el('div', { class: 'stack' });
+    ai.hasKey().then((keyed) => {
+      if (keyed) { box.append(...photoBody(flow)); return; }
+      /* Without a model nothing can look at the photo, and pretending
+         otherwise wastes a picture. Say so, and point at the two ways that
+         work offline. */
+      box.append(
+        el('div', { class: 'rest-tip' }, [
+          el('div', { class: 'rest-tip-ico' }, [icon(ICONS.camera, 18)]),
+          el('div', { class: 'grow' }, [
+            el('b', { text: 'זיהוי מתמונה עובד דרך AI' }),
+            el('p', { text: 'צריך חיבור ל-AI (מפתח API בהגדרות, או שרת שמגיע עם האפליקציה). עד אז — חיפוש במאגר או תיאור חופשי עובדים גם בלי אינטרנט.' })
+          ])
+        ]),
+        el('button', { class: 'btn full', onclick: () => { closeSheet(); flow.ctx.go('settings'); } }, [icon(ICONS.spark, 18), 'להגדרות ה-AI']),
+        el('button', { class: 'btn full ghost', onclick: () => searchSheet(flow) }, [icon(ICONS.search, 18), 'חיפוש במאגר'])
+      );
+    });
+    return box;
+  });
+}
+
+function photoBody(flow) {
+  const file = el('input', { type: 'file', accept: 'image/*', capture: 'environment', style: { display: 'none' } });
+  const pick = el('button', {
+    type: 'button', class: 'btn photo-pick',
+    onclick: () => file.click()
+  }, [icon(ICONS.camera, 24), el('span', { text: 'צלם או בחר תמונה של הצלחת' })]);
+  const hint = el('input', { type: 'text', placeholder: 'רמז אופציונלי (למשל: צלחת גדולה, בלי רוטב)' });
+  const out = el('div', { class: 'stack' });
+  const results = el('div', { class: 'stack' });
+  let items = [];
+
+  const save = el('button', {
+    class: 'btn primary full', text: `הוסף ל${flow.meal.name}`, disabled: true,
+    onclick: async () => {
+      if (!items.length) { toast('אין מה להוסיף', 'bad'); return; }
+      await addItems(flow, items);
+      mealSheet(flow.ctx, flow.day, flow.meal, flow);
+    }
+  });
+  const drawItems = () => {
+    results.replaceChildren(...itemRows(items, (i) => { items.splice(i, 1); drawItems(); }));
+    save.disabled = !items.length;
+  };
+
+  file.addEventListener('change', async () => {
+    const f = file.files?.[0];
+    if (!f) return;
+    pick.remove();
+    out.replaceChildren();
+
+    let dataUrl;
+    try {
+      dataUrl = await shrink(f, 1024);
+    } catch (err) {
+      out.appendChild(el('div', { class: 'tiny', style: { color: 'var(--bad)' }, text: err.message }));
+      return;
+    }
+    /* The photo stays on screen through analysis and stays put on failure
+       too — losing sight of what you photographed while reading an error
+       is its own small annoyance. */
+    out.appendChild(el('img', { src: dataUrl, class: 'photo-preview', alt: 'הצלחת שצולמה' }));
+    const status = el('div', { class: 'tiny dim', text: 'מנתח את התמונה…' });
+    out.appendChild(status);
+
+    try {
+      const res = await ai.analyzeMealPhoto(dataUrl, hint.value);
+      items = (res.items || []).map(cleanItem);
+      status.remove();
+      drawItems();
+      if (res.note) out.appendChild(el('div', { class: 'tiny dim', text: res.note }));
+    } catch (err) {
+      status.remove();
+      out.appendChild(el('div', { class: 'tiny', style: { color: 'var(--bad)' }, text: err.message }));
+    }
+  });
+
+  return [hint, pick, file, out, results, save];
+}
+
+/** AI rows arrive as whatever the model wrote; make them numbers. */
+const cleanItem = (i) => ({
+  label: String(i.label || 'פריט'), amount: String(i.amount || 'מנה'), cat: i.cat || 'dish',
+  kcal: round1(Number(i.kcal) || 0), p: round1(Number(i.p) || 0), c: round1(Number(i.c) || 0), f: round1(Number(i.f) || 0)
+});
+
+/** Detected or parsed items, each removable, with the total under them. */
+function itemRows(items, onRemove) {
+  if (!items.length) return [];
+  const t = sum(items);
+  return [
+    el('div', { class: 'food-list' }, items.map((it, i) => el('div', { class: 'food-row' }, [
+      el('div', { class: 'food-row-main' }, [
+        foodIcon(it.cat),
+        el('div', { class: 'grow' }, [
+          el('b', { text: it.label }),
+          el('small', { text: `${it.amount} · ${macroLine(it)}` })
+        ])
+      ]),
+      el('button', { class: 'food-quick', 'aria-label': `הסר ${it.label}`, onclick: () => onRemove(i) }, [icon(ICONS.close, 16)])
+    ]))),
+    el('div', { class: 'target-box' }, [
+      el('div', { class: 't-lbl', text: 'סה״כ' }),
+      el('div', {}, [
+        el('div', { class: 't-val num', text: `${Math.round(t.kcal)} קק״ל · ${round1(t.p)} ג׳ חלבון` }),
+        el('div', { class: 'tiny dim', text: `פחמימות ${Math.round(t.c)} ג׳ · שומן ${Math.round(t.f)} ג׳` })
+      ])
+    ])
+  ];
+}
+
+/* ---------- 4. free text ---------- */
+
+function textSheet(flow) {
+  page(flow, 'תיאור חופשי', () => {
+    const ta = el('textarea', { rows: '3', placeholder: 'לדוגמה: שתי ביצים, 150 גרם חזה עוף וכוס אורז' });
+    const preview = el('div', { class: 'stack' });
+    let items = [];
+    let unmatched = [];
+    let aiAvailable = false;
+    ai.hasKey().then((k) => { aiAvailable = k; draw(); });
+
+    /* The offline dictionary knows a couple of hundred foods; everything
+       else needs the AI pass. Rather than a dead-end "not found", point
+       straight at what handles the rest. */
+    const draw = () => {
+      preview.replaceChildren(...itemRows(items, (i) => { items.splice(i, 1); draw(); }));
+      if (unmatched.length) {
+        preview.appendChild(el('div', { class: 'tiny', style: { color: 'var(--warn)' } }, aiAvailable
+          ? [`לא זוהו: ${unmatched.join(', ')}. `, el('b', { text: '"נתח עם AI"' }), ' יבין גם אותם.']
+          : [`לא זוהו: ${unmatched.join(', ')}. אפשר לחפש אותם במאגר או להזין ידנית למטה.`]));
+      }
+    };
+
+    ta.addEventListener('input', () => {
+      const r = parseMeal(ta.value);
+      items = r.items;
+      unmatched = r.unmatched;
+      draw();
+    });
+
+    const aiBtn = el('button', { class: 'btn full' }, [icon(ICONS.spark, 18), 'נתח עם AI']);
+    aiBtn.addEventListener('click', async () => {
+      if (!ta.value.trim()) { toast('כתוב קודם מה אכלת', 'bad'); return; }
+      if (!(await ai.hasKey())) { toast('הגדר מפתח API בהגדרות', 'bad'); return; }
+      aiBtn.disabled = true;
+      aiBtn.replaceChildren(icon(ICONS.spark, 18), 'מנתח…');
+      try {
+        const out = await ai.analyzeMealText(ta.value);
+        items = (out.items || []).map(cleanItem);
+        unmatched = [];
+        draw();
+        if (out.note) toast(out.note);
+      } catch (err) {
+        toast(err.message, 'bad');
+      } finally {
+        aiBtn.disabled = false;
+        aiBtn.replaceChildren(icon(ICONS.spark, 18), 'נתח עם AI');
+      }
+    });
+
+    const save = el('button', {
+      class: 'btn primary full', text: `הוסף ל${flow.meal.name}`,
+      onclick: async () => {
+        if (!items.length) { toast('לא זוהה אוכל בטקסט — נסה AI או הזנה ידנית', 'bad'); return; }
+        await addItems(flow, items);
+        mealSheet(flow.ctx, flow.day, flow.meal, flow);
+      }
+    });
+
+    /* manual override — when you already know the numbers */
+    const num = (ph) => el('input', { type: 'number', inputmode: 'decimal', min: '0', step: 'any', placeholder: ph });
     const nm = el('input', { type: 'text', placeholder: 'שם הארוחה' });
-    box.appendChild(el('div', { class: 'row', style: { gap: '8px' } }, [nm]));
-    box.appendChild(el('div', { class: 'row', style: { gap: '8px' } }, [kc, pr]));
-    box.appendChild(el('button', {
+    const kc = num('קלוריות'), pr = num('חלבון (ג׳)'), cb = num('פחמימות (ג׳)'), ft = num('שומן (ג׳)');
+    const manual = el('button', {
       class: 'btn full', text: 'הוסף ידנית',
       onclick: async () => {
-        const kcal = Number(kc.value) || 0;
-        const p = Number(pr.value) || 0;
+        const p = Number(pr.value) || 0, c = Number(cb.value) || 0, f = Number(ft.value) || 0;
+        const kcal = Number(kc.value) || Math.round(p * 4 + c * 4 + f * 9);
         if (!kcal && !p) { toast('הזן ערכים', 'bad'); return; }
-        day.items.push({ label: nm.value.trim() || 'ארוחה', amount: 'ידני', kcal, p, c: 0, f: 0, meal: meal.id });
-        recompute(day);
-        await saveDay(day);
-        close();
-        ctx.reload();
+        await addItems(flow, [{ label: nm.value.trim() || 'ארוחה', amount: 'ידני', cat: 'dish', kcal, p, c, f }]);
+        mealSheet(flow.ctx, flow.day, flow.meal, flow);
       }
-    }));
+    });
 
-    return box;
+    return [
+      ta, preview, save, aiBtn,
+      el('div', { class: 'section-title', text: 'או הזנה ידנית' }),
+      nm,
+      el('div', { class: 'grid-2' }, [kc, pr, cb, ft]),
+      manual
+    ];
+  });
+}
+
+/* ---------- editing a logged item ---------- */
+
+async function editItem(ctx, day, index) {
+  const it = day.items[index];
+  if (!it) return;
+  const meal = MEALS.find((m) => m.id === (it.meal || 'other')) || MEALS[0];
+  const flow = { ctx, day, meal, added: [] };
+  const { food, grams } = foodFromItem(it, resolver(await myFoods()));
+  portionSheet(flow, food, {
+    grams,
+    back: closeSheet,
+    onSave: async (item) => {
+      day.items[index] = { ...item, meal: it.meal };
+      recompute(day);
+      await saveDay(day);
+      ctx.reload();
+    }
   });
 }
 
 const sum = (items) => items.reduce((a, i) => ({
   kcal: a.kcal + (i.kcal || 0), p: a.p + (i.p || 0), c: a.c + (i.c || 0), f: a.f + (i.f || 0)
 }), { kcal: 0, p: 0, c: 0, f: 0 });
-
-/* ---------- photo analysis ---------- */
-
-function photoSheet(ctx, day, meal = { id: currentMeal(), name: 'ארוחה' }) {
-  openSheet('ניתוח צלחת', (close) => {
-    const box = el('div', { class: 'stack' });
-    const file = el('input', { type: 'file', accept: 'image/*', capture: 'environment', style: { display: 'none' } });
-    const pick = el('button', {
-      type: 'button', class: 'btn photo-pick',
-      onclick: () => file.click()
-    }, [icon(ICONS.camera, 24), el('span', { text: 'צלם או בחר תמונה של הצלחת' })]);
-    const hint = el('input', { type: 'text', placeholder: 'רמז אופציונלי (למשל: זו צלחת גדולה)' });
-    const out = el('div', { class: 'stack' });
-    let items = [];
-
-    file.addEventListener('change', async () => {
-      const f = file.files?.[0];
-      if (!f) return;
-      pick.remove();
-      out.innerHTML = '';
-
-      let dataUrl;
-      try {
-        dataUrl = await shrink(f, 1024);
-      } catch (err) {
-        out.appendChild(el('div', { class: 'tiny', style: { color: 'var(--bad)' }, text: err.message }));
-        return;
-      }
-      /* The photo stays on screen through analysis and stays put on failure
-         too — losing sight of what you photographed while reading an error
-         is its own small annoyance. */
-      out.appendChild(el('img', { src: dataUrl, style: { width: '100%', borderRadius: '14px' } }));
-      const status = el('div', { class: 'tiny dim', text: 'מנתח את התמונה…' });
-      out.appendChild(status);
-
-      try {
-        const res = await ai.analyzeMealPhoto(dataUrl, hint.value);
-        items = res.items || [];
-        status.remove();
-        items.forEach((i) => out.appendChild(el('div', { class: 'ex-row' }, [
-          foodIcon(i.cat),
-          el('div', { class: 'grow' }, [
-            el('div', { class: 'ex-name', text: i.label }),
-            el('div', { class: 'ex-meta', text: `${i.amount || ''} · ${Math.round(i.kcal)} קק״ל · ${i.p} ג׳ חלבון` })
-          ])
-        ])));
-        const t = sum(items);
-        out.appendChild(el('div', { class: 'target-box' }, [
-          el('div', { class: 't-lbl', text: 'סה״כ' }),
-          el('div', { class: 't-val num', text: `${Math.round(t.kcal)} קק״ל · ${Math.round(t.p)} ג׳` })
-        ]));
-        if (res.note) out.appendChild(el('div', { class: 'tiny dim', text: res.note }));
-      } catch (err) {
-        status.remove();
-        out.appendChild(el('div', { class: 'tiny', style: { color: 'var(--bad)' }, text: err.message }));
-      }
-    });
-
-    box.appendChild(hint);
-    box.appendChild(pick);
-    box.appendChild(file);
-    box.appendChild(out);
-    box.appendChild(el('button', {
-      class: 'btn primary full', text: 'הוסף ליום',
-      onclick: async () => {
-        if (!items.length) { toast('אין תוצאות לשמירה', 'bad'); return; }
-        day.items.push(...items.map((i) => ({ ...i, meal: meal.id })));
-        recompute(day);
-        await saveDay(day);
-        close();
-        ctx.reload();
-      }
-    }));
-    return box;
-  });
-}
 
 /** Downscale before upload: keeps the request small and fast on mobile data. */
 function shrink(file, max) {

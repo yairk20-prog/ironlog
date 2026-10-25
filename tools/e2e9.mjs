@@ -150,8 +150,11 @@ async function main() {
   await page.locator('.meal', { hasText: 'ארוחת בוקר' }).locator('.meal-add').click();
   await page.waitForTimeout(500);
   out.sheetTitle = (await page.locator('#sheetTitle').innerText()).trim();
+  /* The plus opens the four ways to add food; free text is one of them. */
+  await page.locator('#sheetBody .add-tile', { hasText: 'תיאור חופשי' }).click();
+  await page.waitForTimeout(300);
   await page.locator('#sheetBody textarea').fill('שתי ביצים וכוס אורז');
-  await page.locator('#sheetBody .btn', { hasText: 'הוסף ליום' }).click();
+  await page.locator('#sheetBody .btn.primary', { hasText: 'הוסף ל' }).click();
   await page.waitForTimeout(900);
   out.breakfastItems = await page.locator('.meal', { hasText: 'ארוחת בוקר' }).locator('.meal-item').count();
   await shot(page, '06-meal-filled');

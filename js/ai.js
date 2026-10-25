@@ -189,6 +189,33 @@ export async function analyzeMealPhoto(dataUrl, hint = '') {
   return parseJSON(out);
 }
 
+/**
+ * One food the offline database doesn't know, described per 100 g so it can
+ * be stored beside the database's own foods and measured the same way.
+ * @returns {Promise<{name:string,cat:string,kcal:number,p:number,c:number,f:number,unitG:number|null,unitLabel:string|null,defG:number,note?:string}>}
+ */
+export async function lookupFood(query) {
+  const out = await call(
+    [{ role: 'user', content: `המשתמש מחפש את המאכל: "${query}". תן ערכים תזונתיים ל-100 גרם (או 100 מ״ל למשקה), כפי שהם מופיעים בטבלה תזונתית או במאגר USDA. אם זה מוצר ישראלי מוכר — לפי התווית שלו.` }],
+    {
+      system: `אתה תזונאי. החזר אך ורק JSON בצורה:
+{"name":"שם המאכל בעברית","cat":"protein|dairy|carb|produce|fat|sweet|drink|dish","kcal":0,"p":0,"c":0,"f":0,"unitG":null,"unitLabel":null,"defG":100,"note":"הערה קצרה"}
+kcal/p/c/f ל-100 גרם. unitG=משקל יחידה טבעית אחת בגרמים (פרוסה, חטיף, גביע) ו-unitLabel=שמה, או null אם אין. defG=מנה רגילה בגרמים.
+אל תוסיף טקסט מחוץ ל-JSON.`,
+      maxTokens: 400
+    }
+  );
+  const j = parseJSON(out);
+  const n = (v) => Math.max(0, Number(v) || 0);
+  if (!j || !j.name || !(n(j.kcal) || n(j.p) || n(j.c) || n(j.f))) throw new Error('לא התקבלו ערכים למאכל הזה');
+  return {
+    name: String(j.name).trim(), cat: j.cat || 'dish',
+    kcal: n(j.kcal), p: n(j.p), c: n(j.c), f: n(j.f),
+    unitG: n(j.unitG) || null, unitLabel: j.unitLabel || null,
+    defG: n(j.defG) || 100, note: j.note || ''
+  };
+}
+
 /* ---------- coach ---------- */
 
 const COACH_SYSTEM = `אתה מאמן כושר אישי מקצועי שמדבר עברית.

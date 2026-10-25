@@ -100,7 +100,11 @@ export const ICONS = {
   carton: '<path d="M8 3h8l1 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V7z"/><path d="M7 9h10"/>',
   grain: '<path d="M12 3v18"/><path d="M12 6l-3 2M12 6l3 2M12 10l-3 2M12 10l3 2M12 14l-3 2M12 14l3 2"/>',
   leaf: '<path d="M5 19c8 0 14-6 14-14-8 0-14 6-14 14z"/><path d="M5 19c2-4 5-7 9-9"/>',
-  drop: '<path d="M12 3s6 7 6 12a6 6 0 0 1-12 0c0-5 6-12 6-12z"/>'
+  drop: '<path d="M12 3s6 7 6 12a6 6 0 0 1-12 0c0-5 6-12 6-12z"/>',
+  candy: '<rect x="8" y="8" width="8" height="8" transform="rotate(45 12 12)"/><path d="M4 4l3 3M20 20l-3-3"/>',
+  /* saved foods and free text, on the add-food sheet */
+  heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.1a4.3 4.3 0 0 1 7.5 2.7C19.5 15.4 12 20 12 20z"/>',
+  pen: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'
 };
 
 /* ---------- toast ---------- */
@@ -179,8 +183,15 @@ export function openSheet(title, buildBody) {
   const body = $('#sheetBody');
   $('#sheetTitle').textContent = title;
   clear(body);
+  /* One sheet replacing another (a back step, a sub-page) reuses the same
+     panel: drop the previous listeners first, or each step stacks another. */
+  if (sheetCloser) {
+    wrap.removeEventListener('click', sheetCloser);
+    document.removeEventListener('keydown', sheetCloser);
+  }
   const content = buildBody(closeSheet);
   if (content) body.appendChild(content);
+  body.scrollTop = 0;
   wrap.hidden = false;
   document.body.style.overflow = 'hidden';
 

@@ -997,6 +997,87 @@ body.login-open{overflow:hidden}
   background:var(--surface-3);display:grid;place-items:center;
 }
 
+/* A logged food is a button — tapping it reopens the portion. */
+.meal-item-main{display:flex;align-items:center;gap:10px;flex:1;min-width:0;text-align:start;color:inherit}
+.macro-strip{display:flex;gap:16px;font-size:var(--fs-tiny);color:var(--text-3);font-weight:700}
+.macro-strip b{color:var(--text-2);font-weight:800}
+
+/* ---------- adding food ----------
+   Four ways in as four big squares — the sheet is a choice first, a form
+   only after the choice. */
+.add-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.add-tile{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;
+  min-height:clamp(118px,32vw,140px);padding:14px 8px;
+  background:var(--surface-2);border:1px solid var(--line);color:var(--text);
+  box-shadow:var(--lift-1);text-align:center;
+  transition:transform .13s var(--spring),border-color .13s var(--ease);
+}
+.add-tile-ico{
+  width:52px;height:52px;display:grid;place-items:center;
+  background:var(--accent-dim);color:var(--accent);
+}
+.add-tile-ico svg{width:26px;height:26px;stroke-width:1.8}
+.add-tile b{font-size:clamp(14px,3.9vw,16px);font-weight:800;letter-spacing:-.01em}
+.add-tile small{font-size:11px;color:var(--text-3);font-weight:600;line-height:1.3}
+.add-tile:active{transform:scale(.96);border-color:var(--accent)}
+.add-back{display:inline-flex;align-items:center;gap:4px;align-self:flex-start;margin:-6px 0 -4px}
+.add-back svg{width:16px;height:16px;transform:scaleX(-1)}
+.add-done{
+  position:sticky;bottom:-26px;display:flex;align-items:center;gap:12px;
+  margin:4px calc(var(--pad) * -1) -26px;padding:12px var(--pad) 16px;
+  background:var(--surface-2);border-top:1px solid var(--accent);
+}
+.add-done b{display:block;font-size:13.5px;font-weight:800}
+.add-done small{display:block;font-size:11px;color:var(--text-3);font-weight:600;margin-top:2px}
+
+.food-list{display:flex;flex-direction:column;gap:1px;background:var(--line-soft)}
+.food-list .section-title{background:var(--bg);margin:0;padding-top:4px}
+.food-row{display:flex;align-items:center;background:var(--surface)}
+.food-row-main{
+  display:flex;align-items:center;gap:11px;flex:1;min-width:0;
+  padding:11px 12px;text-align:start;color:inherit;
+}
+.food-row b{display:block;font-size:14px;font-weight:700;line-height:1.25}
+.food-row small{display:block;font-size:11px;color:var(--text-3);font-weight:600;margin-top:2px}
+.food-row .badge{flex:none}
+.food-quick{
+  flex:none;width:46px;align-self:stretch;display:grid;place-items:center;
+  color:var(--text-2);border-inline-start:1px solid var(--line-soft);
+}
+.food-quick svg{width:18px;height:18px}
+.food-quick.on{color:var(--accent)}
+.food-quick.on svg,.heart-btn.on svg{fill:currentColor}
+.food-quick[disabled]{color:var(--ok)}
+
+.portion-head{display:flex;align-items:center;gap:12px}
+.portion-head b{display:block;font-size:12px;font-weight:800;color:var(--text-2)}
+.portion-head small{display:block;font-size:11px;color:var(--text-3);font-weight:600;margin-top:3px;line-height:1.35}
+.heart-btn{flex:none;gap:6px}
+.heart-btn svg{width:16px;height:16px}
+.heart-btn.on{color:var(--accent)}
+.unit-chips{display:flex;flex-wrap:wrap;gap:6px}
+.qty-row{display:flex;align-items:center;gap:8px}
+.qty-btn{
+  flex:none;width:var(--btn-h);height:var(--btn-h);display:grid;place-items:center;
+  background:var(--surface-3);border:1px solid var(--line);color:var(--text);
+}
+.qty-in{flex:1;min-width:0;text-align:center;font-size:22px;font-weight:900;height:var(--btn-h)}
+.qty-unit{flex:none;min-width:44px;font-size:var(--fs-tiny);color:var(--text-2);font-weight:800}
+.macro-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line-soft)}
+.macro-cell{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:11px 4px;background:var(--surface-2);
+}
+.macro-cell small{font-size:10px;color:var(--text-3);font-weight:800;letter-spacing:.04em}
+.macro-cell b{font-size:clamp(18px,5vw,22px);font-weight:900;letter-spacing:-.03em}
+.macro-cell span{font-size:10px;color:var(--text-3);font-weight:700}
+.macro-cell.kcal b{color:var(--ok)}
+.macro-cell.p b{color:var(--accent)}
+.grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.grid-2 input{min-width:0}
+.photo-preview{width:100%;max-height:min(46vh,320px);object-fit:cover;display:block}
+
 /* Water as glasses: the row is the readout and the control at once. */
 .glasses{display:flex;flex-wrap:wrap;gap:6px}
 .glass{

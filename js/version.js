@@ -9,7 +9,7 @@
    Keep BUILD and VERSION in sw.js in step — tools/e2e10.mjs enforces it.
    ========================================================================== */
 
-export const BUILD = '5.6.2';
+export const BUILD = '5.7.0';
 
 /** What the service worker currently controlling this page says it is. */
 export function swVersion(timeout = 1200) {

@@ -136,10 +136,13 @@ async function main() {
   /* Food is added on the meal it belongs to, not from one catch-all button. */
   await page.locator('.meal', { hasText: 'ארוחת בוקר' }).locator('.meal-add').click();
   await page.waitForTimeout(400);
+  /* The plus opens the four ways to add food; free text is one of them. */
+  await page.locator('#sheetBody .add-tile', { hasText: 'תיאור חופשי' }).click();
+  await page.waitForTimeout(300);
   await page.locator('#sheetBody textarea').first().fill('שתי ביצים וסקופ חלבון');
   await page.waitForTimeout(400);
   await shot(page, 'nutrition-parse');
-  await page.locator('#sheetBody .btn', { hasText: 'הוסף ליום' }).click();
+  await page.locator('#sheetBody .btn.primary', { hasText: 'הוסף ל' }).click();
   await page.waitForTimeout(800);
   await shot(page, 'nutrition-after');
   const proteinText = await page.locator('.card .num').first().textContent();
