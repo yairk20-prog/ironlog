@@ -51,8 +51,18 @@ async function stubAI(page) {
     }
     const body = req.postDataJSON();
     const sys = String(body.system || '');
+    const content = body.messages[0].content;
+    out.aiCalls = (out.aiCalls || 0) + 1;
     let text;
-    if (sys.includes('ל-100 גרם')) {
+    if (!Array.isArray(content) && content.startsWith('נתח את הארוחה')) {
+      text = JSON.stringify({
+        items: [
+          { label: 'עוגת גבינה פירורים', amount: 'פרוסה', grams: 120, cat: 'sweet', kcal: 384, p: 9.6, c: 36, f: 22.8 },
+          { label: 'קפה הפוך', amount: 'כוס', grams: 200, cat: 'drink', kcal: 90, p: 5, c: 8, f: 4 }
+        ],
+        note: 'הערכה'
+      });
+    } else if (sys.includes('ל-100 גרם')) {
       out.lookupAsked = body.messages[0].content;
       text = JSON.stringify({ name: 'קינדר בואנו', cat: 'sweet', kcal: 572, p: 8.6, c: 49.5, f: 37.3, unitG: 21.5, unitLabel: 'חטיף', defG: 43, note: 'לפי התווית' });
     } else {
@@ -262,6 +272,46 @@ async function main() {
   await pause(page, 600);
   out.pitaAfterEdit = (await today(page)).items.find((i) => i.label === 'פיתה');
 
+  /* ---------- what the AI recognised is remembered ----------
+     A food the database lacks, analysed once by the AI, becomes one of the
+     user's foods: found by search, understood by the offline parser, and
+     never sent to the AI again. One the database already knows is not
+     duplicated. */
+  await openBreakfast(page);
+  await tile(page, 'תיאור חופשי');
+  await sheet(page).locator('textarea').fill('פרוסת עוגת גבינה פירורים וקפה');
+  await pause(page, 200);
+  await sheet(page).locator('.btn', { hasText: 'נתח עם AI' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('#sheetBody .food-row').length === 2);
+  await sheet(page).locator('.btn.primary', { hasText: 'הוסף ל' }).click();
+  await pause(page, 600);
+  out.learnToast = (await page.locator('#toaster').innerText().catch(() => '')).trim();
+  await sheet(page).locator('.add-done .btn', { hasText: 'סיום' }).click();
+  await pause(page, 400);
+  const learnedFoods = await idb(page, 'customFoods') || [];
+  out.learned = learnedFoods.find((f) => f.name === 'עוגת גבינה פירורים') || null;
+  out.learnedKnownToo = learnedFoods.some((f) => f.name === 'קפה הפוך');
+  out.learnedItem = (await today(page)).items.find((i) => i.label === 'עוגת גבינה פירורים') || null;
+
+  const callsBefore = out.aiCalls;
+  await openBreakfast(page);
+  await tile(page, 'תיאור חופשי');
+  await sheet(page).locator('textarea').fill('עוגת גבינה פירורים');
+  await pause(page, 300);
+  out.offlineRows = await sheet(page).locator('.food-row').count();
+  out.offlineTotal = (await sheet(page).locator('.target-box .t-val').innerText().catch(() => '')).trim();
+  await back(page);
+  await tile(page, 'חיפוש במאגר');
+  out.mineSection = (await sheet(page).locator('.section-title').first().innerText()).trim();
+  out.mineFirst = (await sheet(page).locator('.food-row b').first().innerText()).trim();
+  await shot(page, '14-my-foods');
+  await sheet(page).locator('input[type=search]').fill('עוגת גבינה');
+  await pause(page, 250);
+  out.searchLearned = (await sheet(page).locator('.food-row b').first().innerText()).trim();
+  out.aiCallsForRepeat = out.aiCalls - callsBefore;
+  await page.locator('.sheet-close').click();
+  await pause(page, 300);
+
   /* ---------- small phone ---------- */
   await page.setViewportSize({ width: 360, height: 780 });
   await openBreakfast(page);
@@ -348,6 +398,17 @@ async function main() {
     out.breakfastRows < 7 && `breakfast shows ${out.breakfastRows} rows`,
     !/פחמימות \d+ ג׳/.test(out.macroStrip) && 'carbs are not shown for the day',
     !out.savedSetting.includes('קוטג׳ 5%') && 'the heart did not save',
+    !(out.learned && out.learned.kcal === 320 && out.learned.g === 120 && out.learned.src === 'ai')
+      && `the AI food was not learned per 100 g: ${JSON.stringify(out.learned)}`,
+    out.learnedKnownToo && 'a food the database already has was learned again',
+    !(out.learnedItem && /^c:/.test(out.learnedItem.fid || '') && out.learnedItem.grams === 120 && !out.learnedItem.src)
+      && `the logged AI item is not linked to its learned food: ${JSON.stringify(out.learnedItem)}`,
+    !/נשמר במאגר/.test(out.learnToast) && `learning was not announced: ${out.learnToast}`,
+    !(out.offlineRows === 1 && /384 קק״ל/.test(out.offlineTotal)) && `the learned food is not parsed offline: ${out.offlineRows} / ${out.offlineTotal}`,
+    !(out.mineSection === 'המאכלים שלי' && out.mineFirst === 'עוגת גבינה פירורים')
+      && `search does not open on the user's foods: ${out.mineSection} / ${out.mineFirst}`,
+    out.searchLearned !== 'עוגת גבינה פירורים' && `search for the learned food found ${out.searchLearned}`,
+    out.aiCallsForRepeat !== 0 && 'the learned food was sent to the AI again',
     !(out.customSetting.includes('קינדר בואנו:572') && out.customSetting.includes('חטיף הבית:370'))
       && `custom foods: ${out.customSetting}`,
     out.editButton !== 'עדכן' && 'a logged item does not reopen for editing',

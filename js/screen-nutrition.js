@@ -9,7 +9,7 @@ import * as db from './db.js';
 import { el, icon, ICONS, toast, openSheet, closeSheet, confirmSheet, buzz } from './ui.js';
 import {
   parseMeal, searchFoods, foodById, foodCount, POPULAR, norm, unitsFor, defaultPortion,
-  portion, portionForGrams, foodFromItem, makeFood
+  portion, portionForGrams, foodFromItem, makeFood, foodFromAiItem, isKnownFood
 } from './food.js';
 import * as ai from './ai.js';
 import { goalList } from './programs.js';
@@ -384,13 +384,44 @@ const round1 = (n) => Math.round((n || 0) * 10) / 10;
 /** Put items on the meal, keep the day's totals true, and say so. */
 async function addItems(flow, items) {
   if (!items.length) return;
+  const learned = await learnFoods(items);
+  items = items.map((i) => learned.get(i) || i);
   flow.day.items.push(...items.map((i) => ({ ...i, meal: flow.meal.id })));
   recompute(flow.day);
   await saveDay(flow.day);
   flow.added.push(...items);
   buzz(12);
-  toast(items.length === 1 ? `נוסף: ${items[0].label}` : `נוספו ${items.length} פריטים`, 'ok');
+  const names = [...learned.values()].map((i) => i.label);
+  toast(names.length
+    ? `נוסף, ונשמר במאגר שלך: ${names.join(', ')}`
+    : (items.length === 1 ? `נוסף: ${items[0].label}` : `נוספו ${items.length} פריטים`), 'ok');
   flow.ctx.reload();
+}
+
+/**
+ * Whatever the AI recognised that the database doesn't know is kept as one
+ * of the user's own foods — so the next time it is a search hit, a word the
+ * free-text parser understands, and works with no connection and no credit.
+ * The logged item is re-pointed at that food, so it reopens in its units.
+ * @returns {Map<object, object>} original item → item linked to its food
+ */
+async function learnFoods(items) {
+  const out = new Map();
+  const fresh = items.filter((i) => i.src === 'ai' && !i.fid && !isKnownFood(i.label));
+  if (!fresh.length) return out;
+  let list = await customFoods();
+  for (const item of fresh) {
+    const made = foodFromAiItem(item);
+    if (!made) continue;
+    /* Seen before under the same name: refresh its values, keep its id. */
+    const same = list.find((f) => norm(f.name) === norm(made.food.name));
+    const food = same ? { ...made.food, id: same.id } : made.food;
+    list = [food, ...list.filter((f) => f.id !== food.id)];
+    const { src: _s, ...rest } = item;
+    out.set(item, { ...rest, fid: food.id, grams: made.grams });
+  }
+  await db.setSetting('customFoods', list.slice(0, 300));
+  return out;
 }
 
 /**
@@ -496,6 +527,14 @@ function searchSheet(flow) {
       list.replaceChildren();
       more.replaceChildren();
       const found = q ? searchFoods(q, mine) : POPULAR;
+      /* Before anything is typed: the foods the app has learned for this
+         user come first — that is what "I won't have to look it up again"
+         means. */
+      const own = q ? [] : mine.filter((f) => f.custom).slice(0, 8);
+      if (own.length) {
+        list.appendChild(el('div', { class: 'section-title', text: 'המאכלים שלי' }));
+        own.forEach((f) => list.appendChild(foodRow(f, () => portionSheet(flow, f, { back: () => searchSheet(flow) }))));
+      }
       if (!q) list.appendChild(el('div', { class: 'section-title', text: 'נפוצים' }));
       found.forEach((f) => list.appendChild(foodRow(f, () => portionSheet(flow, f, { back: () => searchSheet(flow) }))));
       if (!q) return;
@@ -750,7 +789,7 @@ function savedSheet(flow) {
       }
 
       if (custom.length) {
-        section('מאכלים שהגדרת');
+        section('המאכלים שלי — מה-AI ומתוויות');
         const list = el('div', { class: 'food-list' });
         custom.forEach((food) => list.appendChild(foodRow(food, () => portionSheet(flow, food, { back: here }), el('button', {
           class: 'food-quick', 'aria-label': `מחק ${food.name}`,
@@ -856,7 +895,9 @@ function photoBody(flow) {
 /** AI rows arrive as whatever the model wrote; make them numbers. */
 const cleanItem = (i) => ({
   label: String(i.label || 'פריט'), amount: String(i.amount || 'מנה'), cat: i.cat || 'dish',
-  kcal: round1(Number(i.kcal) || 0), p: round1(Number(i.p) || 0), c: round1(Number(i.c) || 0), f: round1(Number(i.f) || 0)
+  kcal: round1(Number(i.kcal) || 0), p: round1(Number(i.p) || 0), c: round1(Number(i.c) || 0), f: round1(Number(i.f) || 0),
+  ...(Number(i.grams) > 0 ? { grams: Number(i.grams) } : {}),
+  src: 'ai'
 });
 
 /** Detected or parsed items, each removable, with the total under them. */
@@ -907,8 +948,10 @@ function textSheet(flow) {
       }
     };
 
+    let mine = [];
+    customFoods().then((c) => { mine = c; });
     ta.addEventListener('input', () => {
-      const r = parseMeal(ta.value);
+      const r = parseMeal(ta.value, mine);
       items = r.items;
       unmatched = r.unmatched;
       draw();

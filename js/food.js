@@ -412,9 +412,9 @@ export function portionForGrams(food, grams) {
  * A food the user defined — from a package label, or from the AI's answer
  * about something the database lacks. Values are per 100 g.
  */
-export function makeFood({ id, name, cat = 'dish', kcal, p, c, f, g, ul, d, src }) {
+export function makeFood({ id, name, cat = 'dish', kcal, p, c, f, g, ul, d, src, serving }) {
   const clean = (n) => Math.max(0, Math.round((Number(n) || 0) * 10) / 10);
-  return {
+  const food = {
     id: id || `c:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
     cat, name: String(name || '').trim(), k: [String(name || '').trim()],
     kcal: clean(kcal), p: clean(p), c: clean(c), f: clean(f),
@@ -422,6 +422,39 @@ export function makeFood({ id, name, cat = 'dish', kcal, p, c, f, g, ul, d, src 
     d: Number(d) > 0 ? Number(d) : (Number(g) > 0 ? Number(g) : 100),
     u: null, custom: true, src: src || 'manual'
   };
+  /* A serving with no known weight: its values are per serving, measured
+     in servings only (see unitsFor). */
+  if (serving) Object.assign(food, { serving, g: 100, ul: null, d: 100 });
+  return food;
+}
+
+/** True when the built-in database already knows this name. */
+export const isKnownFood = (name) => ALIAS.has(clean(String(name || '').trim()));
+
+/**
+ * An item the AI described (from a photo or a sentence) → a food that can be
+ * kept and found again offline. With a weight, it is stored per 100 g and a
+ * serving becomes its natural unit; without one, as a serving.
+ * @returns {{food:object, grams:number}|null} null when nothing is worth keeping
+ */
+export function foodFromAiItem(item) {
+  const name = String(item.label || '').trim();
+  if (!name || !(item.kcal > 0)) return null;
+  const m = /(\d+(?:\.\d+)?)\s*(?:גרם|גר׳|ג׳|ג(?![א-ת])|מ״ל|מ"ל|מל|g\b|ml\b)/i.exec(String(item.amount || ''));
+  const grams = Number(item.grams) > 0 ? Number(item.grams) : (m ? Number(m[1]) : 0);
+  if (grams > 0) {
+    const k = 100 / grams;
+    const food = makeFood({
+      name, cat: item.cat, kcal: item.kcal * k, p: item.p * k, c: item.c * k, f: item.f * k,
+      g: grams, ul: 'מנה', src: 'ai'
+    });
+    return { food, grams };
+  }
+  const food = makeFood({
+    name, cat: item.cat, kcal: item.kcal, p: item.p, c: item.c, f: item.f,
+    serving: item.amount || 'מנה', src: 'ai'
+  });
+  return { food, grams: 100 };
 }
 
 /* ==========================================================================
@@ -486,21 +519,36 @@ const dropVav = (w) => (w.length > 2 && w.startsWith('ו') ? w.slice(1) : null);
  *
  * @returns {{items:Array, total:{kcal:number,p:number,c:number,f:number}, unmatched:string[]}}
  */
-export function parseMeal(text) {
+export function parseMeal(text, extra = []) {
   const raw = (text || '').replace(/\s+/g, ' ').trim();
   if (!raw) return { items: [], total: zero(), unmatched: [] };
 
   const tokens = raw.split(' ').map(clean).filter(Boolean);
 
+  /* The user's own foods (learned from the AI or typed off a label) are
+     words the parser knows too — and win over the database, being the more
+     specific of the two. */
+  const mine = new Map();
+  let maxWords = MAX_WORDS;
+  for (const food of extra) {
+    for (const alias of food.k || [food.name]) {
+      const a = clean(alias || '');
+      if (!a || mine.has(a)) continue;
+      mine.set(a, food);
+      maxWords = Math.max(maxWords, a.split(' ').length);
+    }
+  }
+  const lookup = (c) => mine.get(c) || ALIAS.get(c);
+
   /* 1. locate non-overlapping food phrases, longest phrase first */
   const longestAt = (i) => {
-    for (let n = Math.min(MAX_WORDS, tokens.length - i); n >= 1; n--) {
+    for (let n = Math.min(maxWords, tokens.length - i); n >= 1; n--) {
       const slice = tokens.slice(i, i + n);
       const candidates = [slice.join(' ')];
       const stripped = dropVav(slice[0]);
       if (stripped) candidates.push([stripped, ...slice.slice(1)].join(' '));
       for (const c of candidates) {
-        const food = ALIAS.get(c);
+        const food = lookup(c);
         if (food) return { food, start: i, end: i + n };
       }
     }
