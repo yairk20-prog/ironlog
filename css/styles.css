@@ -1078,6 +1078,86 @@ body.login-open{overflow:hidden}
 .grid-2 input{min-width:0}
 .photo-preview{width:100%;max-height:min(46vh,320px);object-fit:cover;display:block}
 
+/* ---------- the day at a glance ----------
+   Two rings big enough to read at arm's length, the number eaten in the
+   middle — the first thing on the screen, because it is the question the
+   screen exists to answer. */
+.day-hero{display:flex;flex-direction:column;gap:16px}
+.rings{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.ring{display:flex;flex-direction:column;align-items:center;gap:10px;min-width:0}
+.ring-dial{position:relative;width:min(100%,148px);aspect-ratio:1}
+.ring-dial svg{position:absolute;inset:0;width:100%;height:100%}
+.ring-track{fill:none;stroke:var(--surface-3);stroke-width:11}
+.ring-fill{fill:none;stroke-width:11;stroke-linecap:butt;transition:stroke-dashoffset .6s var(--ease)}
+.ring-center{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:2px;
+}
+.ring-center b{font-size:clamp(28px,8.4vw,38px);font-weight:900;letter-spacing:-.04em;line-height:1}
+.ring-center small{font-size:11.5px;color:var(--text-3);font-weight:700}
+.ring.protein .ring-center b{color:var(--accent)}
+.ring.kcal .ring-center b{color:var(--ok)}
+.ring.over .ring-center b{color:var(--warn)}
+.ring-label{text-align:center}
+.ring-label b{display:block;font-size:clamp(14px,3.9vw,16px);font-weight:800}
+.ring-label small{
+  display:inline-flex;align-items:center;gap:4px;margin-top:3px;
+  font-size:var(--fs-tiny);color:var(--text-2);font-weight:700;
+}
+.ring.done .ring-label small{color:var(--ok)}
+.ring.over .ring-label small{color:var(--warn)}
+.ring-label small svg{width:12px;height:12px;stroke-width:3}
+.day-hero .card-head,.water-info .card-head{margin-bottom:0}
+.macro-tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.macro-tile{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:10px 12px;background:var(--surface-2);border-inline-start:3px solid var(--c);
+}
+.macro-tile small{font-size:var(--fs-tiny);color:var(--text-2);font-weight:700}
+.macro-tile b{font-size:16px;font-weight:900}
+
+/* ---------- water ----------
+   A tank that fills, the litres in large type, and one big button. */
+.water-card{display:flex;flex-direction:column;gap:14px;border-color:rgba(77,163,255,.35)}
+.water-top{display:flex;gap:14px;align-items:stretch}
+.tank{
+  position:relative;flex:none;width:clamp(92px,26vw,116px);min-height:150px;
+  background:#0E1A28;border:2px solid #2B5A8A;overflow:hidden;
+}
+.tank-fill{
+  position:absolute;inset:auto 0 0 0;
+  background:linear-gradient(180deg,#5AB4FF 0%,#2F7FD6 100%);
+  transition:height .6s var(--ease);
+}
+.tank-fill::before{
+  content:"";position:absolute;inset:-5px 0 auto 0;height:10px;
+  background:radial-gradient(circle at 8px -2px,transparent 7px,#5AB4FF 7.5px) 0 0/16px 10px repeat-x;
+}
+.tank.done{border-color:var(--ok)}
+.tank-text{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:2px;
+  text-shadow:0 1px 6px rgba(0,0,0,.6);
+}
+.tank-text b{font-size:clamp(34px,10vw,44px);font-weight:900;line-height:1;letter-spacing:-.04em}
+.tank-text small{font-size:11.5px;font-weight:800;color:#CFE6FF}
+.water-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px}
+.water-line b{font-size:clamp(24px,7vw,30px);font-weight:900;color:#7CC0FF;letter-spacing:-.03em}
+.water-line span{font-size:var(--fs-tiny);color:var(--text-2);font-weight:700}
+.btn.water-add{background:#2F7FD6;border-color:#2F7FD6;color:#fff;font-weight:900}
+.btn.water-add:active{background:#2569B4}
+.badge.water{background:rgba(77,163,255,.16);color:#7CC0FF}
+
+/* Sharing the app: the link itself, selectable, under the explanation. */
+.share-url{
+  padding:12px 14px;background:var(--surface-2);border:1px dashed var(--line);
+  font-size:var(--fs-tiny);font-weight:700;color:var(--text);direction:ltr;text-align:left;
+  word-break:break-all;user-select:all;
+}
+.share-points{margin:0;padding-inline-start:18px;display:flex;flex-direction:column;gap:8px}
+.share-points li{font-size:var(--fs-tiny);color:var(--text-2);line-height:1.5;font-weight:600}
+.share-points b{color:var(--text)}
+
 /* Water as glasses: the row is the readout and the control at once. */
 .glasses{display:flex;flex-wrap:wrap;gap:6px}
 .glass{

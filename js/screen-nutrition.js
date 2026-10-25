@@ -47,18 +47,27 @@ export async function render(ctx) {
 
   const wrap = el('div', { class: 'stack' });
 
-  /* ---- rings ---- */
-  wrap.appendChild(el('div', { class: 'card stack' }, [
+  /* ---- the day at a glance ----
+     Two rings, read from across the room: protein and calories, the number
+     eaten in the middle and what is left underneath. One button to add
+     food, to the meal the clock says you are on. */
+  wrap.appendChild(el('div', { class: 'card day-hero' }, [
     el('div', { class: 'card-head' }, [
       el('h3', { text: trainedToday ? 'יום אימון' : 'יום מנוחה' }),
       el('span', { class: 'badge accent', text: `${day.items.length} רישומים` })
     ]),
-    meter('חלבון', day.protein_grams, pTarget, 'גרם', 'var(--accent)'),
-    meter('קלוריות', day.calories_consumed, kcalTarget, 'קק״ל', 'var(--ok)'),
-    el('div', { class: 'macro-strip' }, [
-      el('span', {}, ['פחמימות ', el('b', { class: 'num', text: `${Math.round(day.carbs_grams)} ג׳` })]),
-      el('span', {}, ['שומן ', el('b', { class: 'num', text: `${Math.round(day.fat_grams)} ג׳` })])
-    ])
+    el('div', { class: 'rings' }, [
+      ring({ label: 'חלבון', value: day.protein_grams, target: pTarget, unit: 'גרם', short: 'ג׳', color: 'var(--accent)', cls: 'protein' }),
+      ring({ label: 'קלוריות', value: day.calories_consumed, target: kcalTarget, unit: 'קק״ל', short: 'קק״ל', color: 'var(--ok)', cls: 'kcal', capped: true })
+    ]),
+    el('div', { class: 'macro-tiles' }, [
+      macroTile('פחמימות', day.carbs_grams, 'var(--warn)'),
+      macroTile('שומן', day.fat_grams, '#B98BFF')
+    ]),
+    el('button', {
+      class: 'btn primary full',
+      onclick: () => mealSheet(ctx, day, MEALS.find((m) => m.id === currentMeal()))
+    }, [icon(ICONS.plus, 18), `הוסף מאכל · ${MEALS.find((m) => m.id === currentMeal()).name}`])
   ]));
 
   /* ---- water, counted the way people drink it ---- */
@@ -262,6 +271,9 @@ function waterCard(ctx, day, s) {
   const targetGlasses = Math.max(1, Math.round(targetMl / GLASS_ML));
   const drunk = day.water_ml / GLASS_ML;
   const full = Math.floor(drunk + 0.001);
+  const pct = Math.min(1, day.water_ml / targetMl);
+  const left = Math.max(0, targetGlasses - full);
+  const litres = (ml) => (Math.round(ml / 100) / 10).toLocaleString('he-IL');
 
   const add = async (ml) => {
     day.water_ml = Math.max(0, day.water_ml + ml);
@@ -281,38 +293,93 @@ function waterCard(ctx, day, s) {
     }, [icon(ICONS.glass, 20)]));
   }
 
-  const left = Math.max(0, targetGlasses - full);
+  /* The tank fills as the day does — the one picture that says "drink"
+     without reading anything. */
+  const tank = el('div', {
+    class: `tank${left ? '' : ' done'}`,
+    role: 'progressbar', 'aria-label': `מים: ${full} מתוך ${targetGlasses} כוסות`,
+    'aria-valuemin': '0', 'aria-valuemax': String(targetGlasses), 'aria-valuenow': String(full)
+  }, [
+    el('div', { class: 'tank-fill', style: { height: `${Math.round(pct * 100)}%` } }),
+    el('div', { class: 'tank-text' }, [
+      el('b', { class: 'num', text: String(full) }),
+      el('small', { text: `מתוך ${targetGlasses}` })
+    ])
+  ]);
 
-  return el('div', { class: 'card stack' }, [
-    el('div', { class: 'card-head' }, [
-      el('h3', { text: 'מים' }),
-      el('span', {
-        class: `badge ${left ? '' : 'ok'}`,
-        text: left ? `עוד ${left} כוסות` : 'הושלם'
-      })
+  return el('div', { class: 'card water-card' }, [
+    el('div', { class: 'water-top' }, [
+      tank,
+      el('div', { class: 'water-info' }, [
+        el('div', { class: 'card-head' }, [
+          el('h3', { text: 'מים' }),
+          el('span', { class: `badge ${left ? 'water' : 'ok'}`, text: left ? `עוד ${left} כוסות` : 'הושלם' })
+        ]),
+        el('div', { class: 'water-line' }, [
+          el('b', { class: 'num', text: litres(day.water_ml) }),
+          el('span', { text: ` מתוך ${litres(targetMl)} ליטר` })
+        ]),
+        el('button', { class: 'btn water-add full', onclick: () => add(GLASS_ML) }, [icon(ICONS.plus, 18), 'כוס מים']),
+        el('div', { class: 'row', style: { gap: '8px' } }, [
+          el('button', { class: 'btn sm grow', onclick: () => add(BOTTLE_ML) }, [icon(ICONS.bottle, 15), 'בקבוק']),
+          full ? el('button', { class: 'btn sm ghost', 'aria-label': 'בטל כוס אחרונה', onclick: () => add(-GLASS_ML) }, [icon(ICONS.minus, 15), 'בטל']) : null
+        ])
+      ])
     ]),
     glasses,
-    el('div', { class: 'row', style: { gap: '8px' } }, [
-      el('button', { class: 'btn sm grow', onclick: () => add(GLASS_ML) }, [icon(ICONS.glass, 15), 'כוס']),
-      el('button', { class: 'btn sm grow', onclick: () => add(BOTTLE_ML) }, [icon(ICONS.bottle, 15), 'בקבוק']),
-      full ? el('button', { class: 'btn sm ghost', text: 'בטל', onclick: () => add(-GLASS_ML) }) : null
-    ]),
-    el('div', { class: 'tiny dim', text: `${full} מתוך ${targetGlasses} כוסות · כוס = ${GLASS_ML} מ״ל` })
+    el('div', { class: 'tiny dim', text: `כוס = ${GLASS_ML} מ״ל · בקבוק = ${BOTTLE_ML} מ״ל` })
   ]);
 }
 
-function meter(label, value, target, unit, color) {
-  const pct = Math.min(100, target > 0 ? (value / target) * 100 : 0);
-  return el('div', {}, [
-    el('div', { class: 'row between', style: { marginBottom: '5px' } }, [
-      el('span', { class: 'tiny muted', text: label }),
-      el('b', { class: 'num tiny', text: `${Math.round(value)} / ${Math.round(target)} ${unit}` })
+/**
+ * A progress ring. `capped` is for a ceiling (calories): going past it turns
+ * the ring amber and says by how much, instead of celebrating.
+ */
+function ring({ label, value, target, unit, short, color, cls, capped = false }) {
+  const v = Math.round(value);
+  const t = Math.round(target) || 1;
+  const pct = Math.min(1, v / t);
+  const over = capped && v > t;
+  const done = !capped && v >= t;
+  const R = 50;
+  const C = 2 * Math.PI * R;
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 120 120');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.innerHTML = `<circle class="ring-track" cx="60" cy="60" r="${R}"/>`
+    + `<circle class="ring-fill" cx="60" cy="60" r="${R}" stroke-dasharray="${C.toFixed(1)}"`
+    + ` stroke-dashoffset="${(C * (1 - pct)).toFixed(1)}" transform="rotate(-90 60 60)"`
+    + ` style="stroke:${over ? 'var(--warn)' : color}"/>`;
+
+  const left = t - v;
+  const foot = over ? `חריגה של ${-left} ${short}`
+    : done ? 'היעד הושג'
+      : `נשארו ${left} ${short}`;
+
+  return el('div', {
+    class: `ring ${cls}${done ? ' done' : ''}${over ? ' over' : ''}`,
+    role: 'progressbar', 'aria-label': `${label}: ${v} מתוך ${t} ${unit}`,
+    'aria-valuemin': '0', 'aria-valuemax': String(t), 'aria-valuenow': String(v)
+  }, [
+    el('div', { class: 'ring-dial' }, [
+      svg,
+      el('div', { class: 'ring-center' }, [
+        el('b', { class: 'num', text: String(v) }),
+        el('small', { text: `מתוך ${t}` })
+      ])
     ]),
-    el('div', { style: { height: '8px', borderRadius: '8px', background: 'var(--surface-3)', overflow: 'hidden' } }, [
-      el('i', { style: { display: 'block', height: '100%', width: `${pct}%`, background: color, borderRadius: '8px', transition: 'width .3s' } })
+    el('div', { class: 'ring-label' }, [
+      el('b', { text: label }),
+      el('small', {}, [done ? icon(ICONS.check, 12) : null, foot])
     ])
   ]);
 }
+
+const macroTile = (label, grams, color) => el('div', { class: 'macro-tile', style: { '--c': color } }, [
+  el('small', { text: label }),
+  el('b', { class: 'num', text: `${Math.round(grams)} ג׳` })
+]);
 
 /* ---------- adding food ----------
    Four ways in, because people remember a meal in four different ways: by

@@ -50,6 +50,7 @@ export async function render(ctx) {
   wrap.appendChild(link(ICONS.user, 'יציבה וניידות', 'הערכה עצמית ופרוטוקולים מתקנים', () => ctx.go('posture')));
   wrap.appendChild(link(ICONS.calendar, 'סנכרון ליומן', 'ייצוא התוכנית כקובץ ICS עם תזכורות', () => calendarSheet(ctx)));
   wrap.appendChild(link(ICONS.sync, 'הגדרות', 'מטרה, ציוד, חשבון Google וגיבוי', () => ctx.go('settings')));
+  wrap.appendChild(link(ICONS.user, 'שתף עם בן/בת זוג', 'קישור להתקנה — תוכנית ונתונים משלה, עדכונים לשניכם', shareSheet));
 
   /* ---- install hint ---- */
   if (!window.matchMedia('(display-mode: standalone)').matches) {
@@ -72,6 +73,51 @@ const link = (iconPath, title, sub, onclick) => el('button', { class: 'list-link
   el('div', { class: 'grow' }, [el('b', { text: title }), el('small', { text: sub })]),
   icon(ICONS.chevron, 18)
 ]);
+
+/** The address this copy was installed from, without the page name or a route. */
+const appUrl = () => `${location.origin}${location.pathname.replace(/index\.html$/, '')}`;
+
+/**
+ * Another person on the same app is just the same link on another phone:
+ * the data lives on each device, so her plan, food and history are her own,
+ * and every deploy reaches every installed copy on its next open.
+ */
+function shareSheet() {
+  openSheet('שתף את האפליקציה', () => {
+    const url = appUrl();
+    const copy = async () => {
+      try {
+        await navigator.clipboard.writeText(url);
+        toast('הקישור הועתק', 'ok');
+      } catch {
+        toast('לא הצלחתי להעתיק — סמן את הקישור והעתק ידנית', 'bad');
+      }
+    };
+    return el('div', { class: 'stack' }, [
+      el('ul', { class: 'share-points' }, [
+        el('li', {}, [el('b', { text: 'מתקינים מהקישור ' }), 'בטלפון השני, ועונים שם על השאלון. התוכנית, האוכל, המים וההיסטוריה בכל טלפון נפרדים לגמרי.']),
+        el('li', {}, [el('b', { text: 'עדכונים מגיעים לשניכם לבד: ' }), 'כל גרסה חדשה שעולה לאתר נטענת אצל כל מי שהתקין, בפתיחה הבאה של האפליקציה. מופיעה הודעה "האפליקציה עודכנה".']),
+        el('li', {}, [el('b', { text: 'ה-AI משותף: ' }), 'צילום אוכל והמאמן עובדים בשני הטלפונים דרך אותו חשבון API, כך שהשימוש של שניכם יורד מאותו קרדיט.'])
+      ]),
+      el('div', { class: 'share-url', text: url }),
+      el('button', {
+        class: 'btn primary full',
+        onclick: async () => {
+          if (navigator.share) {
+            try {
+              await navigator.share({ title: 'IRONLOG', text: 'אפליקציית האימונים והתזונה שלי — אפשר להתקין מהקישור:', url });
+              return;
+            } catch (err) {
+              if (err?.name === 'AbortError') return;   // the share sheet was closed
+            }
+          }
+          copy();
+        }
+      }, [icon(ICONS.upload, 18), 'שלח קישור']),
+      el('button', { class: 'btn full ghost', onclick: copy }, [icon(ICONS.note, 18), 'העתק קישור'])
+    ]);
+  });
+}
 
 function calendarSheet(ctx) {
   openSheet('סנכרון ליומן', (close) => {

@@ -8,6 +8,7 @@ import * as db from './db.js';
 import { DEFAULTS } from './programs.js';
 import { $, clear, toast, setHaptics, setSoundAlert } from './ui.js';
 import * as timer from './timer.js';
+import { BUILD } from './version.js';
 
 import { render as renderHome } from './screen-home.js';
 import { render as renderWorkout, cleanup as cleanupWorkout } from './screen-workout.js';
@@ -207,6 +208,7 @@ async function boot() {
      questionnaire below blocks until it is answered, and the install prompt
      and image pre-cache should not wait behind it. */
   registerServiceWorker();
+  announceUpdate();
 
   /* First run: sign in (or decline), then build the plan from the questionnaire. */
   if (!ctx.settings.onboarded) {
@@ -223,6 +225,20 @@ async function boot() {
     await db.setSetting('rotationCursor', 0);
     await mount('home');
   }
+}
+
+/**
+ * Say so when an update has landed. Every installed copy picks up a new
+ * deploy by itself and reloads — which on a phone looks like nothing
+ * happened. One toast on the first open of a new build makes it visible.
+ */
+async function announceUpdate() {
+  try {
+    const seen = await db.setting('seenBuild', '');
+    if (seen === BUILD) return;
+    await db.setSetting('seenBuild', BUILD);
+    if (seen && ctx.settings.onboarded) toast(`האפליקציה עודכנה לגרסה ${BUILD}`, 'ok');
+  } catch { /* a toast is not worth a failed boot */ }
 }
 
 /** Only where it can actually work: a real origin, not file:// and not a preview frame. */
