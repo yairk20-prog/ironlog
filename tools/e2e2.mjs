@@ -144,6 +144,9 @@ async function main() {
   await shot(page, 'nutrition-parse');
   await page.locator('#sheetBody .btn.primary', { hasText: 'הוסף ל' }).click();
   await page.waitForTimeout(800);
+  /* Adding returns to the four options for the next food; close the sheet. */
+  await page.locator('#sheetBody .add-done .btn', { hasText: 'סיום' }).click();
+  await page.waitForTimeout(400);
   await shot(page, 'nutrition-after');
   const proteinText = await page.locator('.card .num').first().textContent();
 
