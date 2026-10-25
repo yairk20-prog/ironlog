@@ -255,7 +255,7 @@ async function main() {
     && Math.abs(day.carbs_grams - day.items.reduce((a, i) => a + (i.c || 0), 0)) < 0.05
     && Math.abs(day.fat_grams - day.items.reduce((a, i) => a + (i.f || 0), 0)) < 0.05;
   out.breakfastRows = await page.locator('.meal', { hasText: 'ארוחת בוקר' }).locator('.meal-item').count();
-  out.macroStrip = (await page.locator('.macro-strip').innerText()).replace(/\s+/g, ' ');
+  out.macroStrip = (await page.locator('.macro-tiles').innerText()).replace(/\s+/g, ' ');
   out.savedSetting = (await idb(page, 'savedFoods') || []).map((f) => f.name);
   out.customSetting = (await idb(page, 'customFoods') || []).map((f) => `${f.name}:${f.kcal}`);
   await page.locator('.meal', { hasText: 'ארוחת בוקר' }).scrollIntoViewIfNeeded();
