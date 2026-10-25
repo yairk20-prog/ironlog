@@ -104,7 +104,8 @@ export const ICONS = {
   candy: '<rect x="8" y="8" width="8" height="8" transform="rotate(45 12 12)"/><path d="M4 4l3 3M20 20l-3-3"/>',
   /* saved foods and free text, on the add-food sheet */
   heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.1a4.3 4.3 0 0 1 7.5 2.7C19.5 15.4 12 20 12 20z"/>',
-  pen: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'
+  pen: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+  bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>'
 };
 
 /* ---------- toast ---------- */
@@ -178,9 +179,37 @@ export function chime() {
 
 let sheetCloser = null;
 
+/* ---- the phone's back button ----
+   On Android, "back" with a sheet open should close the sheet, not leave the
+   screen (or the app). So an opening sheet adds one history entry, and the
+   back button arriving on it closes the sheet. Closing it any other way
+   takes that entry back off — and until that has happened, a navigation
+   must wait, or the late "back" would undo it. */
+let sheetEntry = false;
+let backPending = null;
+
+window.addEventListener('popstate', () => {
+  if (backPending) { const done = backPending; backPending = null; done(); return; }
+  if (sheetEntry) { sheetEntry = false; closeSheet({ fromHistory: true }); }
+});
+
+/** Resolves once a pending sheet "back" has landed (immediately if none). */
+export function historySettled() {
+  if (!backPending) return Promise.resolve();
+  return new Promise((resolve) => {
+    const prev = backPending;
+    backPending = () => { prev(); resolve(); };
+    /* A browser that never fires popstate must not strand navigation. */
+    setTimeout(() => { if (backPending) { const d = backPending; backPending = null; d(); } }, 400);
+  });
+}
+
 export function openSheet(title, buildBody) {
   const wrap = $('#sheet');
   const body = $('#sheetBody');
+  if (wrap.hidden && !sheetEntry) {
+    try { history.pushState({ ironSheet: true }, ''); sheetEntry = true; } catch { /* sandboxed frame */ }
+  }
   $('#sheetTitle').textContent = title;
   clear(body);
   /* One sheet replacing another (a back step, a sub-page) reuses the same
@@ -203,9 +232,16 @@ export function openSheet(title, buildBody) {
   return closeSheet;
 }
 
-export function closeSheet() {
+export function closeSheet({ fromHistory = false } = {}) {
   const wrap = $('#sheet');
   if (!wrap || wrap.hidden) return;
+  if (!fromHistory && sheetEntry) {
+    sheetEntry = false;
+    if (history.state?.ironSheet) {
+      backPending = () => {};
+      history.back();
+    }
+  }
   wrap.hidden = true;
   document.body.style.overflow = '';
   if (sheetCloser) {

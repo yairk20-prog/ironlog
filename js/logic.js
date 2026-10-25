@@ -176,7 +176,7 @@ export function movingAverage(series, window = 7) {
    rules (the usual 1.6–2.2) over-feed protein to someone carrying a lot of
    fat and under-feed a lean lifter; lean mass is what protein is for.
    A cut needs the most — protein is what keeps muscle in a deficit. */
-const PROTEIN_PER_LEAN_KG = { cut: 2.6, hypertrophy: 2.4, abs: 2.4, strength: 2.3, endurance: 1.9 };
+const PROTEIN_PER_LEAN_KG = { cut: 2.6, hypertrophy: 2.4, abs: 2.4, strength: 2.3, functional: 2.2, endurance: 1.9 };
 
 /**
  * The daily protein target and how it was reached.

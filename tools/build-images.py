@@ -5,14 +5,25 @@ Build the bundled exercise image set.
 Source: yuhonas/free-exercise-db (Unlicense / public domain).
 Each exercise gets two frames — start and end of the movement — resized and
 converted to WebP so the whole set stays small enough to ship offline.
+
+Frames already in img/ex are kept as they are; only missing ones are built,
+read from a local clone of the source repo (FEDB=path) or, failing that,
+downloaded from it. Re-encoding the whole set on every run would rewrite
+every image in git for no visible change.
+
+Run:  python3 tools/build-images.py
 """
+import io
 import json
 import os
-import shutil
+import pathlib
+import urllib.request
 from PIL import Image
 
-SRC = '/tmp/claude-0/fedb'
-OUT = '/home/claude/gym/img/ex'
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+SRC = os.environ.get('FEDB', '/tmp/fedb')
+RAW = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main'
+OUT = str(ROOT / 'img' / 'ex')
 WIDTH = 420
 QUALITY = 74
 
@@ -143,11 +154,42 @@ MAP = {
     'cardio_elliptical': 'Elliptical_Trainer',
     'cardio_rope': 'Rope_Jumping',
     'cardio_rower': 'Rowing_Stationary',
+
+    # functional
+    'kb_swing': 'One-Arm_Kettlebell_Swings',
+    'kb_thruster': 'Kettlebell_Thruster',
+    'kb_clean': 'One-Arm_Kettlebell_Clean',
+    'turkish_getup': 'Kettlebell_Turkish_Get-Up_Squat_style',
+    'farmer_carry': 'Farmers_Walk',
+    'renegade_row': 'Alternating_Renegade_Row',
+    'med_ball_slam': 'Overhead_Slam',
+    'box_jump': 'Front_Box_Jump',
+    'battle_ropes': 'Battling_Ropes',
+    'sled_push': 'Sled_Push',
+    'inchworm': 'Inchworm',
+    'pushup_side_plank': 'Push_Up_to_Side_Plank',
 }
 
 
-def convert(src_path, dst_path):
-    img = Image.open(src_path).convert('RGB')
+def source(rel):
+    """Bytes of one source frame: the local clone if there is one, else the repo."""
+    local = os.path.join(SRC, 'exercises', rel)
+    if os.path.exists(local):
+        return open(local, 'rb').read()
+    with urllib.request.urlopen(f'{RAW}/exercises/{rel}', timeout=30) as r:
+        return r.read()
+
+
+def index():
+    local = os.path.join(SRC, 'dist', 'exercises.json')
+    if os.path.exists(local):
+        return json.load(open(local))
+    with urllib.request.urlopen(f'{RAW}/dist/exercises.json', timeout=30) as r:
+        return json.load(r)
+
+
+def convert(src_bytes, dst_path):
+    img = Image.open(io.BytesIO(src_bytes)).convert('RGB')
     h = int(img.height * WIDTH / img.width)
     img = img.resize((WIDTH, h), Image.LANCZOS)
     img.save(dst_path, 'WEBP', quality=QUALITY, method=6)
@@ -156,13 +198,19 @@ def convert(src_path, dst_path):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    data = {e['id']: e for e in json.load(open(f'{SRC}/dist/exercises.json'))}
+    data = None
 
     manifest = {}
     total = 0
     missing = []
 
     for mine, theirs in MAP.items():
+        have = [f'{mine}-{n}.webp' for n in range(2) if os.path.exists(os.path.join(OUT, f'{mine}-{n}.webp'))]
+        if have:
+            manifest[mine] = have
+            continue
+        if data is None:
+            data = {e['id']: e for e in index()}
         entry = data.get(theirs)
         if not entry:
             missing.append((mine, theirs, 'no-entry'))
@@ -174,11 +222,13 @@ def main():
 
         frames = []
         for n, rel in enumerate(images[:2]):
-            src = os.path.join(SRC, 'exercises', rel)
-            if not os.path.exists(src):
+            try:
+                raw = source(rel)
+            except Exception as err:  # one missing frame is not the whole set
+                print('  fetch failed', rel, err)
                 continue
             name = f'{mine}-{n}.webp'
-            total += convert(src, os.path.join(OUT, name))
+            total += convert(raw, os.path.join(OUT, name))
             frames.append(name)
 
         if frames:
@@ -203,7 +253,7 @@ def main():
         ']);',
         '',
     ]
-    with open('/home/claude/gym/js/ex-images.js', 'w', encoding='utf-8') as f:
+    with open(ROOT / 'js' / 'ex-images.js', 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines) + '\n')
 
     # Flat file list the service worker warms in the background after install.
@@ -212,7 +262,7 @@ def main():
         json.dump(files, f)
 
     print(f'exercises with images: {len(manifest)}')
-    print(f'total bytes: {total/1024/1024:.2f} MB')
+    print(f'new bytes: {total/1024/1024:.2f} MB')
     if missing:
         print('MISSING:')
         for m in missing:

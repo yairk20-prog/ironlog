@@ -18,7 +18,7 @@ const PORT = Number(process.env.PORT || 8777);
 
 /* Each group is [server mode, suites…]. '' means no hosted coach at all. */
 const GROUPS = [
-  ['1', ['e2e', 'e2e2', 'e2e3', 'e2e4', 'e2e5', 'e2e6', 'e2e8', 'e2e9', 'e2e11', 'e2e12', 'e2e13', 'e2e14']],
+  ['1', ['e2e', 'e2e2', 'e2e3', 'e2e4', 'e2e5', 'e2e6', 'e2e8', 'e2e9', 'e2e11', 'e2e12', 'e2e13', 'e2e14', 'e2e15']],
   ['1', ['e2e7', 'e2e10']],
   ['', ['e2e7']],
   ['fail', ['e2e10']]
@@ -94,12 +94,13 @@ if (!(await portIsFree())) {
 
 let failed = 0;
 
-/* The coach function's own unit checks need no browser and no server. */
-{
-  const { out, code } = await run('node', [path.join(ROOT, 'tools/fn-test.mjs')], '');
+/* The functions' own unit checks (the coach; push reminders) need no
+   browser and no server. */
+for (const unit of ['fn-test', 'test-push']) {
+  const { out, code } = await run('node', [path.join(ROOT, `tools/${unit}.mjs`)], '');
   const ok = code === 0;
   if (!ok) failed++;
-  console.log(`${'fn-test'.padEnd(22)} ${ok ? 'PASS' : 'FAIL'}`);
+  console.log(`${unit.padEnd(22)} ${ok ? 'PASS' : 'FAIL'}`);
   if (!ok) console.log(`  ${(out.split('\n').find((l) => /^(FAIL:|FATAL)/.test(l)) || out.slice(-200)).slice(0, 220)}`);
 }
 

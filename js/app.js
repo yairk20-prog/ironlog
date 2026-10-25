@@ -6,7 +6,7 @@
 
 import * as db from './db.js';
 import { DEFAULTS } from './programs.js';
-import { $, clear, toast, setHaptics, setSoundAlert } from './ui.js';
+import { $, clear, toast, setHaptics, setSoundAlert, historySettled } from './ui.js';
 import * as timer from './timer.js';
 import { BUILD } from './version.js';
 
@@ -28,7 +28,7 @@ const ROUTES = {
   home: { render: renderHome, title: 'היום' },
   plan: { render: renderPlan, title: 'תוכנית' },
   nutrition: { render: renderNutrition, title: 'תזונה' },
-  history: { render: renderHistory, title: 'היסטוריה' },
+  history: { render: renderHistory, title: 'התקדמות' },
   more: { render: renderMore, title: 'עוד' },
   workout: { render: renderWorkout, cleanup: cleanupWorkout, title: 'אימון', chrome: false },
   cardio: { render: renderCardio, cleanup: cleanupCardio, title: 'אירובי', chrome: false },
@@ -113,6 +113,12 @@ function syncTabs(route) {
 /* ---------- routing ---------- */
 
 export function go(route, opts = {}) {
+  /* A sheet that was just closed is still taking its history entry back;
+     changing the hash before that lands would be undone by it. */
+  historySettled().then(() => navigate(route, opts));
+}
+
+function navigate(route, opts = {}) {
   const target = ROUTES[route] ? route : 'home';
   if (location.hash !== `#/${target}`) {
     if (opts.replace) location.replace(`#/${target}`);
@@ -131,39 +137,83 @@ export function reload() {
    latest one matters, so it simply replaces any earlier one waiting. */
 let queued = null;
 
+/* ---------- moving between screens ----------
+   Tabs slide in the direction of the tab tapped; a deeper screen slides in
+   and slides back out the way it came; a refresh of the same screen (a glass
+   of water, a food added) changes in place without replaying any entrance.
+   Where the browser has the View Transitions API the old screen and the new
+   one animate as two pictures; elsewhere the cards rise in as before. */
+const TAB_ORDER = ['home', 'plan', 'nutrition', 'history', 'more'];
+const scrollMemory = {};
+let restoreNext = false;
+const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+function direction(from, to) {
+  const a = TAB_ORDER.indexOf(from), b = TAB_ORDER.indexOf(to);
+  if (a >= 0 && b >= 0) return b > a ? 'forward' : 'back';
+  if (ROUTES[to]?.back === from || (b < 0 && a >= 0)) return 'forward';
+  if (ROUTES[from]?.back === to || (a < 0 && b >= 0)) return 'back';
+  return 'fade';
+}
+
 async function mount(route, { keepScroll = false } = {}) {
   if (rendering) { queued = { route, keepScroll }; return; }
   rendering = true;
   const def = ROUTES[route] || ROUTES.home;
-  if (currentRoute !== route) ROUTES[currentRoute]?.cleanup?.();
+  const from = currentRoute;
+  const changing = from !== route;
+  if (changing) {
+    scrollMemory[from] = window.scrollY;
+    ROUTES[from]?.cleanup?.();
+  }
   currentRoute = route;
 
   const view = $('#view');
-  const scrollY = keepScroll ? window.scrollY : 0;
+  const restore = changing && restoreNext ? (scrollMemory[route] || 0) : 0;
+  restoreNext = false;
+  const scrollY = keepScroll ? window.scrollY : restore;
 
-  setTitle(def.title, '');
-  setActions([]);
-  backTo = def.chrome === false ? 'home' : (def.back || null);
-  $('#topbarBack').hidden = !backTo;
-  document.body.classList.toggle('no-tabs', def.chrome === false);
-  $('#tabbar').hidden = def.chrome === false;
-  syncTabs(route);
+  const paint = async () => {
+    setTitle(def.title, '');
+    setActions([]);
+    backTo = def.chrome === false ? 'home' : (def.back || null);
+    $('#topbarBack').hidden = !backTo;
+    document.body.classList.toggle('no-tabs', def.chrome === false);
+    $('#tabbar').hidden = def.chrome === false;
+    syncTabs(route);
+    try {
+      const node = await def.render(ctx);
+      clear(view);
+      view.appendChild(node);
+    } catch (err) {
+      console.error('[render]', err);
+      clear(view);
+      view.appendChild(Object.assign(document.createElement('div'), {
+        className: 'empty',
+        innerHTML: `<b>שגיאה בטעינת המסך</b><div class="tiny">${String(err.message || err)}</div>`
+      }));
+    }
+    view.hidden = false;
+    // 'instant': the stylesheet's smooth scrolling would visibly scroll the restored page into place
+    window.scrollTo({ top: scrollY, behavior: 'instant' });
+  };
+
+  /* Same screen again: no entrance at all. */
+  view.classList.toggle('calm', !changing);
+  const animate = changing && !view.hidden && document.startViewTransition && !reducedMotion();
 
   try {
-    const node = await def.render(ctx);
-    clear(view);
-    view.appendChild(node);
-  } catch (err) {
-    console.error('[render]', err);
-    clear(view);
-    view.appendChild(Object.assign(document.createElement('div'), {
-      className: 'empty',
-      innerHTML: `<b>שגיאה בטעינת המסך</b><div class="tiny">${String(err.message || err)}</div>`
-    }));
+    if (animate) {
+      view.classList.add('calm');
+      document.documentElement.dataset.nav = direction(from, route);
+      const vt = document.startViewTransition(paint);
+      await vt.updateCallbackDone.catch(() => {});
+      vt.finished.finally(() => { delete document.documentElement.dataset.nav; });
+    } else {
+      await paint();
+    }
   } finally {
     rendering = false;
-    view.hidden = false;
-    window.scrollTo({ top: keepScroll ? scrollY : 0, behavior: 'auto' });
     if (queued) {
       const q = queued;
       queued = null;
@@ -189,7 +239,13 @@ async function boot() {
   }
 
   document.querySelectorAll('.tab').forEach((t) => {
-    t.addEventListener('click', () => go(t.dataset.route));
+    t.addEventListener('click', () => {
+      /* The tab you are on: back to the top, the way every phone app does. */
+      if (t.dataset.route === currentRoute) { window.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' }); return; }
+      /* Another tab: come back to where you left it. */
+      restoreNext = true;
+      go(t.dataset.route);
+    });
   });
   $('#topbarBack').addEventListener('click', () => go(backTo || 'home'));
   window.addEventListener('hashchange', () => mount(routeFromHash()));

@@ -1,26 +1,60 @@
 /* ==========================================================================
-   screen-history.js — completed sessions, per-exercise records and
-   a volume trend over the last eight weeks.
+   screen-history.js — "התקדמות": bodyweight against a goal, the week in
+   numbers, strength trends, then completed sessions, records and volume.
    ========================================================================== */
 
 import * as db from './db.js';
 import { el, icon, ICONS, emptyState, openSheet } from './ui.js';
-import { DAY_TYPES } from './programs.js';
+import { DAY_TYPES, goalList } from './programs.js';
 import { exerciseName, getExercise, EXERCISES } from './exercises.js';
 import { thumb, exerciseDetail } from './media.js';
-import { oneRM, fmtW, fmtDuration, round2, todayISO } from './logic.js';
-import { recentWorkouts, workoutSummary, setsOf } from './session.js';
+import { oneRM, fmtW, fmtDuration, round2, todayISO, hebDate, proteinTarget } from './logic.js';
+import { lineChart } from './chart.js';
+import { weighIns, weightStats, goalLine, weighSheet, weekNumbers } from './progress.js';
+import { recentWorkouts, workoutSummary, setsOf, streak } from './session.js';
 import { cardioLine, cardioPic, paceOf, weeklyCardioMinutes, WEEKLY_CARDIO_TARGET } from './cardio.js';
 
 export async function render(ctx) {
-  ctx.setTitle('היסטוריה');
+  ctx.setTitle('התקדמות');
 
   const wrap = el('div', { class: 'stack' });
   const workouts = await recentWorkouts(60);
 
+  /* ---- bodyweight, against the goal ---- */
+  wrap.appendChild(weightCard(ctx, await weighIns()));
+
+  /* ---- the last seven days ---- */
+  const profile = { ...ctx.settings, goals: goalList(ctx.settings) };
+  const week = await weekNumbers(ctx.settings, (trained) => proteinTarget(profile, trained));
+  const stk = await streak();
+  wrap.appendChild(el('div', { class: 'section-title', text: '7 הימים האחרונים' }));
+  wrap.appendChild(el('div', { class: 'week-nums' }, [
+    weekNum(ICONS.dumbbell, week.workouts, 'אימונים', 'var(--accent)'),
+    weekNum(ICONS.target, `${week.protein}/7`, 'ימי חלבון ביעד', 'var(--accent)'),
+    weekNum(ICONS.glass, `${week.water}/7`, 'ימי מים ביעד', '#4DA3FF'),
+    weekNum(ICONS.flame, stk, 'ימים ברצף', 'var(--warn)')
+  ]));
+
   if (!workouts.length) {
-    wrap.appendChild(emptyState('אין עדיין היסטוריה', 'אימונים שתסיים יופיעו כאן עם נפח, סטים ושיאים'));
+    wrap.appendChild(emptyState('אין עדיין אימונים', 'אימונים שתסיים יופיעו כאן עם נפח, סטים ושיאים'));
     return wrap;
+  }
+
+  /* ---- strength, lift by lift ---- */
+  const lifts = await strengthTrends(3);
+  if (lifts.length) {
+    wrap.appendChild(el('div', { class: 'section-title', text: 'כוח · 1RM משוער' }));
+    wrap.appendChild(el('div', { class: 'card lift-trends' }, lifts.map((l) => el('button', {
+      class: 'lift-row', onclick: () => openSheet(exerciseName(l.id), () => exerciseDetail(l.id))
+    }, [
+      thumb(l.id, exerciseName(l.id)),
+      el('div', { class: 'grow' }, [
+        el('b', { text: exerciseName(l.id) }),
+        el('small', { text: `${l.sessions} אימונים · ${l.delta == null ? 'עוד אין השוואה' : `\u2066${l.delta >= 0 ? '+' : '−'}${Math.abs(Math.round(l.delta * 10) / 10)}\u2069 ק״ג מאז ${l.sinceLabel}`}` })
+      ]),
+      sparkline(l.points),
+      el('b', { class: 'num lift-now', text: String(Math.round(l.now)) })
+    ]))));
   }
 
   /* ---- volume trend ---- */
@@ -204,4 +238,108 @@ async function topRecords() {
     }
   }
   return Array.from(best.values()).sort((a, b) => b.e1rm - a.e1rm);
+}
+
+/* ---------- progress pieces ---------- */
+
+function weightCard(ctx, entries) {
+  const st = weightStats(entries, ctx.settings.goalWeight);
+  const weigh = el('button', { class: 'btn primary grow', onclick: () => weighSheet(ctx) }, [icon(ICONS.scale, 18), 'שקילה']);
+  const more = el('button', { class: 'btn grow', onclick: () => ctx.go('body') }, [icon(ICONS.ruler, 18), 'מדידות']);
+
+  if (!st) {
+    return el('div', { class: 'card stack weight-card' }, [
+      el('div', { class: 'card-head' }, [el('h3', { text: 'משקל' })]),
+      el('p', { class: 'tiny dim', style: { margin: 0, lineHeight: '1.55' }, text: 'שקילה פעם-פעמיים בשבוע, בבוקר, מספיקה כדי לראות מגמה אמיתית — ולדעת מתי תגיע ליעד.' }),
+      el('div', { class: 'row', style: { gap: '8px' } }, [weigh, more])
+    ]);
+  }
+
+  /* Down is good when the goal is below where you started, up when it is
+     above; with no goal, a change is just a change. */
+  const goodDir = st.goal ? Math.sign(st.goal - st.start) : 0;
+  const tone = (n) => (!goodDir || !n ? '' : Math.sign(n) === goodDir ? 'good' : 'off');
+  const delta = (n, label) => n == null ? null : el('div', { class: 'w-delta' }, [
+    el('b', { class: `num ${tone(n)}`, text: `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n)}` }),
+    el('small', { text: label })
+  ]);
+
+  const recent = entries.slice(-30);
+  const chart = recent.length >= 2 ? lineChart(recent.map((e) => ({ y: e.weight, label: hebDate(e.date) })), { unit: 'ק״ג', height: 120 }) : null;
+
+  return el('div', { class: 'card stack weight-card' }, [
+    el('div', { class: 'card-head' }, [
+      el('h3', { text: 'משקל' }),
+      el('span', { class: 'badge', text: st.daysSinceLast === 0 ? 'נשקלת היום' : `לפני ${st.daysSinceLast} ימים` })
+    ]),
+    el('div', { class: 'w-top' }, [
+      el('div', { class: 'w-now' }, [
+        el('b', { class: 'num', text: String(st.current) }),
+        el('span', { text: 'ק״ג · ממוצע שבוע' })
+      ]),
+      el('div', { class: 'w-deltas' }, [
+        delta(st.month, 'ב-4 שבועות'),
+        delta(st.total, 'מההתחלה')
+      ])
+    ]),
+    st.goal ? el('div', { class: 'goal-bar', role: 'progressbar', 'aria-valuenow': String(st.goalPct), 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-label': `התקדמות ליעד ${st.goal} ק״ג` }, [
+      el('div', { class: 'goal-track' }, [el('i', { style: { width: `${st.goalPct}%` } })]),
+      el('div', { class: 'goal-ends' }, [el('small', { text: `${st.start}` }), el('small', { text: `יעד ${st.goal}` })])
+    ]) : null,
+    el('p', { class: 'tiny w-line', text: goalLine(st) }),
+    chart,
+    el('div', { class: 'row', style: { gap: '8px' } }, [weigh, more])
+  ]);
+}
+
+const weekNum = (ico, value, label, color) => el('div', { class: 'week-num', style: { '--c': color } }, [
+  icon(ico, 18),
+  el('b', { class: 'num', text: String(value) }),
+  el('small', { text: label })
+]);
+
+/**
+ * The lifts done most often, each as its best estimated 1RM per session,
+ * and how far it has moved over about a month.
+ */
+async function strengthTrends(limit = 3) {
+  const rows = (await db.all('set_logs')).filter((r) => !r.is_warmup && r.weight_kg > 0 && r.reps > 0);
+  const byEx = new Map();
+  for (const r of rows) {
+    if (!byEx.has(r.exercise_id)) byEx.set(r.exercise_id, new Map());
+    const sessions = byEx.get(r.exercise_id);
+    const e = oneRM(r.weight_kg, r.reps);
+    const cur = sessions.get(r.workout_id);
+    if (!cur || e > cur.e) sessions.set(r.workout_id, { e, t: r.timestamp });
+  }
+  const out = [];
+  for (const [id, sessions] of byEx) {
+    const pts = [...sessions.values()].sort((a, b) => a.t - b.t);
+    if (pts.length < 2) continue;
+    const last = pts[pts.length - 1];
+    const ref = [...pts].reverse().find((p) => p.t <= last.t - 26 * 86400000) || pts[0];
+    out.push({
+      id,
+      sessions: pts.length,
+      now: round2(last.e),
+      delta: round2(last.e - ref.e),
+      sinceLabel: new Date(ref.t).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' }),
+      points: pts.slice(-12).map((p) => p.e)
+    });
+  }
+  return out.sort((a, b) => b.sessions - a.sessions || b.now - a.now).slice(0, limit);
+}
+
+/** A trend in 64×24, no axes: the shape is the whole message. */
+function sparkline(values) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 64 24');
+  svg.setAttribute('class', 'spark');
+  svg.setAttribute('aria-hidden', 'true');
+  const lo = Math.min(...values), hi = Math.max(...values);
+  const span = hi - lo || 1;
+  const pts = values.map((v, i) => `${(i / Math.max(1, values.length - 1)) * 62 + 1},${22 - ((v - lo) / span) * 20}`).join(' ');
+  svg.innerHTML = `<polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="2"/>`;
+  return svg;
 }

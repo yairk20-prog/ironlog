@@ -208,6 +208,31 @@ h1,h2,h3{margin:0;font-weight:900;letter-spacing:-.03em;text-wrap:balance}
 .view > .stack > *:nth-child(5){animation-delay:.13s}
 .view > .stack > *:nth-child(n+6){animation-delay:.16s}
 @keyframes riseIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+/* A refresh of the same screen, or a screen arriving inside a view
+   transition, does not replay the entrance. */
+.view.calm > .stack > *{animation:none}
+
+/* ---------- screen transitions (View Transitions API) ----------
+   The top bar and the tab bar are their own layers, so they hold still while
+   the content slides beneath them. RTL: the next tab is to the left, so
+   "forward" content arrives from the left. */
+.topbar{view-transition-name:topbar}
+.tabbar{view-transition-name:tabbar}
+::view-transition-group(tabbar),::view-transition-group(topbar){animation-duration:.22s}
+::view-transition-old(root),::view-transition-new(root){
+  animation-duration:.26s;animation-timing-function:cubic-bezier(.2,.8,.2,1);animation-fill-mode:both;
+}
+html[data-nav=forward]::view-transition-old(root){animation-name:vtOutRight}
+html[data-nav=forward]::view-transition-new(root){animation-name:vtInLeft}
+html[data-nav=back]::view-transition-old(root){animation-name:vtOutLeft}
+html[data-nav=back]::view-transition-new(root){animation-name:vtInRight}
+@keyframes vtInLeft{from{transform:translateX(-14%);opacity:0}to{transform:none;opacity:1}}
+@keyframes vtInRight{from{transform:translateX(14%);opacity:0}to{transform:none;opacity:1}}
+@keyframes vtOutRight{to{transform:translateX(10%);opacity:0}}
+@keyframes vtOutLeft{to{transform:translateX(-10%);opacity:0}}
+@media (prefers-reduced-motion:reduce){
+  ::view-transition-group(*),::view-transition-old(*),::view-transition-new(*){animation:none!important}
+}
 
 /* Anything you can press answers the finger immediately. */
 .btn,.chip,.list-link,.day-card,.lib-card,.opt,.pick,.tab,.set-go,.glass,.pick-tile{
@@ -1158,6 +1183,70 @@ body.login-open{overflow:hidden}
 .share-points li{font-size:var(--fs-tiny);color:var(--text-2);line-height:1.5;font-weight:600}
 .share-points b{color:var(--text)}
 
+/* ---------- progress ---------- */
+/* SVG text anchors follow the text direction: in an RTL page "start" is the
+   right edge, which pushed the chart's first date off the left side. The
+   chart is a picture with a left-to-right time axis; lay it out that way. */
+svg.chart{direction:ltr}
+.weight-card{gap:14px}
+.weight-card .card-head{margin-bottom:0}
+.w-top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.w-now b{display:block;font-size:clamp(38px,11vw,48px);font-weight:900;letter-spacing:-.04em;line-height:1}
+.w-now span{display:block;font-size:var(--fs-tiny);color:var(--text-3);font-weight:700;margin-top:4px}
+.w-deltas{display:flex;gap:14px}
+.w-delta{text-align:center}
+.w-delta b{display:block;font-size:18px;font-weight:900;direction:ltr;unicode-bidi:isolate}
+.w-delta b.good{color:var(--ok)}
+.w-delta b.off{color:var(--warn)}
+.w-delta small{display:block;font-size:10.5px;color:var(--text-3);font-weight:700;margin-top:2px}
+.goal-track{height:10px;background:var(--surface-3);overflow:hidden}
+.goal-track i{display:block;height:100%;background:var(--accent);transition:width .5s var(--ease)}
+.goal-ends{display:flex;justify-content:space-between;margin-top:5px}
+.goal-ends small{font-size:11px;color:var(--text-3);font-weight:700}
+.w-line{margin:0;color:var(--text-2);line-height:1.55;font-weight:600}
+.week-nums{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.week-num{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:12px 4px 10px;background:var(--surface);border:1px solid var(--line-soft);
+  border-top:3px solid var(--c);text-align:center;box-shadow:var(--lift-1);
+}
+.week-num svg{width:18px;height:18px;color:var(--c)}
+.week-num b{font-size:clamp(18px,5.4vw,22px);font-weight:900;letter-spacing:-.03em}
+.week-num small{font-size:10px;color:var(--text-3);font-weight:700;line-height:1.25}
+.lift-trends{padding:0;display:flex;flex-direction:column}
+.lift-row{display:flex;align-items:center;gap:11px;padding:11px 12px;text-align:start;color:inherit;width:100%}
+.lift-row + .lift-row{border-top:1px solid var(--line-soft)}
+.lift-row b{display:block;font-size:14px;font-weight:700}
+.lift-row small{display:block;font-size:11px;color:var(--text-3);font-weight:600;margin-top:2px}
+.lift-row .spark{width:64px;height:24px;flex:none;color:var(--accent)}
+.lift-now{flex:none;min-width:44px;text-align:end;font-size:18px!important;font-weight:900!important;color:var(--accent)}
+.weigh-row{display:flex;align-items:center;gap:10px}
+.weigh-box{flex:1;display:flex;align-items:baseline;justify-content:center;gap:6px}
+.weigh-box span{font-size:16px;font-weight:800;color:var(--text-2)}
+.weigh-in{font-size:clamp(40px,12vw,54px)!important;font-weight:900;text-align:center;padding:8px 4px!important;letter-spacing:-.03em}
+.weigh-prompt{
+  display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;
+  background:var(--surface);border:1px solid var(--line);border-inline-start:3px solid var(--accent);
+  text-align:start;color:var(--text);box-shadow:var(--lift-1);
+}
+.weigh-prompt b{display:block;font-size:14px;font-weight:800}
+.weigh-prompt small{display:block;font-size:11.5px;color:var(--text-3);font-weight:600;margin-top:2px}
+.weigh-prompt > svg{color:var(--accent);flex:none}
+@media (max-width:359px){.week-nums{grid-template-columns:repeat(2,1fr)}}
+
+/* ---------- reminders ---------- */
+.remind-invite{
+  display:flex;align-items:center;gap:12px;padding:12px 10px 12px 14px;
+  background:var(--surface);border:1px solid var(--line);border-inline-start:3px solid #4DA3FF;
+  box-shadow:var(--lift-1);
+}
+.remind-invite b{display:block;font-size:14px;font-weight:800}
+.remind-invite small{display:block;font-size:11.5px;color:var(--text-3);font-weight:600;margin-top:2px;line-height:1.35}
+.remind-ico{flex:none;width:38px;height:38px;display:grid;place-items:center;background:rgba(77,163,255,.14);color:#7CC0FF}
+.remind-x{flex:none;width:30px;height:30px;display:grid;place-items:center;color:var(--text-3)}
+.remind-x svg{width:16px;height:16px}
+.reminders select{width:100%}
+
 /* Water as glasses: the row is the readout and the control at once. */
 .glasses{display:flex;flex-wrap:wrap;gap:6px}
 .glass{
@@ -1379,6 +1468,21 @@ body.no-tabs .timer-dock{bottom:calc(var(--safe-b) + 14px)}
 .quick-tile b{font-size:13px;font-weight:800;letter-spacing:-.02em}
 .quick-tile small{font-size:10px;color:var(--text-3);font-weight:600;text-align:center;line-height:1.25}
 .quick-tile:active{transform:scale(.95);box-shadow:var(--lift-press);border-color:var(--accent)}
+
+/* Functional: one wide tile under the grid, a photo on the side. */
+.func-wide{
+  display:flex;align-items:center;gap:12px;width:100%;margin-top:8px;
+  padding:0 14px 0 0;min-height:76px;overflow:hidden;
+  background:linear-gradient(90deg,rgba(255,176,32,.16),var(--surface-2) 70%);
+  border:1px solid rgba(255,176,32,.45);color:var(--text);text-align:start;
+  box-shadow:var(--lift-1);
+}
+.func-wide img{width:96px;height:76px;object-fit:cover;flex:none;order:2}
+.func-wide b{display:block;font-size:15px;font-weight:900;letter-spacing:-.02em}
+.func-wide small{display:block;font-size:11.5px;color:var(--text-2);font-weight:600;margin-top:3px}
+.func-wide > svg{flex:none;color:#FFB020;order:3;margin-inline-end:10px}
+.func-wide:active{transform:scale(.98)}
+.func-opt small + small{color:var(--text-3);font-size:10.5px;margin-top:4px;line-height:1.4}
 
 /* Four across is tight on a small phone; two rows read better than four
    columns of clipped words. */

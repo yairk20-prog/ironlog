@@ -12,6 +12,7 @@ import {
   portion, portionForGrams, foodFromItem, makeFood, foodFromAiItem, isKnownFood
 } from './food.js';
 import * as ai from './ai.js';
+import * as reminders from './reminders.js';
 import { goalList } from './programs.js';
 import { proteinTarget, calorieTarget, todayISO, round2 } from './logic.js';
 import { recentWorkouts } from './session.js';
@@ -45,6 +46,10 @@ export async function render(ctx) {
   const pTarget = proteinTarget(profile, trainedToday);
   const kcalTarget = s.calorieTarget || calorieTarget(profile, trainedToday);
 
+  /* Reminders compare the day against these; keep the server's copy true. */
+  reminders.setTargets({ water_target: s.waterTarget || 3000, protein_target: pTarget });
+  reminders.syncDay(day);
+
   const wrap = el('div', { class: 'stack' });
 
   /* ---- the day at a glance ----
@@ -72,6 +77,10 @@ export async function render(ctx) {
 
   /* ---- water, counted the way people drink it ---- */
   wrap.appendChild(waterCard(ctx, day, s));
+
+  /* ---- the one-tap way into reminders, until they are on ---- */
+  const invite = await reminders.invite(ctx);
+  if (invite) wrap.appendChild(invite);
 
   /* Adding food happens on the meal you are adding it to, so the two
      catch-all buttons that used to live here are gone. */
@@ -125,7 +134,10 @@ function recompute(day) {
   day.fat_grams = round2(t.f);
 }
 
-const saveDay = (day) => db.put('nutrition_logs', day);
+const saveDay = async (day) => {
+  await db.put('nutrition_logs', day);
+  reminders.syncDay(day);
+};
 
 /* ---------- meals ---------- */
 

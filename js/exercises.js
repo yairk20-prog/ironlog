@@ -156,6 +156,26 @@ export const EXERCISES = [
   { id: 'jump_squat', name: 'סקוואט קפיצה', muscle: 'quads', secondary: ['glutes', 'calves'], cat: 'Bodyweight', pattern: 'conditioning', rest: 30, compound: true, yt: 'jump squat form', cue: 'נחיתה רכה על כל כף הרגל' },
   { id: 'split_jump', name: 'מכרעים בקפיצה', muscle: 'quads', secondary: ['glutes'], cat: 'Bodyweight', pattern: 'conditioning', rest: 30, compound: true, yt: 'split jump lunge' },
 
+  /* ================= FUNCTIONAL =================
+     Whole-body movements done as circuits: power from the hips, carrying,
+     getting up off the floor, moving fast and changing direction. Their own
+     pattern, like conditioning, so a kettlebell swing is never offered as a
+     swap for a deadlift or the other way round. */
+  { id: 'kb_swing', name: 'קטלבל סווינג', muscle: 'glutes', secondary: ['hamstrings', 'core', 'shoulders'], cat: 'FreeWeights', pattern: 'functional', rest: 60, compound: true, yt: 'kettlebell swing form', cue: 'התנופה מהירכיים, לא מהידיים — לחיצת ישבן חזקה למעלה' },
+  { id: 'kb_thruster', name: 'תראסטר קטלבל', muscle: 'quads', secondary: ['shoulders', 'glutes', 'core'], cat: 'FreeWeights', pattern: 'functional', rest: 75, compound: true, yt: 'kettlebell thruster form', cue: 'סקוואט ומיד לחיצה מעל הראש בתנועה אחת רציפה' },
+  { id: 'kb_clean', name: 'קלין קטלבל', muscle: 'glutes', secondary: ['traps', 'forearms', 'core'], cat: 'FreeWeights', pattern: 'functional', rest: 60, compound: true, yt: 'kettlebell clean technique', cue: 'הקטלבל מתגלגל סביב היד — בלי מכה באמה' },
+  { id: 'turkish_getup', name: 'טורקיש גט-אפ', muscle: 'core', secondary: ['shoulders', 'glutes'], cat: 'FreeWeights', pattern: 'functional', rest: 75, compound: true, yt: 'turkish get up step by step', cue: 'לאט, שלב אחרי שלב, העיניים על המשקולת' },
+  { id: 'farmer_carry', name: 'הליכת חקלאי', muscle: 'forearms', secondary: ['traps', 'core'], cat: 'FreeWeights', pattern: 'functional', rest: 60, compound: true, yt: 'farmers walk form', cue: 'משקולת כבדה בכל יד, כתפיים למטה, צעדים קצרים' },
+  { id: 'renegade_row', name: 'חתירת רנגייד', muscle: 'back', secondary: ['core', 'chest'], cat: 'FreeWeights', pattern: 'functional', rest: 60, compound: true, yt: 'renegade row form', cue: 'רגליים רחבות, אגן יציב — לא מסתובבים' },
+  { id: 'med_ball_slam', name: 'הטחת כדור כוח', muscle: 'lats', secondary: ['core', 'shoulders'], cat: 'FreeWeights', pattern: 'functional', rest: 45, compound: true, yt: 'medicine ball slam', cue: 'כל הגוף נמתח למעלה ואז מטיח בכוח' },
+  { id: 'box_jump', name: 'קפיצה לקופסה', muscle: 'quads', secondary: ['glutes', 'calves'], cat: 'Bodyweight', pattern: 'functional', rest: 60, compound: true, yt: 'box jump form', cue: 'נחיתה רכה ושקטה, יורדים בצעד ולא בקפיצה' },
+  { id: 'battle_ropes', name: 'חבלי קרב', muscle: 'shoulders', secondary: ['core', 'forearms'], cat: 'FreeWeights', pattern: 'functional', rest: 45, compound: true, yt: 'battle ropes workout', cue: 'ברכיים כפופות, גלים מהירים וקבועים' },
+  { id: 'sled_push', name: 'דחיפת מזחלת', muscle: 'quads', secondary: ['glutes', 'calves', 'core'], cat: 'Machine', pattern: 'functional', rest: 90, compound: true, yt: 'sled push technique', cue: 'גוף באלכסון, ידיים נעולות, צעדים חזקים' },
+  { id: 'burpee', name: 'ברפי', muscle: 'quads', secondary: ['chest', 'core', 'shoulders'], cat: 'Bodyweight', pattern: 'functional', rest: 45, compound: true, yt: 'burpee proper form', cue: 'חזה לרצפה, קופצים למעלה עם מחיאה מעל הראש' },
+  { id: 'bear_crawl', name: 'זחילת דוב', muscle: 'core', secondary: ['shoulders', 'quads'], cat: 'Bodyweight', pattern: 'functional', rest: 45, compound: true, yt: 'bear crawl exercise', cue: 'ברכיים שני ס״מ מהרצפה, גב שטוח' },
+  { id: 'inchworm', name: 'תולעת', muscle: 'hamstrings', secondary: ['core', 'shoulders'], cat: 'Bodyweight', pattern: 'functional', rest: 45, compound: true, yt: 'inchworm exercise', cue: 'ידיים הולכות קדימה עד פלאנק, ואז רגליים אליהן' },
+  { id: 'pushup_side_plank', name: 'שכיבת סמיכה לפלאנק צד', muscle: 'chest', secondary: ['core', 'shoulders'], cat: 'Bodyweight', pattern: 'functional', rest: 45, compound: true, yt: 'push up to side plank', cue: 'שכיבה אחת, ואז סיבוב לצד עם יד לתקרה' },
+
   /* ================= POSTURE / MOBILITY ================= */
   { id: 'hip_flexor_stretch', name: 'מתיחת כופפי ירך', muscle: 'hipflexors', cat: 'Bodyweight', pattern: 'mobility', rest: 30, compound: false, yt: 'couch stretch hip flexor', cue: 'הטיית אגן אחורה לפני המתיחה' },
   { id: 'glute_activation', name: 'אקטיבציית ישבן', muscle: 'glutes', cat: 'Bands', pattern: 'mobility', rest: 30, compound: false, yt: 'glute activation exercises' },
@@ -175,9 +195,9 @@ const BY_ID = new Map(EXERCISES.map((e) => [e.id, e]));
  */
 export const LIMIT_BLOCKS = {
   shoulder: ['bb_ohp', 'db_shoulder_press', 'dips', 'bench_dips', 'db_fly', 'bb_incline'],
-  knee: ['bb_squat', 'front_squat', 'walking_lunge', 'bw_lunge', 'bulgarian_split', 'step_up', 'hack_squat', 'jump_squat', 'split_jump'],
-  back: ['deadlift', 'bb_row', 'rdl', 'tbar_row', 'bb_squat'],
-  wrist: ['bb_curl', 'skullcrusher', 'front_squat', 'pushup', 'decline_pushup', 'diamond_pushup', 'close_grip_bench']
+  knee: ['bb_squat', 'front_squat', 'walking_lunge', 'bw_lunge', 'bulgarian_split', 'step_up', 'hack_squat', 'jump_squat', 'split_jump', 'box_jump', 'burpee', 'kb_thruster'],
+  back: ['deadlift', 'bb_row', 'rdl', 'tbar_row', 'bb_squat', 'kb_swing', 'med_ball_slam'],
+  wrist: ['bb_curl', 'skullcrusher', 'front_squat', 'pushup', 'decline_pushup', 'diamond_pushup', 'close_grip_bench', 'renegade_row', 'pushup_side_plank', 'burpee']
 };
 
 /** True when this exercise is allowed under the user's equipment and limits. */

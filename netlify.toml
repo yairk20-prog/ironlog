@@ -75,6 +75,11 @@
   to = "/.netlify/functions/backup"
   status = 200
 
+[[redirects]]
+  from = "/api/push"
+  to = "/.netlify/functions/push"
+  status = 200
+
 # Single-page app: every path falls back to the shell.
 [[redirects]]
   from = "/*"

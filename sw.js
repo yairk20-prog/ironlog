@@ -3,7 +3,7 @@
    Keep VERSION in step with BUILD in js/version.js; tools/e2e10.mjs fails the
    build if they drift, because the number shown in Settings is the only way
    anyone can tell from a phone whether an update actually landed. */
-const VERSION = 'ironlog-v5.8.0';
+const VERSION = 'ironlog-v5.9.0';
 
 /* Every request for code goes out with the browser's HTTP cache bypassed.
    Without this the service worker's "network-first" rule is a lie: fetch()
@@ -44,6 +44,8 @@ const SHELL = [
   './js/cardio.js',
   './js/screen-cardio.js',
   './js/body.js',
+  './js/progress.js',
+  './js/reminders.js',
   './js/feed.js',
   './js/body-paths.js',
   './js/screen-home.js',
@@ -114,6 +116,34 @@ self.addEventListener('message', (e) => {
      page's own constant: if the two disagree the update is half-applied, and
      that is exactly the state worth being able to see from a phone. */
   if (e.data === 'version') e.source?.postMessage({ swVersion: VERSION });
+});
+
+/* ---------- reminders ----------
+   Sent by the site's server once an hour (netlify/functions/push-tick.js)
+   when the day is behind on water or protein. A tap opens the nutrition
+   screen — in the app window that is already open, if there is one. */
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'IRONLOG', {
+    body: d.body || '',
+    tag: d.tag || 'ironlog',
+    renotify: true,
+    dir: 'rtl',
+    lang: 'he',
+    icon: './icons/icon-192.png',
+    data: { url: d.url || './#/nutrition' }
+  }));
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = new URL(e.notification.data?.url || './', self.registration.scope).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+    const win = wins.find((w) => 'focus' in w);
+    if (win) return win.focus().then((w) => (w || win).navigate?.(url)).catch(() => {});
+    return self.clients.openWindow(url);
+  }));
 });
 
 self.addEventListener('fetch', (e) => {

@@ -58,6 +58,21 @@ export const GOALS = {
     incCompound: 0.025,
     incIsolation: 0.05,
     rirTarget: 2
+  },
+  /* Functional fitness: strength you use outside the gym — swinging,
+     carrying, jumping, getting up off the floor — done as circuits with
+     short rests, so the heart works as hard as the muscles. Choosing it
+     offers the functional splits; any split can still run a functional day
+     from the home screen. */
+  functional: {
+    id: 'functional',
+    name: 'כושר פונקציונלי',
+    desc: 'מעגלים של כוח מתפרץ, נשיאה, קפיצות ותנועה — מנוחות קצרות',
+    reps: { compound: [8, 12], isolation: [12, 15] },
+    restMul: 0.6,
+    incCompound: 0.025,
+    incIsolation: 0.05,
+    rirTarget: 2
   }
 };
 
@@ -69,6 +84,7 @@ export const DAY_TYPES = {
   Park: { name: 'פארק', short: 'P', color: '#2FD9C4' },
   Home: { name: 'בית', short: 'H', color: '#FF6FA8' },
   Cardio: { name: 'אירובי', short: 'R', color: '#FF4D6D' },
+  Functional: { name: 'פונקציונלי', short: 'F', color: '#FFB020' },
   Custom: { name: 'מותאם', short: '★', color: '#FFC93D' }
 };
 
@@ -153,6 +169,44 @@ export const TEMPLATES = {
     ]
   },
 
+  /* Functional days. A: power and carrying with a kettlebell; B: a
+     bodyweight metcon that needs nothing; C: control — getting up, holding
+     a position, moving well under load. Timed slots are carries, crawls and
+     ropes, where a rep count means nothing. */
+  func_a: {
+    id: 'func_a', type: 'Functional', name: 'פונקציונלי A · כוח מתפרץ',
+    slots: [
+      { ex: 'kb_swing', s: 4 },
+      { ex: 'kb_thruster', s: 3 },
+      { ex: 'box_jump', s: 3 },
+      { ex: 'renegade_row', s: 3 },
+      { ex: 'farmer_carry', s: 3, seconds: 40 },
+      { ex: 'med_ball_slam', s: 3 }
+    ]
+  },
+  func_b: {
+    id: 'func_b', type: 'Functional', name: 'פונקציונלי B · מטקון משקל גוף',
+    slots: [
+      { ex: 'burpee', s: 4 },
+      { ex: 'jump_squat', s: 3 },
+      { ex: 'pushup_side_plank', s: 3 },
+      { ex: 'mountain_climbers', s: 3, seconds: 30 },
+      { ex: 'bw_lunge', s: 3 },
+      { ex: 'bear_crawl', s: 3, seconds: 30 }
+    ]
+  },
+  func_c: {
+    id: 'func_c', type: 'Functional', name: 'פונקציונלי C · תנועה ושליטה',
+    slots: [
+      { ex: 'turkish_getup', s: 3 },
+      { ex: 'goblet_squat', s: 3 },
+      { ex: 'kb_clean', s: 3 },
+      { ex: 'inchworm', s: 3 },
+      { ex: 'battle_ropes', s: 3, seconds: 30 },
+      { ex: 'pallof_press', s: 3 }
+    ]
+  },
+
   /* Stretching is not the posture routine with the strength work removed —
      it is what you want after a session or on a stiff evening: holds only,
      no activation drills, no core. Five minutes, nothing to think about. */
@@ -209,6 +263,14 @@ export const VENUE_DAYS = {
       { ex: 'single_leg_bridge', s: 3 },
       { ex: 'bw_calf', s: 4 },
       { ex: 'hanging_leg_raise', s: 3 }
+    ],
+    Functional: [
+      { ex: 'burpee', s: 4 },
+      { ex: 'pullup', s: 3 },
+      { ex: 'jump_squat', s: 3 },
+      { ex: 'pushup_side_plank', s: 3 },
+      { ex: 'bear_crawl', s: 3, seconds: 30 },
+      { ex: 'mountain_climbers', s: 3, seconds: 30 }
     ]
   },
   /* No bar at home, so there is no vertical pull: the table row carries the
@@ -235,6 +297,14 @@ export const VENUE_DAYS = {
       { ex: 'single_leg_bridge', s: 3 },
       { ex: 'glute_bridge', s: 3 },
       { ex: 'bw_calf', s: 4 }
+    ],
+    Functional: [
+      { ex: 'burpee', s: 4 },
+      { ex: 'jump_squat', s: 3 },
+      { ex: 'pushup_side_plank', s: 3 },
+      { ex: 'inchworm', s: 3 },
+      { ex: 'bw_lunge', s: 3 },
+      { ex: 'mountain_climbers', s: 3, seconds: 30 }
     ]
   }
 };
@@ -315,8 +385,23 @@ export const ROTATIONS = {
     name: 'PPL · 3 ימים',
     desc: 'אימון יום־כן־יום, מתאים ללו״ז עמוס',
     days: ['push_a', 'rest', 'pull_a', 'rest', 'legs_a', 'posture', 'rest']
+  },
+  hybrid5: {
+    id: 'hybrid5',
+    name: 'כוח + פונקציונלי · 5 ימים',
+    desc: 'דחיפה, משיכה ורגליים, ושני ימי מעגלים פונקציונליים',
+    days: ['push_a', 'func_a', 'legs_a', 'rest', 'pull_a', 'func_b', 'rest']
+  },
+  func4: {
+    id: 'func4',
+    name: 'פונקציונלי · 4 ימים',
+    desc: 'שלושה סוגי מעגלים — כוח מתפרץ, מטקון ותנועה',
+    days: ['func_a', 'func_b', 'rest', 'func_c', 'rest', 'func_b', 'rest']
   }
 };
+
+/** Templates for a functional day picked off-plan, from the home screen. */
+export const FUNCTIONAL = ['func_a', 'func_b', 'func_c'];
 
 export const DEFAULTS = {
   goal: 'hypertrophy',

@@ -5,13 +5,15 @@
 import * as db from './db.js';
 import { el, icon, ICONS, openSheet } from './ui.js';
 import {
-  DAY_TYPES, VENUES, VENUE_DAYS, restFor, goalList, resolveGoal, templateForIndex, planSlots, venueToday, sessionName, CHALLENGES
+  DAY_TYPES, VENUES, VENUE_DAYS, restFor, goalList, resolveGoal, templateForIndex, planSlots, venueToday, sessionName, CHALLENGES,
+  TEMPLATES, FUNCTIONAL
 } from './programs.js';
 import { CARDIO, getActiveCardio, cardioElapsed, cardioPic, cardioLine, cardioDay, recommendCardio } from './cardio.js';
 import { dayCard, restDayCard } from './screen-plan.js';
 import { exerciseName, search, CATEGORIES } from './exercises.js';
 import { frameUrl, hasImages, thumb } from './media.js';
 import { fmtDuration, todayISO, HEB_DAYS } from './logic.js';
+import { weighIns, weightStats, weighSheet } from './progress.js';
 import {
   getActive, nextUp, createFromTemplate, createFreeWorkout, createChallenge,
   createQuickWorkout, challengeBest, advanceRotation, recentWorkouts, workoutSummary, streak
@@ -58,6 +60,17 @@ export async function render(ctx) {
       quickTile(ICONS.flame, 'אתגר', 'שיא אישי', () => challengeSheet(ctx)),
       quickTile(ICONS.search, 'חופשי', 'בחר תרגיל', () => freeSheet(ctx))
     ]));
+    /* Functional circuits get a full-width way in rather than a seventh
+       tile: three different sessions sit behind it, and it is the one
+       off-plan choice that is a whole workout rather than a filler. */
+    wrap.appendChild(el('button', { class: 'func-wide', onclick: () => functionalSheet(ctx) }, [
+      hasImages('kb_swing') ? el('img', { src: frameUrl('kb_swing', 1), alt: '', loading: 'lazy' }) : null,
+      el('div', { class: 'grow' }, [
+        el('b', { text: 'אימון פונקציונלי' }),
+        el('small', { text: 'מעגלים: קטלבל, קפיצות, נשיאה ומשקל גוף' })
+      ]),
+      icon(ICONS.chevron, 18)
+    ]));
   }
 
   /* What is coming, as information rather than controls: the list answers
@@ -81,6 +94,20 @@ export async function render(ctx) {
         slot.done ? icon(ICONS.check, 16) : null
       ]);
     })));
+  }
+
+  /* A weigh-in a week is what makes the progress screen worth opening;
+     after seven days without one, ask — once, quietly, with one tap. */
+  const wst = weightStats(await weighIns(), settings.goalWeight);
+  if (!wst || wst.daysSinceLast >= 7) {
+    wrap.appendChild(el('button', { class: 'weigh-prompt', onclick: () => weighSheet(ctx) }, [
+      icon(ICONS.scale, 22),
+      el('div', { class: 'grow' }, [
+        el('b', { text: 'שקילה שבועית' }),
+        el('small', { text: wst ? `עברו ${wst.daysSinceLast} ימים מהשקילה האחרונה (${wst.last} ק״ג)` : 'שקילה ראשונה — ומהיום רואים מגמה ויעד' })
+      ]),
+      icon(ICONS.plus, 18)
+    ]));
   }
 
   /* A peek at tomorrow: the next slot in the split after the one that's
@@ -260,6 +287,30 @@ const quickTile = (iconPath, title, sub, onclick) => el('button', { class: 'quic
 async function startTemplate(ctx, templateId) {
   await createFromTemplate(templateId, ctx.settings, { offPlan: true });
   ctx.go('workout');
+}
+
+/** The three functional sessions, each a whole workout, off-plan. */
+function functionalSheet(ctx) {
+  const WHAT = {
+    func_a: 'קטלבל, קופסה וכדור כוח · כוח מתפרץ ונשיאה',
+    func_b: 'בלי שום ציוד · ברפי, קפיצות, זחילות',
+    func_c: 'קטלבל וכבל · טורקיש גט-אפ, קלין, יציבות'
+  };
+  openSheet('אימון פונקציונלי', () => el('div', { class: 'stack' }, [
+    el('p', { class: 'tiny dim', style: { margin: 0, lineHeight: '1.55' }, text: 'תרגילים שעובדים על כל הגוף יחד, עם מנוחות קצרות — כוח, סיבולת וקואורדינציה באימון אחד. מחוץ לתוכנית: הסבב השבועי לא זז.' }),
+    ...FUNCTIONAL.map((id) => {
+      const tpl = TEMPLATES[id];
+      return el('button', { class: 'opt func-opt', onclick: () => startTemplate(ctx, id) }, [
+        thumb(tpl.slots[0].ex, exerciseName(tpl.slots[0].ex)),
+        el('div', { class: 'grow' }, [
+          el('b', { text: tpl.name }),
+          el('small', { text: WHAT[id] }),
+          el('small', { text: tpl.slots.map((x) => exerciseName(x.ex)).join(' · ') })
+        ]),
+        icon(ICONS.play, 18)
+      ]);
+    })
+  ]));
 }
 
 async function quickWorkout(ctx, venue) {

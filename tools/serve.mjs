@@ -10,6 +10,7 @@ const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const PORT = Number(process.argv[2] || 8777);
 /* '1' = the coach answers; 'fail' = a key is set but the API refuses. */
 const COACH = process.env.COACH === 'fail' ? 'fail' : (process.env.COACH === '1' ? '1' : '');
+const PUSH_LOG = [];
 
 /** In-memory stand-in for Netlify Blobs, so the backup flow can be tested. */
 const BACKUPS = new Map();
@@ -55,6 +56,22 @@ http.createServer((req, res) => {
         send(res, 400, JSON.stringify({ error: 'bad json' }), TYPES['.json']);
       }
     });
+  }
+
+  /* Reminders: a stand-in for netlify/functions/push.js. It keeps what the
+     app sent, so the suites can check it, and answers GET ?last with that. */
+  if (pathname === '/api/push') {
+    if (req.method === 'GET') {
+      if (url.searchParams.has('last')) return send(res, 200, JSON.stringify(PUSH_LOG), TYPES['.json']);
+      return send(res, 200, JSON.stringify({ available: true, publicKey: 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U' }), TYPES['.json']);
+    }
+    let raw = '';
+    req.on('data', (c) => { raw += c; });
+    req.on('end', () => {
+      try { PUSH_LOG.push(JSON.parse(raw)); } catch { /* ignore */ }
+      send(res, 200, JSON.stringify({ ok: true, status: 201 }), TYPES['.json']);
+    });
+    return;
   }
 
   if (pathname === '/api/coach') {

@@ -11,6 +11,7 @@ import * as ai from './ai.js';
 import * as gdrive from './gdrive.js';
 import * as cloud from './cloud.js';
 import { BUILD, swVersion } from './version.js';
+import * as reminders from './reminders.js';
 
 /**
  * A settings screen that shows everything at once is a wall. Each group is a
@@ -153,6 +154,10 @@ export async function render(ctx) {
     toggle('הצע סטי חימום לתרגילים כבדים', s.warmupOn !== false, (v) => ctx.saveSetting('warmupOn', v)),
     toggle('מעקב RIR (חזרות שנשארו במאגר)', s.trackRir === true, (v) => ctx.saveSetting('trackRir', v))
   ])]));
+
+  /* ---- water and protein reminders ---- */
+  const rem = await reminders.settings();
+  wrap.appendChild(section('תזכורות מים וחלבון', rem.on ? 'פעילות' : 'כבויות', [reminders.panel(ctx)]));
 
   /* ---- backup: the easy one first, the account one second ---- */
   const cloudOn = await cloud.available();

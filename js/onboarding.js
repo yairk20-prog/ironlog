@@ -41,6 +41,12 @@ const DAYS = [
   { id: 'ppl6', num: '6', name: '6 ימים בשבוע', desc: 'כל קבוצת שרירים פעמיים — הכי מהיר' }
 ];
 
+/* Offered only when functional fitness is one of the goals. */
+const FUNCTIONAL_DAYS = [
+  { id: 'func4', num: '4', name: '4 ימים פונקציונליים', desc: 'מעגלים בלבד — כוח מתפרץ, מטקון ותנועה' },
+  { id: 'hybrid5', num: '5', name: '5 ימים · כוח + פונקציונלי', desc: 'דחיפה, משיכה, רגליים ושני ימי מעגלים' }
+];
+
 const SEX = [
   { id: 'male', name: 'גבר' },
   { id: 'female', name: 'אישה' },
@@ -248,9 +254,16 @@ function stepGoal(a, repaint) {
     else a.goals.push(id);
     a.goal = a.goals[0];
     a.goalsTouched = true;
+    /* Picking functional fitness should land on a split that has functional
+       days in it, unless the days were already chosen by hand. */
+    if (!a.daysTouched) {
+      const func = a.goals.includes('functional');
+      if (func) a.rotation = a.goals.length === 1 ? 'func4' : 'hybrid5';
+      else if (['func4', 'hybrid5'].includes(a.rotation)) a.rotation = 'ppl6';
+    }
     repaint();
   };
-  const PIC = { hypertrophy: 'db_curl', strength: 'bb_squat', cut: 'plank', abs: 'hip_thrust', endurance: 'cardio_run' };
+  const PIC = { hypertrophy: 'db_curl', strength: 'bb_squat', cut: 'plank', abs: 'hip_thrust', endurance: 'cardio_run', functional: 'kb_swing' };
   const suggested = a.bodyType != null ? SUGGESTED_GOALS[a.bodyType] : [];
   return el('div', {}, [
     ...head('שלב 4', 'מה המטרה?', 'אפשר לבחור כמה — נשלב ביניהן. קובע את טווח החזרות, זמני המנוחה, קצב העלאת המשקל וכמה אירובי.'),
@@ -268,7 +281,8 @@ function stepGoal(a, repaint) {
 function stepDays(a, repaint) {
   return el('div', {}, [
     ...head('שלב 5', 'כמה ימים בשבוע?', 'תבחר משהו שתצליח לעמוד בו לאורך זמן — עקביות מנצחת נפח.'),
-    ...DAYS.map((o) => pick(o, a.rotation === o.id, () => { a.rotation = o.id; repaint(); }))
+    ...[...DAYS, ...(a.goals.includes('functional') ? FUNCTIONAL_DAYS : [])]
+      .map((o) => pick(o, a.rotation === o.id, () => { a.rotation = o.id; a.daysTouched = true; repaint(); }))
   ]);
 }
 
