@@ -1247,6 +1247,20 @@ svg.chart{direction:ltr}
 .remind-x svg{width:16px;height:16px}
 .reminders select{width:100%}
 
+/* Cardio days in the plan: a five-way choice in one row. */
+.seg-row{display:flex;gap:6px}
+.seg-row .chip{flex:1;justify-content:center;padding:0 6px}
+.cardio-day .day-card-img{display:grid;place-items:center;color:var(--text-3)}
+.planned-note{
+  display:flex;align-items:center;gap:10px;padding:11px 13px;
+  background:rgba(255,77,109,.1);border:1px solid rgba(255,77,109,.4);
+  font-size:var(--fs-tiny);font-weight:700;color:var(--text);line-height:1.45;
+}
+.planned-note svg{flex:none;color:#FF4D6D;width:18px;height:18px}
+.onb-cardio{margin-top:18px;padding:14px;background:var(--surface-2);border:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.onb-cardio b{font-size:15px;font-weight:800}
+.onb-cardio small{font-size:12px;color:var(--text-3);font-weight:600;line-height:1.45}
+
 /* Water as glasses: the row is the readout and the control at once. */
 .glasses{display:flex;flex-wrap:wrap;gap:6px}
 .glass{

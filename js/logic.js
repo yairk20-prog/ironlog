@@ -176,7 +176,7 @@ export function movingAverage(series, window = 7) {
    rules (the usual 1.6–2.2) over-feed protein to someone carrying a lot of
    fat and under-feed a lean lifter; lean mass is what protein is for.
    A cut needs the most — protein is what keeps muscle in a deficit. */
-const PROTEIN_PER_LEAN_KG = { cut: 2.6, hypertrophy: 2.4, abs: 2.4, strength: 2.3, functional: 2.2, endurance: 1.9 };
+const PROTEIN_PER_LEAN_KG = { cut: 2.6, lose: 2.4, hypertrophy: 2.4, abs: 2.4, strength: 2.3, functional: 2.2, endurance: 1.9 };
 
 /**
  * The daily protein target and how it was reached.
@@ -229,7 +229,9 @@ export function calorieTarget(p, isTrainingDay = true) {
   /* A deficit wins over a surplus when both are selected — you cannot eat
      above and below maintenance at the same time. */
   const goals = Array.isArray(p.goals) && p.goals.length ? p.goals : [p.goal || 'hypertrophy'];
-  const adj = goals.includes('cut') ? -0.18 : goals.includes('hypertrophy') ? 0.1 : 0;
+  /* Weight loss asks for the larger deficit (~22%); a cut for a gentler one
+     that keeps training quality up. */
+  const adj = goals.includes('lose') ? -0.22 : goals.includes('cut') ? -0.18 : goals.includes('hypertrophy') ? 0.1 : 0;
   return Math.round(tdee * (1 + adj));
 }
 

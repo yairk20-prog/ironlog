@@ -15,7 +15,7 @@ import { tile } from './screen-summary.js';
 import {
   CARDIO, ZONES, buildPhases, totalSeconds, phaseAt, kcalFor, cardioElapsed, cardioName, cardioPic,
   getActiveCardio, saveActiveCardio, clearActiveCardio, startCardio, finishCardio, paceOf,
-  recommendCardio, weeklyCardioMinutes, WEEKLY_CARDIO_TARGET
+  recommendCardio, weeklyCardioMinutes, WEEKLY_CARDIO_TARGET, plannedCardioCursor, plannedProgram
 } from './cardio.js';
 
 let LOOP = null;     // the 250 ms ticker
@@ -67,8 +67,18 @@ async function pickView(ctx) {
     })
   ]));
 
-  const best = recommendCardio(s);
-  wrap.appendChild(el('div', { class: 'section-title', text: 'מומלץ לך' }));
+  /* On a planned cardio day, say that whichever session is picked here is
+     the day's session — and lead with the one the plan named. */
+  const planned = (await plannedCardioCursor(s)) != null;
+  if (planned) {
+    wrap.appendChild(el('div', { class: 'planned-note' }, [
+      icon(ICONS.calendar, 18),
+      el('span', { text: 'היום יום אירובי בתוכנית — כל אימון שתבחר כאן נספר, והתוכנית תתקדם ליום הבא.' })
+    ]));
+  }
+
+  const best = planned ? plannedProgram(s) : recommendCardio(s);
+  wrap.appendChild(el('div', { class: 'section-title', text: planned ? 'לפי התוכנית' : 'מומלץ לך' }));
   wrap.appendChild(programCard(ctx, CARDIO[best], true));
 
   wrap.appendChild(el('div', { class: 'section-title', text: 'כל האפשרויות' }));

@@ -6,10 +6,10 @@ import * as db from './db.js';
 import { el, icon, ICONS, openSheet } from './ui.js';
 import {
   DAY_TYPES, VENUES, VENUE_DAYS, restFor, goalList, resolveGoal, templateForIndex, planSlots, venueToday, sessionName, CHALLENGES,
-  TEMPLATES, FUNCTIONAL
+  TEMPLATES, FUNCTIONAL, dayAt
 } from './programs.js';
-import { CARDIO, getActiveCardio, cardioElapsed, cardioPic, cardioLine, cardioDay, recommendCardio } from './cardio.js';
-import { dayCard, restDayCard } from './screen-plan.js';
+import { CARDIO, getActiveCardio, cardioElapsed, cardioPic, cardioLine, cardioDay, recommendCardio, plannedProgram, startCardio, buildPhases, totalSeconds } from './cardio.js';
+import { dayCard, restDayCard, cardioDayCard } from './screen-plan.js';
 import { exerciseName, search, CATEGORIES } from './exercises.js';
 import { frameUrl, hasImages, thumb } from './media.js';
 import { fmtDuration, todayISO, HEB_DAYS } from './logic.js';
@@ -42,7 +42,9 @@ export async function render(ctx) {
       ? heroCardio(ctx, cardio)
       : up.template
         ? heroStart(ctx, up.template, settings, venue)
-        : heroRest(ctx, up));
+        : up.cardio
+          ? heroPlannedCardio(ctx, up)
+          : heroRest(ctx, up));
 
   /* A way out of the plan that doesn't require being on a rest day for it:
      a stretch, a posture session, a run, a really quick pass at whatever's
@@ -112,11 +114,14 @@ export async function render(ctx) {
 
   /* A peek at tomorrow: the next slot in the split after the one that's
      up now, so the plan never feels like a surprise. */
-  const tomorrowTpl = templateForIndex(settings.rotation, up.cursor + 1);
+  const tomorrowKey = dayAt(settings, up.cursor + 1);
+  const tomorrowTpl = TEMPLATES[tomorrowKey];
   wrap.appendChild(el('div', { class: 'section-title', text: 'מחר' }));
   wrap.appendChild(tomorrowTpl
     ? dayCard(ctx, tomorrowTpl, false, () => ctx.go('plan'))
-    : restDayCard(false, 'יום מנוחה'));
+    : tomorrowKey === 'cardio'
+      ? cardioDayCard(settings, false, () => ctx.go('plan'))
+      : restDayCard(false, 'יום מנוחה'));
 
   /* Everything below is a progress report, and a progress report with no
      progress in it is noise. It appears as there is something to say. */
@@ -221,6 +226,32 @@ function heroStart(ctx, tpl, settings, venue) {
         ctx.go('workout');
       }
     }, [icon(ICONS.play, 18), 'התחל אימון'])
+  ]);
+}
+
+/** Today the plan says cardio: the planned session, one tap to start it. */
+function heroPlannedCardio(ctx, up) {
+  const p = CARDIO[plannedProgram(ctx.settings)];
+  const mins = Math.round(totalSeconds(buildPhases(p.id, ctx.settings.duration)) / 60);
+  return el('div', { class: 'hero' }, [
+    el('img', { class: 'hero-bg', src: frameUrl(p.pic, 0), alt: '', loading: 'lazy' }),
+    el('div', { class: 'hero-kicker', text: `אירובי · לפי התוכנית · ${resolveGoal(goalList(ctx.settings)).name}` }),
+    el('h2', { text: p.name }),
+    el('p', { text: `כ-${mins} דקות · ${p.desc}` }),
+    el('button', {
+      class: 'btn primary full', style: { marginTop: '14px' },
+      onclick: async () => {
+        await startCardio(p.id, ctx.settings, { gps: p.outdoor });
+        ctx.go('cardio');
+      }
+    }, [icon(ICONS.play, 18), 'התחל']),
+    el('div', { class: 'row', style: { marginTop: '8px', gap: '8px' } }, [
+      el('button', { class: 'btn full', style: { flex: '1' }, onclick: () => ctx.go('cardio') }, [icon(ICONS.run, 17), 'בחר אחר']),
+      el('button', {
+        class: 'btn full', style: { flex: '1' },
+        onclick: async () => { await advanceRotation(1); ctx.reload(); }
+      }, [icon(ICONS.chevron, 17), 'דלג ליום הבא'])
+    ])
   ]);
 }
 

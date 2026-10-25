@@ -27,7 +27,7 @@ export const SUGGESTED_GOALS = [
   ['hypertrophy'],
   ['hypertrophy'],
   ['cut', 'hypertrophy'],
-  ['cut', 'endurance']
+  ['lose']
 ];
 
 const sexKey = (sex) => (sex === 'female' ? 'female' : 'male');

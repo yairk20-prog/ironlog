@@ -4,7 +4,7 @@
    a pre-workout carb reminder alarm. No account linking, no network.
    ========================================================================== */
 
-import { ROTATIONS, TEMPLATES, DAY_TYPES } from './programs.js';
+import { ROTATIONS, TEMPLATES, DAY_TYPES, planDays } from './programs.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -34,8 +34,8 @@ function fold(line) {
  * @param {number} opts.duration   minutes
  * @param {boolean} opts.carbAlarm add a 60-minute-before reminder
  */
-export function buildICS({ rotation = 'ppl6', cursor = 0, weeks = 8, time = '18:00', duration = 75, carbAlarm = true } = {}) {
-  const rot = ROTATIONS[rotation] || ROTATIONS.ppl6;
+export function buildICS({ rotation = 'ppl6', cursor = 0, weeks = 8, time = '18:00', duration = 75, carbAlarm = true, cardioDays = 0, cardioName = 'אירובי' } = {}) {
+  const days = planDays({ rotation, cardioDays });
   const [hh, mm] = time.split(':').map(Number);
   const lines = [
     'BEGIN:VCALENDAR',
@@ -50,9 +50,12 @@ export function buildICS({ rotation = 'ppl6', cursor = 0, weeks = 8, time = '18:
   const now = new Date();
 
   for (let i = 0; i < total; i++) {
-    const key = rot.days[(cursor + i) % rot.days.length];
+    const key = days[(cursor + i) % days.length];
     if (key === 'rest') continue;
-    const tpl = TEMPLATES[key];
+    /* A cardio day is a calendar event like any other, without exercises. */
+    const tpl = key === 'cardio'
+      ? { type: 'Cardio', name: cardioName, slots: [] }
+      : TEMPLATES[key];
     if (!tpl) continue;
 
     const start = new Date(now);
@@ -70,7 +73,7 @@ export function buildICS({ rotation = 'ppl6', cursor = 0, weeks = 8, time = '18:
     lines.push(`DTSTART:${stamp(start)}`);
     lines.push(`DTEND:${stamp(end)}`);
     lines.push(fold(`SUMMARY:${esc(`${DAY_TYPES[tpl.type]?.name || 'אימון'} · ${tpl.name}`)}`));
-    lines.push(fold(`DESCRIPTION:${esc(`${tpl.slots.length} תרגילים\n${desc}`)}`));
+    lines.push(fold(`DESCRIPTION:${esc(key === 'cardio' ? 'ריצה / אירובי לפי התוכנית' : `${tpl.slots.length} תרגילים\n${desc}`)}`));
     lines.push('CATEGORIES:FITNESS');
 
     lines.push('BEGIN:VALARM');

@@ -42,7 +42,7 @@ async function main() {
   for (let i = 0; i < 12 && (await page.locator('.onb').count()); i++) {
     const goalStep = await page.locator('.onb h2', { hasText: 'מה המטרה' }).count();
     if (goalStep) {
-      await page.locator('.pick', { hasText: 'כוח גולמי' }).click();
+      await page.locator('.pick', { hasText: 'להתחזק' }).click();
       await page.waitForTimeout(250);
       out.onbGoalsSelected = await page.locator('.pick.on').count();
       out.onbBlendNote = await page.locator('.onb p', { hasText: 'משולב' }).count();

@@ -72,6 +72,9 @@ export function runOnboarding() {
       /* Once the user picks goals by hand, the body type stops suggesting them. */
       goalsTouched: false,
       rotation: 'ppl6',
+      /* Cardio days in the week; follows the goals until chosen by hand. */
+      cardioDays: 0,
+      cardioTouched: false,
       equipment: ['FreeWeights', 'Machine', 'Cable', 'Bodyweight'],
       limits: [],
       posture: false
@@ -263,7 +266,7 @@ function stepGoal(a, repaint) {
     }
     repaint();
   };
-  const PIC = { hypertrophy: 'db_curl', strength: 'bb_squat', cut: 'plank', abs: 'hip_thrust', endurance: 'cardio_run', functional: 'kb_swing' };
+  const PIC = { hypertrophy: 'db_curl', strength: 'bb_squat', cut: 'plank', lose: 'cardio_walk', abs: 'hip_thrust', endurance: 'cardio_run', functional: 'kb_swing' };
   const suggested = a.bodyType != null ? SUGGESTED_GOALS[a.bodyType] : [];
   return el('div', {}, [
     ...head('שלב 4', 'מה המטרה?', 'אפשר לבחור כמה — נשלב ביניהן. קובע את טווח החזרות, זמני המנוחה, קצב העלאת המשקל וכמה אירובי.'),
@@ -278,11 +281,25 @@ function stepGoal(a, repaint) {
   ]);
 }
 
+/** Cardio days the goals call for, before the user says otherwise. */
+const suggestedCardio = (goals) =>
+  (goals.includes('lose') || goals.includes('endurance') ? 2 : goals.includes('cut') ? 1 : 0);
+
 function stepDays(a, repaint) {
+  if (!a.cardioTouched) a.cardioDays = suggestedCardio(a.goals);
   return el('div', {}, [
     ...head('שלב 5', 'כמה ימים בשבוע?', 'תבחר משהו שתצליח לעמוד בו לאורך זמן — עקביות מנצחת נפח.'),
     ...[...DAYS, ...(a.goals.includes('functional') ? FUNCTIONAL_DAYS : [])]
-      .map((o) => pick(o, a.rotation === o.id, () => { a.rotation = o.id; a.daysTouched = true; repaint(); }))
+      .map((o) => pick(o, a.rotation === o.id, () => { a.rotation = o.id; a.daysTouched = true; repaint(); })),
+    el('div', { class: 'onb-cardio' }, [
+      el('b', { text: 'לשלב ריצה / אירובי בתוכנית?' }),
+      el('small', { text: suggestedCardio(a.goals) ? 'מומלץ למטרה שבחרת. ימי האירובי נכנסים לסבב כמו ימי כוח.' : 'ימי האירובי נכנסים לסבב כמו ימי כוח — קודם במקום ימי מנוחה.' }),
+      el('div', { class: 'seg-row' }, [0, 1, 2, 3].map((v) => el('button', {
+        class: `chip${a.cardioDays === v ? ' on' : ''}`, 'aria-pressed': String(a.cardioDays === v),
+        text: v ? `${v} ימים` : 'בלי',
+        onclick: () => { a.cardioDays = v; a.cardioTouched = true; repaint(); }
+      })))
+    ])
   ]);
 }
 
@@ -380,6 +397,7 @@ export async function applyAnswers(ctx, a) {
     goal: a.goals[0],
     goals: a.goals,
     rotation: a.rotation,
+    cardioDays: a.cardioDays || 0,
     equipment: a.equipment,
     limits: a.limits,
     postureFocus: a.posture,

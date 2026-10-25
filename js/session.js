@@ -6,7 +6,7 @@
 
 import * as db from './db.js';
 import {
-  TEMPLATES, ROTATIONS, VENUE_DAYS, repRange, restFor, goalList, challengeById, durationFor, planSlots, sessionName
+  TEMPLATES, ROTATIONS, VENUE_DAYS, repRange, restFor, goalList, challengeById, durationFor, planSlots, sessionName, planDays
 } from './programs.js';
 import { getExercise, isAllowed, substitutes, sameMuscle } from './exercises.js';
 import { nextTarget, oneRM, volume, todayISO } from './logic.js';
@@ -21,12 +21,25 @@ export async function getActive() {
   return w;
 }
 
-/** Next template in the rotation (null on a rest slot). */
+/** Next day in the plan: a template, or a 'cardio' or 'rest' day (template null). */
 export async function nextUp(settings) {
-  const rot = ROTATIONS[settings.rotation] || ROTATIONS.ppl6;
-  const cursor = (await db.setting('rotationCursor', 0)) % rot.days.length;
-  const key = rot.days[cursor];
-  return { cursor, key, template: key === 'rest' ? null : TEMPLATES[key] };
+  const days = planDays(settings);
+  const cursor = (((await db.setting('rotationCursor', 0)) % days.length) + days.length) % days.length;
+  const key = days[cursor];
+  return { cursor, key, cardio: key === 'cardio', template: TEMPLATES[key] || null };
+}
+
+/**
+ * Change how many cardio days the week has, without losing the place: the
+ * cursor moves to where today's planned day sits in the new week.
+ */
+export async function setCardioDays(settings, n, save) {
+  const before = await nextUp(settings);
+  await save('cardioDays', n);
+  const days = planDays({ ...settings, cardioDays: n });
+  let at = days.indexOf(before.key);
+  if (at < 0) at = days.findIndex((d) => d !== 'rest' && d !== 'cardio');
+  await db.setSetting('rotationCursor', Math.max(0, at));
 }
 
 export async function advanceRotation(by = 1) {

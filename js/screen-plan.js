@@ -5,9 +5,10 @@
 
 import * as db from './db.js';
 import { el, icon, ICONS, toast, openSheet } from './ui.js';
-import { ROTATIONS, TEMPLATES, DAY_TYPES, GOALS, repRange, goalList, resolveGoal } from './programs.js';
+import { ROTATIONS, TEMPLATES, DAY_TYPES, GOALS, repRange, goalList, resolveGoal, planDays } from './programs.js';
+import { CARDIO, plannedProgram, buildPhases, totalSeconds } from './cardio.js';
 import { getExercise, CATEGORIES } from './exercises.js';
-import { createFromTemplate, getActive, nextUp, advanceRotation, resolveExercise } from './session.js';
+import { createFromTemplate, getActive, nextUp, advanceRotation, resolveExercise, setCardioDays } from './session.js';
 import { thumb, exerciseDetail, hasImages, frameUrl } from './media.js';
 
 export async function render(ctx) {
@@ -25,8 +26,13 @@ export async function render(ctx) {
 
   wrap.appendChild(el('div', { class: 'section-title', text: 'ימי הסבב' }));
 
-  rot.days.forEach((key, i) => {
-    const isNext = i === up.cursor % rot.days.length;
+  const days = planDays(settings);
+  days.forEach((key, i) => {
+    const isNext = i === up.cursor;
+    if (key === 'cardio') {
+      wrap.appendChild(cardioDayCard(settings, isNext, () => ctx.go('cardio')));
+      return;
+    }
     if (key === 'rest') {
       wrap.appendChild(restDayCard(isNext, isNext ? 'הבא בתור — השריר גדל היום' : 'התאוששות'));
       return;
@@ -35,6 +41,10 @@ export async function render(ctx) {
     const tpl = TEMPLATES[key];
     wrap.appendChild(dayCard(ctx, tpl, isNext, () => daySheet(ctx, tpl, !!active, isNext)));
   });
+
+  /* ---- running and cardio as part of the week ---- */
+  wrap.appendChild(el('div', { class: 'section-title', text: 'ריצה ואירובי בתוכנית' }));
+  wrap.appendChild(cardioPlanControl(ctx));
 
   /* A missed day is an occasional problem, so its controls sit after the plan
      rather than on top of it. */
@@ -134,6 +144,56 @@ function rotationSheet(ctx) {
 
 
 /** Visual card for a rest day, matching dayCard's layout. */
+/** A planned cardio day: what it will be, how long, and that it counts. */
+export function cardioDayCard(settings, isNext, onclick) {
+  const p = CARDIO[plannedProgram(settings)];
+  const mins = Math.round(totalSeconds(buildPhases(p.id, settings.duration)) / 60);
+  return el('button', { class: `day-card cardio-day${isNext ? ' next' : ''}`, onclick }, [
+    el('div', { class: 'day-card-img' }, [
+      hasImages(p.pic) ? el('img', { src: frameUrl(p.pic, 0), alt: '', loading: 'lazy', decoding: 'async' }) : icon(ICONS.run, 30)
+    ]),
+    el('div', { class: 'day-card-body' }, [
+      el('span', { class: 'day-card-tag', style: { color: DAY_TYPES.Cardio.color } }, [el('span', { text: '● אירובי' })]),
+      el('h3', { text: p.name }),
+      el('p', { text: `כ-${mins} דקות · חלק מהתוכנית${isNext ? ' · הבא בתור' : ''}` })
+    ])
+  ]);
+}
+
+/**
+ * How many cardio days the week has, and which session they open on.
+ * Shared by the plan screen and Settings.
+ */
+export function cardioPlanControl(ctx) {
+  const box = el('div', { class: 'card stack cardio-plan' });
+  const paint = () => {
+    const s = ctx.settings;
+    const n = Math.max(0, Math.min(4, Number(s.cardioDays) || 0));
+    const kind = CARDIO[s.cardioKind] ? s.cardioKind : 'auto';
+    box.replaceChildren(
+      el('p', { class: 'tiny dim', style: { margin: 0, lineHeight: '1.55' }, text: 'ימי אירובי נכנסים לסבב כמו ימי כוח: קודם במקום ימי מנוחה (תמיד נשאר יום מנוחה אחד), ואם צריך עוד — אחרי ימי כוח. אימון אירובי ביום כזה נספר והתוכנית מתקדמת.' }),
+      el('div', { class: 'field-label', text: 'כמה ימים בשבוע' }),
+      el('div', { class: 'seg-row' }, [0, 1, 2, 3, 4].map((v) => el('button', {
+        class: `chip${v === n ? ' on' : ''}`, 'aria-pressed': String(v === n), text: v ? String(v) : 'בלי',
+        onclick: async () => {
+          if (v === n) return;
+          await setCardioDays(ctx.settings, v, ctx.saveSetting);
+          ctx.reload();
+        }
+      }))),
+      n ? el('div', { class: 'field-label', text: 'איזה אימון' }) : null,
+      n ? el('div', { class: 'row', style: { gap: '6px', flexWrap: 'wrap' } }, [
+        ['auto', 'לפי ההמלצה'], ...Object.values(CARDIO).map((p) => [p.id, p.name])
+      ].map(([id, name]) => el('button', {
+        class: `chip${id === kind ? ' on' : ''}`, 'aria-pressed': String(id === kind), text: name,
+        onclick: async () => { await ctx.saveSetting('cardioKind', id === 'auto' ? null : id); ctx.reload(); }
+      }))) : null
+    );
+  };
+  paint();
+  return box;
+}
+
 export function restDayCard(isNext, note) {
   return el('div', { class: `day-card rest${isNext ? ' next' : ''}` }, [
     el('div', { class: 'day-card-img rest-img' }, [icon(ICONS.timer, 30)]),

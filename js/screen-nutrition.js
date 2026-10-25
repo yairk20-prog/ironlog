@@ -227,7 +227,7 @@ function guidanceCard(ctx, day, pTarget, kcalTarget, trainedToday) {
     });
   }
 
-  if (goals.includes('cut') && kcalLeft < 0) {
+  if ((goals.includes('cut') || goals.includes('lose')) && kcalLeft < 0) {
     lines.push({
       icon: ICONS.flame,
       title: `חריגה של ${Math.abs(kcalLeft)} קק״ל`,
@@ -249,7 +249,7 @@ function guidanceCard(ctx, day, pTarget, kcalTarget, trainedToday) {
     });
   }
 
-  if (goals.includes('abs') || goals.includes('cut')) {
+  if (goals.includes('abs') || goals.includes('cut') || goals.includes('lose')) {
     lines.push({
       icon: ICONS.glass,
       title: 'סיבים ומים',

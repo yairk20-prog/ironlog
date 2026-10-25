@@ -14,7 +14,7 @@
 
 import * as db from './db.js';
 import { getExercise } from './exercises.js';
-import { goalList } from './programs.js';
+import { goalList, planDays } from './programs.js';
 import { fmtDuration, todayISO } from './logic.js';
 
 export const ZONES = {
@@ -211,8 +211,23 @@ export const getActiveCardio = () => db.setting('activeCardio', null);
 export const saveActiveCardio = (run) => db.setSetting('activeCardio', run);
 export const clearActiveCardio = () => db.setSetting('activeCardio', null);
 
+/**
+ * Today's place in the plan when today is a planned cardio day, else null.
+ * Any cardio session started on such a day is that day's session.
+ */
+export async function plannedCardioCursor(settings) {
+  const days = planDays(settings);
+  const cursor = await db.setting('rotationCursor', 0);
+  return days[((cursor % days.length) + days.length) % days.length] === 'cardio' ? cursor : null;
+}
+
+/** The session a planned cardio day opens on: the user's choice, or the recommendation. */
+export const plannedProgram = (settings) =>
+  (CARDIO[settings.cardioKind] ? settings.cardioKind : recommendCardio(settings));
+
 export async function startCardio(programId, settings, { variant = null, gps = false } = {}) {
   const prog = CARDIO[programId];
+  const plannedCursor = await plannedCardioCursor(settings);
   const run = {
     id: db.uid('c'),
     program: programId,
@@ -223,7 +238,9 @@ export async function startCardio(programId, settings, { variant = null, gps = f
     pausedAt: null,
     pausedMs: 0,
     gps: !!(gps && prog.outdoor),
-    distanceM: 0
+    distanceM: 0,
+    planned: plannedCursor != null,
+    plannedCursor
   };
   await saveActiveCardio(run);
   return run;
@@ -231,8 +248,10 @@ export async function startCardio(programId, settings, { variant = null, gps = f
 
 /**
  * Save the run as a completed workout. Off-plan — a run on a lifting day
- * must not consume the lifting day — but it is a completed session, so it
- * counts toward the streak like any other.
+ * must not consume the lifting day — unless it was started on a planned
+ * cardio day: then it *is* that day, and the plan moves on (once — only if
+ * the plan is still where it was when the run began). Either way it counts
+ * toward the streak.
  */
 export async function finishCardio(run, { distanceKm = null, rpe = null } = {}, weightKg = 75) {
   const now = run.pausedAt || Date.now();
@@ -249,7 +268,7 @@ export async function finishCardio(run, { distanceKm = null, rpe = null } = {}, 
     duration_seconds: elapsed,
     completed: 1,
     cursor: 0,
-    offPlan: true,
+    offPlan: !run.planned,
     slots: [],
     cardio: {
       program: run.program,
@@ -262,6 +281,9 @@ export async function finishCardio(run, { distanceKm = null, rpe = null } = {}, 
   };
   await db.put('workouts', workout);
   await clearActiveCardio();
+  if (run.planned && (await db.setting('rotationCursor', 0)) === run.plannedCursor) {
+    await db.setSetting('rotationCursor', run.plannedCursor + 1);
+  }
   return workout;
 }
 
@@ -300,7 +322,7 @@ export const WEEKLY_CARDIO_TARGET = 150;
 /** Rest days become cardio days when the goals or the body type call for it. */
 export function cardioDay(settings) {
   const goals = goalList(settings);
-  return goals.includes('cut') || goals.includes('endurance') || (settings.bodyType ?? 2) >= 3;
+  return goals.includes('cut') || goals.includes('lose') || goals.includes('endurance') || (settings.bodyType ?? 2) >= 3;
 }
 
 /**
@@ -314,6 +336,7 @@ export function recommendCardio(settings) {
   const goals = goalList(settings);
   if (body >= 4) return 'walk';
   if (settings.experience === 'beginner' || body === 3) return 'runwalk';
+  if (goals.includes('lose') && settings.experience !== 'advanced') return 'runwalk';
   if (goals.includes('endurance') && settings.experience === 'advanced') return 'intervals';
   return 'easyrun';
 }

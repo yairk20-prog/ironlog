@@ -12,6 +12,7 @@ import * as gdrive from './gdrive.js';
 import * as cloud from './cloud.js';
 import { BUILD, swVersion } from './version.js';
 import * as reminders from './reminders.js';
+import { cardioPlanControl } from './screen-plan.js';
 
 /**
  * A settings screen that shows everything at once is a wall. Each group is a
@@ -88,6 +89,7 @@ export async function render(ctx) {
     ]));
   });
   wrap.appendChild(section('פיצול שבועי', ROTATIONS[s.rotation]?.name || '', splitNodes));
+  wrap.appendChild(section('ריצה ואירובי בתוכנית', s.cardioDays ? `${s.cardioDays} ימים בשבוע` : 'לא משולב', [cardioPlanControl(ctx)]));
 
   /* ---- session length ---- */
   const durationNodes = Object.values(DURATIONS).map((d) => el('button', {

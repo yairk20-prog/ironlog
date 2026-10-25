@@ -6,10 +6,12 @@
    ========================================================================== */
 
 export const GOALS = {
+  /* Names are what people say they want ("להתחזק", "להתחטב"), not the
+     training terms; the description says what that means in the gym. */
   hypertrophy: {
     id: 'hypertrophy',
-    name: 'היפרטרופיה',
-    desc: 'בניית שריר — טווח 8–12, נפח גבוה',
+    name: 'לבנות שריר',
+    desc: 'להגדיל מסת שריר — 8–12 חזרות, נפח גבוה',
     reps: { compound: [6, 10], isolation: [10, 15] },
     restMul: 1,
     incCompound: 0.025,
@@ -18,8 +20,8 @@ export const GOALS = {
   },
   strength: {
     id: 'strength',
-    name: 'כוח גולמי',
-    desc: 'שיאים — טווח 3–6, מנוחות ארוכות',
+    name: 'להתחזק',
+    desc: 'להרים יותר — משקלים כבדים, 3–6 חזרות, מנוחות ארוכות',
     reps: { compound: [3, 6], isolation: [8, 12] },
     restMul: 1.35,
     incCompound: 0.025,
@@ -28,17 +30,30 @@ export const GOALS = {
   },
   cut: {
     id: 'cut',
-    name: 'חיטוב / ירידה במשקל',
-    desc: 'שמירה על עצימות, מנוחות קצרות, נפח מתון',
+    name: 'להתחטב',
+    desc: 'להוריד שומן ולשמור על השריר — גירעון קל, עצימות גבוהה, מנוחות קצרות',
     reps: { compound: [6, 10], isolation: [12, 18] },
     restMul: 0.8,
     incCompound: 0.02,
     incIsolation: 0.04,
     rirTarget: 2
   },
+  /* Weight loss as the main aim: a bigger calorie deficit than a cut, cardio
+     days in the plan, and lifting kept to moderate loads on short rests —
+     the muscle stays, the number on the scale goes down. */
+  lose: {
+    id: 'lose',
+    name: 'לרדת במשקל',
+    desc: 'ירידה במשקל — גירעון קלורי, אירובי בתוכנית, אימוני כוח במנוחות קצרות',
+    reps: { compound: [8, 12], isolation: [12, 20] },
+    restMul: 0.75,
+    incCompound: 0.02,
+    incIsolation: 0.04,
+    rirTarget: 2
+  },
   abs: {
     id: 'abs',
-    name: 'חיטוב בטני / ליבה',
+    name: 'בטן וליבה',
     desc: 'דגש על ליבה ובטן לצד שמירת מסה',
     reps: { compound: [8, 12], isolation: [12, 20] },
     restMul: 0.85,
@@ -51,8 +66,8 @@ export const GOALS = {
      gym it means lighter, higher-rep work on short rests. */
   endurance: {
     id: 'endurance',
-    name: 'כושר לב-ריאה',
-    desc: 'אירובי בימי המנוחה, חזרות גבוהות ומנוחות קצרות',
+    name: 'כושר וסיבולת',
+    desc: 'לב-ריאה — ריצה ואירובי בתוכנית, חזרות גבוהות ומנוחות קצרות',
     reps: { compound: [10, 15], isolation: [15, 20] },
     restMul: 0.7,
     incCompound: 0.025,
@@ -489,6 +504,48 @@ export function repRange(goal, exercise) {
 export function restFor(goal, exercise) {
   const g = resolveGoal(goal);
   return Math.round((exercise?.rest ?? 90) * g.restMul);
+}
+
+/* ==========================================================================
+   Cardio days in the plan.
+
+   Running or other cardio can be part of the week rather than an extra on
+   the side: `cardioDays` (0–4) puts that many 'cardio' days into the split.
+   They take rest days first — a run is what a lifting rest day is for —
+   but one full rest day always stays; any more are inserted after lifting
+   days, spread through the week. A planned cardio day is done by finishing
+   any cardio session that day, and it moves the rotation like a lift does.
+   ========================================================================== */
+
+/** n items from a list, evenly spread. */
+function spread(list, n) {
+  if (n <= 0) return [];
+  if (n >= list.length) return [...list];
+  return [...new Set(Array.from({ length: n }, (_, k) => list[Math.floor(((k + 0.5) * list.length) / n)]))];
+}
+
+/** The days of the week as planned: the split, with its cardio days in it. */
+export function planDays(settings) {
+  const base = [...(ROTATIONS[settings?.rotation] || ROTATIONS.ppl6).days];
+  const want = Math.max(0, Math.min(4, Math.round(Number(settings?.cardioDays) || 0)));
+  if (!want) return base;
+  const days = [...base];
+  const rests = days.map((d, i) => (d === 'rest' ? i : -1)).filter((i) => i >= 0);
+  const convertible = rests.slice(0, Math.max(0, rests.length - 1));
+  const converted = spread(convertible, Math.min(want, convertible.length));
+  converted.forEach((i) => { days[i] = 'cardio'; });
+  const more = want - converted.length;
+  if (more > 0) {
+    const lifts = days.map((d, i) => (d !== 'rest' && d !== 'cardio' ? i : -1)).filter((i) => i >= 0);
+    spread(lifts, more).sort((a, b) => b - a).forEach((i) => days.splice(i + 1, 0, 'cardio'));
+  }
+  return days;
+}
+
+/** The key planned for a day index: a template id, 'cardio' or 'rest'. */
+export function dayAt(settings, index) {
+  const days = planDays(settings);
+  return days[((index % days.length) + days.length) % days.length];
 }
 
 /** Which template is scheduled for a given day index in the rotation. */

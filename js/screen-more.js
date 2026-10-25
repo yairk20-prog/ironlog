@@ -5,6 +5,7 @@
 import * as db from './db.js';
 import { el, icon, ICONS, toast, openSheet } from './ui.js';
 import { buildICS, downloadICS } from './calendar.js';
+import { CARDIO, plannedProgram } from './cardio.js';
 import { streak, recentWorkouts } from './session.js';
 import { todayISO } from './logic.js';
 import { ROTATIONS } from './programs.js';
@@ -150,7 +151,9 @@ function calendarSheet(ctx) {
           weeks: Number(weeks.value) || 8,
           time: time.value || '18:00',
           duration: Number(dur.value) || 75,
-          carbAlarm: carb
+          carbAlarm: carb,
+          cardioDays: ctx.settings.cardioDays || 0,
+          cardioName: `אירובי · ${CARDIO[plannedProgram(ctx.settings)].name}`
         });
         downloadICS(ics);
         close();
