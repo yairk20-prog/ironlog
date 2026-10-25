@@ -241,7 +241,14 @@ async function main() {
   await shot(page, '10-history');
 
   /* ---------- a rest day becomes a cardio day for this body type ---------- */
-  await setIdb(page, 'rotationCursor', 6);   // ppl6: the seventh day rests
+  /* The week's rest day, wherever it sits: this body type's goals now put
+     a cardio day into the week too, which shifts the positions. */
+  const restAt = await page.evaluate(async () => {
+    const { planDays } = await import('./js/programs.js');
+    const db = await import('./js/db.js');
+    return planDays({ rotation: await db.setting('rotation'), cardioDays: await db.setting('cardioDays') }).indexOf('rest');
+  });
+  await setIdb(page, 'rotationCursor', restAt);
   await page.goto(`${BASE}#/home`, { waitUntil: 'load' });
   await page.waitForTimeout(800);
   out.restHero = await page.locator('.hero h2').textContent();
