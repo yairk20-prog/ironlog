@@ -1,14 +1,16 @@
-/* v5.12: nothing typed in a workout is lost.
+/* v5.12–5.13: nothing typed in a workout is lost, and a change carries.
 
    The five reports, each reproduced:
-   1. bodyweight exercises (push-ups) start with the lifter's bodyweight in
-      the weight column, and progress by reps, not by a heavier body
+   1. bodyweight exercises (push-ups): 0 in the weight column is the body
+      (the empty field reads "גוף"), a number there is only added load, and
+      progress is by reps, not by a heavier body
    2/4. reps and weight typed into a set — not yet ticked — survive leaving
       for the home screen and coming back, and a full reload
    3. ticking a working set opens the rest screen, short rests included
    5. switching to the swipe view and back keeps what was typed, in both
       directions
-   and the weight of a ticked set carries to the next open set. */
+   and raising the reps (or the weight) on one set carries — at once — to
+   every later set not typed into itself, in both views. */
 import pw from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -58,13 +60,17 @@ async function main() {
   await pause(page, 900);
   out.firstExercise = (await page.locator('.focus-nav .name b, .ex-head h2, #exPane h2').first().innerText().catch(() => '')).trim();
   out.prefill = await rowValues(page, 0);
+  out.placeholder = await page.locator('.set:not(.warmup)').nth(0).locator('input').first().getAttribute('placeholder');
+  out.weightHead = (await page.locator('.set-head span').nth(1).innerText()).trim();
+  out.bwHint = await page.locator('.bw-hint').count();
   await shot(page, '01-pushups');
 
   /* 2/4: type into set 1 without ticking, leave, come back */
   const set1 = page.locator('.set:not(.warmup)').nth(0).locator('input');
-  await set1.nth(0).fill('80');
+  await set1.nth(0).fill('10');
   await set1.nth(1).fill('12');
   await pause(page, 100);
+  out.carriedLive = await rowValues(page, 3);
   await page.locator('.tab[data-route="home"]').click().catch(() => {});
   await page.evaluate(async () => (await import('./js/app.js')).go('home'));
   await pause(page, 900);
@@ -72,6 +78,7 @@ async function main() {
   await page.evaluate(async () => (await import('./js/app.js')).go('workout'));
   await pause(page, 900);
   out.afterLeave = await rowValues(page, 0);
+  out.afterLeaveSet3 = await rowValues(page, 2);
 
   /* ...and a full reload */
   await page.reload({ waitUntil: 'load' });
@@ -87,10 +94,12 @@ async function main() {
   const feedSet3 = page.locator('.feed-card').first().locator('.feed-set').nth(2).locator('input');
   await feedSet3.nth(1).fill('9');
   await pause(page, 100);
+  out.feedSet4Live = await page.locator('.feed-card').first().locator('.feed-set').nth(3).locator('input').evaluateAll((els) => els.map((e) => e.value));
   await shot(page, '02-feed');
   await page.locator('.feed-close').click();
   await pause(page, 700);
   out.afterFeed = await rowValues(page, 2);
+  out.afterFeedSet4 = await rowValues(page, 3);
   out.afterFeedSet1 = await rowValues(page, 0);
 
   /* 3: ticking a set opens the rest screen */
@@ -115,7 +124,8 @@ async function main() {
     const { getExercise } = await import('./js/exercises.js');
     return {
       fresh: nextTarget({ lastSets: [], exercise: getExercise('pushup'), goal: ['hypertrophy'], settings: { bodyweight: 82 } }),
-      after: nextTarget({ lastSets: [{ weight_kg: 80, reps: 12 }, { weight_kg: 80, reps: 12 }], exercise: getExercise('pushup'), goal: ['hypertrophy'], settings: { bodyweight: 82 } }),
+      after: nextTarget({ lastSets: [{ weight_kg: 10, reps: 12 }, { weight_kg: 10, reps: 12 }], exercise: getExercise('pushup'), goal: ['hypertrophy'], settings: { bodyweight: 82 } }),
+      typedBody: nextTarget({ lastSets: [{ weight_kg: 82, reps: 12 }], exercise: getExercise('pushup'), goal: ['hypertrophy'], settings: { bodyweight: 82 } }),
       bench: nextTarget({ lastSets: [], exercise: getExercise('bb_bench'), goal: ['hypertrophy'], settings: { bodyweight: 82 } })
     };
   });
@@ -125,18 +135,26 @@ async function main() {
   await browser.close();
 
   const fatal = [
-    out.prefill[0] !== '82' && `push-ups should start with the bodyweight (82), got ${out.prefill[0]}`,
+    out.prefill[0] !== '' && `push-ups should start with an empty (= bodyweight) weight, got "${out.prefill[0]}"`,
+    out.placeholder !== 'גוף' && `the empty weight should read "גוף": ${out.placeholder}`,
+    out.weightHead !== 'ק״ג נוסף' && `weight column for bodyweight: ${out.weightHead}`,
+    out.bwHint !== 1 && 'no "0 = bodyweight" hint',
+    !(out.carriedLive[0] === '10' && out.carriedLive[1] === '12') && `set 1's numbers did not carry to set 4 as typed: ${out.carriedLive}`,
     out.leftTo !== '#/home' && 'did not leave the workout',
-    !(out.afterLeave[0] === '80' && out.afterLeave[1] === '12') && `typed values lost on leaving: ${out.afterLeave}`,
-    !(out.afterReload[0] === '80' && out.afterReload[1] === '12') && `typed values lost on reload: ${out.afterReload}`,
-    !(out.feedSet1[0] === '80' && out.feedSet1[1] === '12') && `the swipe view does not show what was typed: ${out.feedSet1}`,
+    !(out.afterLeave[0] === '10' && out.afterLeave[1] === '12') && `typed values lost on leaving: ${out.afterLeave}`,
+    !(out.afterLeaveSet3[0] === '10' && out.afterLeaveSet3[1] === '12') && `the carried values lost on leaving: ${out.afterLeaveSet3}`,
+    !(out.afterReload[0] === '10' && out.afterReload[1] === '12') && `typed values lost on reload: ${out.afterReload}`,
+    !(out.feedSet1[0] === '10' && out.feedSet1[1] === '12') && `the swipe view does not show what was typed: ${out.feedSet1}`,
+    out.feedSet4Live[1] !== '9' && `reps changed in the swipe view did not carry to the next set: ${out.feedSet4Live}`,
     out.afterFeed[1] !== '9' && `reps typed in the swipe view lost on switching back: ${out.afterFeed}`,
-    !(out.afterFeedSet1[0] === '80' && out.afterFeedSet1[1] === '12') && `switching views lost set 1: ${out.afterFeedSet1}`,
+    out.afterFeedSet4[1] !== '9' && `the carried reps lost on switching back: ${out.afterFeedSet4}`,
+    !(out.afterFeedSet1[0] === '10' && out.afterFeedSet1[1] === '12') && `switching views lost set 1: ${out.afterFeedSet1}`,
     out.restOpen !== 1 && 'ticking a push-up set did not open the rest screen',
-    !out.logged.includes('pushup:80x12') && `the set was not logged as typed: ${out.logged}`,
-    out.set2[0] !== '80' && `the next set did not carry the weight: ${out.set2}`,
-    !(out.next.fresh.weight === 82) && `a fresh bodyweight target: ${JSON.stringify(out.next.fresh)}`,
-    !(out.next.after.weight === 80 && out.next.after.reps === 13) && `bodyweight progression: ${JSON.stringify(out.next.after)}`,
+    !out.logged.includes('pushup:10x12') && `the set was not logged as typed: ${out.logged}`,
+    !(out.set2[0] === '10' && out.set2[1] === '12') && `the next set did not carry the numbers: ${out.set2}`,
+    !(out.next.fresh.weight === 0) && `a fresh bodyweight target: ${JSON.stringify(out.next.fresh)}`,
+    !(out.next.after.weight === 10 && out.next.after.reps === 13) && `bodyweight progression: ${JSON.stringify(out.next.after)}`,
+    !(out.next.typedBody.weight === 0 && out.next.typedBody.reps === 13) && `bodyweight typed as weight should read as the body: ${JSON.stringify(out.next.typedBody)}`,
     out.next.bench.weight !== 0 && 'a barbell lift got the bodyweight as its weight',
     errors.length && `page errors: ${errors.join(' | ')}`
   ].filter(Boolean);

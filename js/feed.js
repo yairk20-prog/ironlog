@@ -33,7 +33,7 @@ const THRESHOLD = 70;
  * @param {Object<string,string>} [p.notes]  exercise id → saved note from last time
  * @param {number} [p.glassesLeft]  water glasses still owed today
  */
-export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, settings = {}, notes = {}, glassesLeft = 0, defaults = null, onDraft = null }) {
+export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, settings = {}, notes = {}, glassesLeft = 0, defaults = null, onDraft = null, hasDraft = null }) {
   const cards = [];
   const figures = [];
   let at = 0;
@@ -56,24 +56,38 @@ export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, setting
     figures.push(fig);
 
     const rows = el('div', { class: 'feed-sets' });
+    /* Bodyweight: an empty weight reads "גוף" — 0 is the body itself. */
+    const bw = ex.cat === 'Bodyweight' && !slot.seconds;
+    const shownW = (v) => (bw && !(Number(v) > 0) ? '' : v);
     const paintRows = () => {
       rows.replaceChildren();
+      const inputs = [];
       for (let order = 1; order <= slot.sets; order++) {
         const log = getLog(index, order);
         /* What was typed (in either view) survives a switch or a reload. */
         const start = log ? null : (defaults ? defaults(index, order) : { w: slot.targetWeight || '', r: slot.targetReps || '' });
         const w = el('input', {
           type: 'number', inputmode: 'decimal', step: '0.5',
-          value: log ? round2(log.weight_kg) : start.w,
-          placeholder: '0', 'aria-label': `משקל סט ${order}`
+          value: log ? shownW(round2(log.weight_kg)) : shownW(start.w),
+          placeholder: bw ? 'גוף' : '0', 'aria-label': bw ? `משקל נוסף, סט ${order}` : `משקל סט ${order}`
         });
         const r = el('input', {
           type: 'number', inputmode: 'numeric',
           value: log ? log.reps : start.r,
           placeholder: '0', 'aria-label': `חזרות סט ${order}`
         });
+        const me = { order, w, r, logged: !!log };
+        inputs.push(me);
         if (!log && onDraft) {
-          const keep = () => onDraft(index, order, w.value, r.value);
+          /* a change carries to every later set not typed into itself */
+          const keep = () => {
+            onDraft(index, order, w.value, r.value);
+            for (const later of inputs.slice(inputs.indexOf(me) + 1)) {
+              if (later.logged || (hasDraft && hasDraft(index, later.order))) continue;
+              later.w.value = w.value;
+              later.r.value = r.value;
+            }
+          };
           w.addEventListener('input', keep);
           r.addEventListener('input', keep);
         }

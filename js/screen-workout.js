@@ -68,9 +68,10 @@ window.addEventListener('pagehide', flushDrafts);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushDrafts(); });
 
 /**
- * What an open set row starts with: what was typed into it; else the weight
- * of the set just before it (the same bar does not change between sets);
- * else today's target.
+ * What an open set row starts with: what was typed into it; else the last
+ * numbers set on an earlier set of this exercise — ticked or just typed —
+ * so raising the reps on set 2 raises them for 3 and 4 as well; else
+ * today's target.
  */
 function rowDefaults(s, order, defWeight, defReps, isWarmup) {
   const d = getDraft(s.ex, order);
@@ -78,10 +79,29 @@ function rowDefaults(s, order, defWeight, defReps, isWarmup) {
   if (!isWarmup) {
     for (let k = order - 1; k >= 1; k--) {
       const prev = getLog(s.ex, k);
-      if (prev) return { w: prev.weight_kg ? round2(prev.weight_kg) : (defWeight || ''), r: defReps || '' };
+      if (prev) return { w: prev.weight_kg ? round2(prev.weight_kg) : '', r: prev.reps || defReps || '' };
+      const typed = getDraft(s.ex, k);
+      if (typed) return { w: typed.w, r: typed.r };
     }
   }
   return { w: defWeight || '', r: defReps || '' };
+}
+
+/** Bodyweight: 0 (or empty) in the weight column is the body itself. */
+const isBodyweight = (ex, s) => ex?.cat === 'Bodyweight' && !s?.seconds;
+
+/**
+ * Typing into one set carries to every later open set that has not been
+ * typed into itself — the change shows at once, not only on the next visit.
+ */
+function carryForward(rows, from) {
+  const src = rows[from];
+  for (let j = from + 1; j < rows.length; j++) {
+    const r = rows[j];
+    if (r.logged || getDraft(r.ex, r.order)) continue;
+    r.wInput.value = src.wInput.value;
+    r.rInput.value = src.rInput.value;
+  }
 }
 
 export async function render(ctx) {
@@ -160,6 +180,7 @@ async function openFeedMode(ctx) {
       return rowDefaults(s, order, s.targetWeight, s.seconds || s.targetReps, false);
     },
     onDraft: (slotIndex, order, w, r) => setDraft(W.slots[slotIndex].ex, order, w, r),
+    hasDraft: (slotIndex, order) => !!getDraft(W.slots[slotIndex].ex, order),
     onLogSet: async (slotIndex, order, weight, reps) => {
       const s = W.slots[slotIndex];
       const ex = getExercise(s.ex);
@@ -270,14 +291,16 @@ function paintExercise() {
   /* today's target */
   pane.appendChild(el('div', { class: 'target-box' }, [
     el('div', {}, [
-      el('div', { class: 't-lbl', text: 'יעד להיום' }),
+      el('div', { class: 't-lbl', text: isBodyweight(ex, s) ? 'יעד להיום · משקל גוף' : 'יעד להיום' }),
       el('div', {
         class: 't-val num',
         text: s.seconds
           ? `${s.seconds} שניות`
-          : s.targetWeight
-            ? `${fmtW(s.targetWeight)} × ${s.targetReps}`
-            : `${s.targetReps || range.min} חזרות`
+          : isBodyweight(ex, s)
+            ? (s.targetWeight ? `+${fmtW(s.targetWeight)} × ${s.targetReps}` : `${s.targetReps || range.min} חזרות`)
+            : s.targetWeight
+              ? `${fmtW(s.targetWeight)} × ${s.targetReps}`
+              : `${s.targetReps || range.min} חזרות`
       })
     ]),
     el('div', { style: { textAlign: 'end', maxWidth: '52%' } }, [
@@ -358,7 +381,7 @@ async function fillPrevHint(exId, box) {
   const when = new Date(prev[0].timestamp).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' });
   box.appendChild(el('span', { text: `פעם קודמת (${when}):` }));
   prev.forEach((p) => {
-    box.appendChild(el('b', { class: 'num', text: `${round2(p.weight_kg)}×${p.reps}` }));
+    box.appendChild(el('b', { class: 'num', text: `${p.weight_kg ? round2(p.weight_kg) : (getExercise(exId)?.cat === 'Bodyweight' ? 'גוף' : 0)}×${p.reps}` }));
   });
 }
 
@@ -370,9 +393,10 @@ function setList(s, ex) {
   const list = el('div', { class: 'setlist' });
 
   /* One header instead of the same two labels repeated on every row. */
+  const bw = isBodyweight(ex, s);
   list.appendChild(el('div', { class: `set-head${withRir ? ' with-rir' : ''}` }, [
     el('span', { text: 'סט' }),
-    el('span', { text: 'ק״ג' }),
+    el('span', { text: bw ? 'ק״ג נוסף' : 'ק״ג' }),
     el('span', { text: timed ? 'שניות' : 'חזרות' }),
     withRir ? el('span', { text: 'RIR' }) : null,
     el('span', { text: '' })
@@ -382,31 +406,47 @@ function setList(s, ex) {
     list.appendChild(setRow(s, ex, -(i + 1), w.weight, w.reps, true, w.label));
   });
 
+  const rows = [];
   for (let i = 1; i <= s.sets; i++) {
-    list.appendChild(setRow(s, ex, i, s.targetWeight, s.seconds || s.targetReps, false));
+    list.appendChild(setRow(s, ex, i, s.targetWeight, s.seconds || s.targetReps, false, null, rows));
+  }
+  if (bw) {
+    list.appendChild(el('div', { class: 'bw-hint' }, [
+      icon(ICONS.info, 14),
+      el('span', { text: '0 = משקל הגוף שלך. מוסיפים משקל (חגורה, תיק)? כותבים רק את התוספת.' })
+    ]));
   }
   return list;
 }
 
-function setRow(s, ex, order, defWeight, defReps, isWarmup, label) {
+function setRow(s, ex, order, defWeight, defReps, isWarmup, label, rows = null) {
   const timed = !isWarmup && !!s.seconds;
   const log = getLog(s.ex, order);
   const done = !!log;
   const active = !done && !isWarmup && firstOpenOrder(s) === order;
 
   const start = log ? null : rowDefaults(s, order, defWeight, defReps, isWarmup);
+  const bw = isBodyweight(ex, s);
+  /* For bodyweight, an empty field reads "גוף" — the 0 that means the body. */
+  const shownW = (v) => (bw && !(Number(v) > 0) ? '' : v);
   const wInput = el('input', {
     type: 'number', inputmode: 'decimal', step: '0.5', min: '0',
-    value: log ? round2(log.weight_kg) : start.w,
-    placeholder: '0', 'aria-label': `משקל, סט ${isWarmup ? (label || 'חימום') : order}`
+    value: log ? shownW(round2(log.weight_kg)) : shownW(start.w),
+    placeholder: bw ? 'גוף' : '0',
+    'aria-label': bw ? `משקל נוסף על משקל הגוף, סט ${order}` : `משקל, סט ${isWarmup ? (label || 'חימום') : order}`
   });
   const rInput = el('input', {
     type: 'number', inputmode: 'numeric', step: '1', min: '0',
     value: log ? log.reps : start.r,
     placeholder: '0', 'aria-label': `${timed ? 'שניות' : 'חזרות'}, סט ${isWarmup ? (label || 'חימום') : order}`
   });
+  const me = { ex: s.ex, order, wInput, rInput, logged: !!log };
+  if (rows && !isWarmup) rows.push(me);
   if (!log) {
-    const keep = () => setDraft(s.ex, order, wInput.value, rInput.value);
+    const keep = () => {
+      setDraft(s.ex, order, wInput.value, rInput.value);
+      if (rows && !isWarmup) carryForward(rows, rows.indexOf(me));
+    };
     wInput.addEventListener('input', keep);
     rInput.addEventListener('input', keep);
   }

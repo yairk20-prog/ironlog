@@ -493,6 +493,8 @@ body.timer-on.no-tabs .view{padding-bottom:calc(var(--safe-b) + 130px)}
 .set.done{animation:settle .3s var(--ease)}
 @keyframes settle{from{background:var(--surface-2)}to{background:var(--ok-dim)}}
 
+.bw-hint{display:flex;align-items:center;gap:7px;padding:9px 12px;font-size:var(--fs-tiny);color:var(--text-2);font-weight:600;background:var(--surface-2)}
+.bw-hint svg{width:14px;height:14px;flex:none;color:var(--accent)}
 /* Two quiet text actions under the grid, not two more buttons. */
 .set-actions{display:flex;justify-content:space-between;gap:12px;padding:12px 2px 0}
 .linkish{

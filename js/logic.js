@@ -45,17 +45,22 @@ export function nextTarget({ lastSets, exercise, goal, settings }) {
   const step = stepFor(exercise, settings);
 
   const working = (lastSets || []).filter((s) => !s.is_warmup && s.reps > 0);
-  /* Bodyweight work: the load is the body, so the "weight" column carries
-     the lifter's own bodyweight (or whatever they last logged there), and
-     progress is more reps — never a 2.5% heavier body. */
+  /* Bodyweight work: the body is the load, so 0 in the weight column means
+     "my bodyweight" and a number there is only what is added on top (a
+     belt, a backpack). Progress is one more rep — never a heavier body. */
   if (exercise?.cat === 'Bodyweight') {
-    const bw = Number(settings?.bodyweight) || 0;
     if (!working.length) {
-      return { weight: bw, reps: range.min, action: 'start', note: 'משקל גוף — המשקל שלך כבר בשדה, רק חזרות' };
+      return { weight: 0, reps: range.min, action: 'start', note: 'משקל גוף — 0 בשדה הק״ג הוא משקל הגוף שלך' };
     }
-    const top = Math.max(...working.map((s) => s.weight_kg || 0)) || bw;
+    const bw = Number(settings?.bodyweight) || 0;
+    let top = Math.max(...working.map((s) => s.weight_kg || 0));
+    /* sets logged with the bodyweight typed in as the weight: that was the body */
+    if (bw && Math.abs(top - bw) <= 1) top = 0;
     const best = Math.max(...working.map((s) => s.reps));
-    return { weight: top, reps: best + 1, action: 'hold', note: `משקל גוף — נסה ${best + 1} חזרות` };
+    return {
+      weight: top, reps: best + 1, action: 'hold',
+      note: top ? `משקל גוף + ${fmtW(top)} — נסה ${best + 1} חזרות` : `משקל גוף — נסה ${best + 1} חזרות`
+    };
   }
   if (!working.length) {
     return { weight: 0, reps: range.min, action: 'start', note: 'אימון ראשון — קבע משקל התחלתי נוח' };

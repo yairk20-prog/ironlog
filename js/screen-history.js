@@ -171,7 +171,7 @@ function sessionSheet(w, ctx) {
           el('div', { class: 'stack', style: { gap: '4px' } },
             working.map((r) => el('div', { class: 'row between tiny' }, [
               el('span', { class: 'dim', text: `סט ${r.set_order}` }),
-              el('b', { class: 'num', text: `${round2(r.weight_kg)} ק״ג × ${r.reps}${r.rir != null ? ` · RIR ${r.rir}` : ''}` })
+              el('b', { class: 'num', text: `${r.weight_kg ? `${round2(r.weight_kg)} ק״ג` : (getExercise(exId)?.cat === 'Bodyweight' ? 'משקל גוף' : '0 ק״ג')} × ${r.reps}${r.rir != null ? ` · RIR ${r.rir}` : ''}` })
             ])))
         ]));
       }
