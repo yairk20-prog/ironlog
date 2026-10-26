@@ -112,7 +112,8 @@ export async function createFromTemplate(templateId, settings, { offPlan = false
       ex: slot.ex,
       sets: slot.seconds ? slot.s : setsFor(slot.s, settings),
       seconds: slot.seconds || null,
-      targetWeight: target.weight,
+      /* A timed hold has no load to carry. */
+      targetWeight: slot.seconds ? 0 : target.weight,
       targetReps: slot.seconds ? 0 : (target.reps || range.min),
       action: target.action,
       note: swapped ? `הוחלף אוטומטית לפי הציוד והמגבלות שלך · ${target.note}` : target.note,

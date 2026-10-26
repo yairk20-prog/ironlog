@@ -35,6 +35,53 @@ let DEMO = null;       // running image loop, stopped on every repaint
 export function cleanup() {
   DEMO?.stop();
   DEMO = null;
+  flushDrafts();
+}
+
+/* ---------- typed but not yet ticked ----------
+   A weight or a rep count is worth keeping the moment it is typed, not only
+   when the set is ticked: leaving for the home screen, switching to the
+   swipe view, or the phone killing the tab must all come back to the same
+   numbers. Drafts live on the workout record itself, saved a beat after the
+   last keystroke and immediately when the screen is left. */
+let draftTimer = null;
+const getDraft = (exId, order) => W?.drafts?.[logKey(exId, order)] || null;
+
+function setDraft(exId, order, w, r) {
+  if (!W) return;
+  W.drafts = { ...(W.drafts || {}), [logKey(exId, order)]: { w, r } };
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => { draftTimer = null; saveWorkout(W); }, 250);
+}
+
+function clearDraft(exId, order) {
+  if (W?.drafts?.[logKey(exId, order)]) delete W.drafts[logKey(exId, order)];
+}
+
+function flushDrafts() {
+  if (!draftTimer) return;
+  clearTimeout(draftTimer);
+  draftTimer = null;
+  if (W) saveWorkout(W);
+}
+window.addEventListener('pagehide', flushDrafts);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushDrafts(); });
+
+/**
+ * What an open set row starts with: what was typed into it; else the weight
+ * of the set just before it (the same bar does not change between sets);
+ * else today's target.
+ */
+function rowDefaults(s, order, defWeight, defReps, isWarmup) {
+  const d = getDraft(s.ex, order);
+  if (d) return { w: d.w, r: d.r };
+  if (!isWarmup) {
+    for (let k = order - 1; k >= 1; k--) {
+      const prev = getLog(s.ex, k);
+      if (prev) return { w: prev.weight_kg ? round2(prev.weight_kg) : (defWeight || ''), r: defReps || '' };
+    }
+  }
+  return { w: defWeight || '', r: defReps || '' };
 }
 
 export async function render(ctx) {
@@ -107,6 +154,12 @@ async function openFeedMode(ctx) {
     notes,
     glassesLeft,
     getLog: (slotIndex, order) => getLog(W.slots[slotIndex].ex, order),
+    /* the swipe view reads and writes the same drafts as the list */
+    defaults: (slotIndex, order) => {
+      const s = W.slots[slotIndex];
+      return rowDefaults(s, order, s.targetWeight, s.seconds || s.targetReps, false);
+    },
+    onDraft: (slotIndex, order, w, r) => setDraft(W.slots[slotIndex].ex, order, w, r),
     onLogSet: async (slotIndex, order, weight, reps) => {
       const s = W.slots[slotIndex];
       const ex = getExercise(s.ex);
@@ -118,11 +171,13 @@ async function openFeedMode(ctx) {
         await saveWorkout(W);
         return;
       }
+      if (!(reps > 0)) { toast('הזן מספר חזרות', 'bad'); return; }
       const row = await logSet({
         workout_id: W.id, exercise_id: s.ex, set_order: order,
-        weight_kg: weight, reps, rir: null, is_warmup: false
+        weight_kg: weight || 0, reps, rir: null, is_warmup: false
       });
       LOGS.set(logKey(s.ex, order), row);
+      clearDraft(s.ex, order);
       buzz(14);
       s.done = Array.from({ length: s.sets }, (_, i) => getLog(s.ex, i + 1)).every(Boolean);
       await saveWorkout(W);
@@ -132,6 +187,7 @@ async function openFeedMode(ctx) {
     },
     onFinish: () => finishFlow(ctx),
     onClose: async () => {
+      flushDrafts();
       await db.setSetting('feedMode', false);
       await loadLogs();
       paintExercise();
@@ -338,16 +394,22 @@ function setRow(s, ex, order, defWeight, defReps, isWarmup, label) {
   const done = !!log;
   const active = !done && !isWarmup && firstOpenOrder(s) === order;
 
+  const start = log ? null : rowDefaults(s, order, defWeight, defReps, isWarmup);
   const wInput = el('input', {
     type: 'number', inputmode: 'decimal', step: '0.5', min: '0',
-    value: log ? round2(log.weight_kg) : (defWeight || ''),
-    placeholder: '0'
+    value: log ? round2(log.weight_kg) : start.w,
+    placeholder: '0', 'aria-label': `משקל, סט ${isWarmup ? (label || 'חימום') : order}`
   });
   const rInput = el('input', {
     type: 'number', inputmode: 'numeric', step: '1', min: '0',
-    value: log ? log.reps : (defReps || ''),
-    placeholder: '0'
+    value: log ? log.reps : start.r,
+    placeholder: '0', 'aria-label': `${timed ? 'שניות' : 'חזרות'}, סט ${isWarmup ? (label || 'חימום') : order}`
   });
+  if (!log) {
+    const keep = () => setDraft(s.ex, order, wInput.value, rInput.value);
+    wInput.addEventListener('input', keep);
+    rInput.addEventListener('input', keep);
+  }
 
   const withRir = CTX?.settings?.trackRir === true;
   const rirSel = el('select', {},
@@ -414,6 +476,7 @@ async function toggleSet(s, ex, order, refs) {
     is_warmup: refs.isWarmup
   });
   LOGS.set(logKey(s.ex, order), row);
+  clearDraft(s.ex, order);
   buzz(14);
 
   /* PR check on working sets only */
@@ -444,10 +507,10 @@ async function toggleSet(s, ex, order, refs) {
     setTimeout(() => move(1), 700);
   }
 
-  /* A real rest is a minute or more of nothing. Short warm-up pauses and
-     quick-fire sets are left alone — a takeover screen for 45 seconds is an
-     interruption, not a feature. */
-  if (rest >= 60 && !refs.isWarmup && CTX.settings.restScreen !== false) {
+  /* Every working set opens the rest screen — short rests included: a
+     bodyweight set on a 45-second rest is still a rest, and lifters asked
+     for it. Warm-up pauses stay on the small dock timer. */
+  if (rest >= 20 && !refs.isWarmup && CTX.settings.restScreen !== false) {
     showRest({ slot: s, exercise: ex, allDone });
   }
 }

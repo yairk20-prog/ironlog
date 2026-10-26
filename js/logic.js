@@ -45,6 +45,18 @@ export function nextTarget({ lastSets, exercise, goal, settings }) {
   const step = stepFor(exercise, settings);
 
   const working = (lastSets || []).filter((s) => !s.is_warmup && s.reps > 0);
+  /* Bodyweight work: the load is the body, so the "weight" column carries
+     the lifter's own bodyweight (or whatever they last logged there), and
+     progress is more reps — never a 2.5% heavier body. */
+  if (exercise?.cat === 'Bodyweight') {
+    const bw = Number(settings?.bodyweight) || 0;
+    if (!working.length) {
+      return { weight: bw, reps: range.min, action: 'start', note: 'משקל גוף — המשקל שלך כבר בשדה, רק חזרות' };
+    }
+    const top = Math.max(...working.map((s) => s.weight_kg || 0)) || bw;
+    const best = Math.max(...working.map((s) => s.reps));
+    return { weight: top, reps: best + 1, action: 'hold', note: `משקל גוף — נסה ${best + 1} חזרות` };
+  }
   if (!working.length) {
     return { weight: 0, reps: range.min, action: 'start', note: 'אימון ראשון — קבע משקל התחלתי נוח' };
   }

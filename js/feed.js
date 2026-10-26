@@ -33,7 +33,7 @@ const THRESHOLD = 70;
  * @param {Object<string,string>} [p.notes]  exercise id → saved note from last time
  * @param {number} [p.glassesLeft]  water glasses still owed today
  */
-export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, settings = {}, notes = {}, glassesLeft = 0 }) {
+export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, settings = {}, notes = {}, glassesLeft = 0, defaults = null, onDraft = null }) {
   const cards = [];
   const figures = [];
   let at = 0;
@@ -60,16 +60,23 @@ export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, setting
       rows.replaceChildren();
       for (let order = 1; order <= slot.sets; order++) {
         const log = getLog(index, order);
+        /* What was typed (in either view) survives a switch or a reload. */
+        const start = log ? null : (defaults ? defaults(index, order) : { w: slot.targetWeight || '', r: slot.targetReps || '' });
         const w = el('input', {
           type: 'number', inputmode: 'decimal', step: '0.5',
-          value: log ? round2(log.weight_kg) : (slot.targetWeight || ''),
+          value: log ? round2(log.weight_kg) : start.w,
           placeholder: '0', 'aria-label': `משקל סט ${order}`
         });
         const r = el('input', {
           type: 'number', inputmode: 'numeric',
-          value: log ? log.reps : (slot.targetReps || ''),
+          value: log ? log.reps : start.r,
           placeholder: '0', 'aria-label': `חזרות סט ${order}`
         });
+        if (!log && onDraft) {
+          const keep = () => onDraft(index, order, w.value, r.value);
+          w.addEventListener('input', keep);
+          r.addEventListener('input', keep);
+        }
         rows.appendChild(el('div', { class: `feed-set${log ? ' done' : ''}` }, [
           el('span', { class: 'feed-set-n', text: String(order) }),
           w, el('span', { class: 'feed-x', text: '×' }), r,
