@@ -1089,6 +1089,16 @@ body.login-open{overflow:hidden}
 }
 .qty-in{flex:1;min-width:0;text-align:center;font-size:22px;font-weight:900;height:var(--btn-h)}
 .qty-unit{flex:none;min-width:44px;font-size:var(--fs-tiny);color:var(--text-2);font-weight:800}
+.unit-chip{flex-direction:column;justify-content:center;gap:0;min-height:44px;padding-top:4px;padding-bottom:4px;line-height:1.15}
+.unit-chip small{font-size:10px;font-weight:700;color:var(--text-3)}
+.unit-chip.on small{color:#333}
+.amount-like{
+  display:flex;align-items:center;gap:7px;align-self:flex-start;
+  padding:6px 10px;background:var(--surface-2);border:1px solid var(--line);
+  font-size:var(--fs-tiny);font-weight:700;color:var(--text-2);
+}
+.amount-like svg{width:15px;height:15px;color:var(--accent);flex:none}
+.amount-like[hidden]{display:none}
 .macro-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line-soft)}
 .macro-cell{
   display:flex;flex-direction:column;align-items:center;gap:2px;

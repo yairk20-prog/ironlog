@@ -9,7 +9,7 @@ import * as db from './db.js';
 import { el, icon, ICONS, toast, openSheet, closeSheet, confirmSheet, buzz } from './ui.js';
 import {
   parseMeal, searchFoods, foodById, foodCount, POPULAR, norm, unitsFor, defaultPortion,
-  portion, portionForGrams, foodFromItem, makeFood, foodFromAiItem, isKnownFood
+  portion, portionForGrams, foodFromItem, makeFood, foodFromAiItem, isKnownFood, describeAmount
 } from './food.js';
 import * as ai from './ai.js';
 import * as reminders from './reminders.js';
@@ -680,12 +680,17 @@ function portionSheet(flow, food, { back, grams = null, onSave = null } = {}) {
     const qtyIn = el('input', { type: 'number', inputmode: 'decimal', min: '0', step: 'any', class: 'qty-in', 'aria-label': 'כמות' });
     const unitLbl = el('span', { class: 'qty-unit' });
     const grid = el('div', { class: 'macro-grid' });
-    const grams_ = el('div', { class: 'tiny dim' });
+    /* What the amount is, in the other language: grams said as a plate or a
+       cup, a plate said in grams. */
+    const grams_ = el('div', { class: 'amount-like' });
 
     const step = () => (unit.id === 'g' ? (qty >= 100 ? 10 : 5) : 0.5);
     const draw = () => {
+      /* Each measure carries its weight, so "a plate" and "250 g" are never
+         apart. */
       chips.replaceChildren(...units.map((u) => el('button', {
-        class: `chip${u.id === unit.id ? ' on' : ''}`, text: u.label,
+        class: `chip unit-chip${u.id === unit.id ? ' on' : ''}`,
+        'aria-label': u.id === 'g' || u.id === 'serving' ? u.label : `${u.label}, ${Math.round(u.g)} ${food.ml ? 'מ״ל' : 'גרם'}`,
         onclick: () => {
           if (u.id === unit.id) return;
           /* Switching measure keeps the amount on the plate the same,
@@ -696,7 +701,10 @@ function portionSheet(flow, food, { back, grams = null, onSave = null } = {}) {
           qtyIn.value = qty;
           draw();
         }
-      })));
+      }, [
+        el('span', { text: u.label }),
+        u.id === 'g' || u.id === 'serving' ? null : el('small', { text: `${Math.round(u.g)} ${food.ml ? 'מ״ל' : 'ג׳'}` })
+      ])));
       unitLbl.textContent = unit.label;
       const it = portion(food, unit, qty || 0);
       grid.replaceChildren(
@@ -705,7 +713,11 @@ function portionSheet(flow, food, { back, grams = null, onSave = null } = {}) {
         cell('פחמימות', round1(it.c), 'ג׳', 'c'),
         cell('שומן', round1(it.f), 'ג׳', 'f')
       );
-      grams_.textContent = food.serving || unit.id === 'g' ? '' : `= ${Math.round(it.grams)} ${food.ml ? 'מ״ל' : 'גרם'}`;
+      const like = unit.id === 'g' ? describeAmount(food, it.grams) : null;
+      grams_.replaceChildren(...(food.serving ? [] : unit.id === 'g'
+        ? (like ? [icon(ICONS.plate, 15), el('span', { text: `זה בערך ${like}` })] : [])
+        : [el('span', { text: `= ${Math.round(it.grams)} ${food.ml ? 'מ״ל' : 'גרם'}` })]));
+      grams_.hidden = !grams_.childNodes.length;
     };
     const cell = (label, value, unitText, cls) => el('div', { class: `macro-cell ${cls}` }, [
       el('small', { text: label }), el('b', { class: 'num', text: String(value) }), el('span', { text: unitText })
@@ -1008,7 +1020,7 @@ function itemRows(items, onRemove) {
 
 function textSheet(flow) {
   page(flow, 'תיאור חופשי', () => {
-    const ta = el('textarea', { rows: '3', placeholder: 'לדוגמה: שתי ביצים, 150 גרם חזה עוף וכוס אורז' });
+    const ta = el('textarea', { rows: '3', placeholder: 'לדוגמה: שתי ביצים, צלחת אורז, 150 גרם חזה עוף וספל קפה הפוך' });
     const preview = el('div', { class: 'stack' });
     let items = [];
     let unmatched = [];

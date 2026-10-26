@@ -344,8 +344,87 @@ export function unitsFor(food) {
   if (food.serving) return [{ id: 'serving', label: 'מנה', g: food.g || 100 }];
   if (food.g) out.push({ id: 'unit', label: food.ul || 'יחידה', g: food.g });
   for (const [label, g] of Object.entries(food.u || {})) out.push({ id: `u:${label}`, label, g });
+  for (const [label, g] of householdFor(food)) {
+    if (!out.some((u) => u.label === label)) out.push({ id: `h:${label}`, label, g });
+  }
   out.push({ id: 'g', label: food.ml ? 'מ״ל' : 'גרם', g: 1 });
   return out;
+}
+
+/* ==========================================================================
+   Everyday measures.
+
+   Nobody pictures 250 g of rice; everybody pictures a plate. Foods that do
+   not name their own measures get the ones their kind is eaten in — a
+   plate for cooked grains and dishes, a bowl for salad, a palm-sized piece
+   for meat or fish, a cup, mug, can or bottle for drinks, spoons for
+   spreads — and any gram or millilitre amount is described back in them.
+   The weights are typical servings, so the description says "≈".
+   ========================================================================== */
+
+const HOUSEHOLD = {
+  drink: [['כוס קטנה', 150], ['כוס', 240], ['ספל', 300], ['בקבוק קטן', 500]],
+  plate: [['צלחת קטנה', 150], ['צלחת בינונית', 250], ['צלחת גדולה', 350]],
+  bowl: [['קערה קטנה', 150], ['קערה', 250]],
+  piece: [['מנה קטנה', 100], ['מנה בגודל כף יד', 150], ['מנה גדולה', 220]],
+  spoon: [['כפית', 5], ['כף', 15]]
+};
+
+function householdFor(food) {
+  const own = [food.ul, ...Object.keys(food.u || {})].filter(Boolean);
+  const hasOwn = (re) => own.some((l) => re.test(l));
+  if (food.custom && !food.ml) return [];
+  if (food.ml || food.cat === 'drink') return HOUSEHOLD.drink;
+  if (food.g) return [];                       // an egg, a pita, a bar: counted, not measured
+  const d = food.d || 100;
+  if ((food.cat === 'carb' || food.cat === 'dish') && d >= 150 && !hasOwn(/צלחת|קערה/)) return HOUSEHOLD.plate;
+  if (food.cat === 'produce' && d >= 100 && !hasOwn(/קערה|משולש|פלח/)) return HOUSEHOLD.bowl;
+  if (food.cat === 'protein' && d >= 100 && !hasOwn(/קופסה|מחבת/)) return HOUSEHOLD.piece;
+  if (d <= 40 && !hasOwn(/כף|חופן|קובייה|פרוסה|שקית/)) return HOUSEHOLD.spoon;
+  return [];
+}
+
+/* plural forms for counting more than one */
+const PLURAL = {
+  'כוס': 'כוסות', 'ספל': 'ספלים', 'פחית': 'פחיות', 'כף': 'כפות', 'כפית': 'כפיות', 'קערה': 'קערות',
+  'פרוסה': 'פרוסות', 'חופן': 'חופנים', 'גביע': 'גביעים', 'מנה': 'מנות', 'בקבוק': 'בקבוקים', 'קופסה': 'קופסאות',
+  'צלחת': 'צלחות', 'יחידה': 'יחידות', 'סקופ': 'סקופים', 'קובייה': 'קוביות', 'כדור': 'כדורים', 'משולש': 'משולשים',
+  'צלחת קטנה': 'צלחות קטנות', 'צלחת בינונית': 'צלחות בינוניות', 'צלחת גדולה': 'צלחות גדולות',
+  'כוס קטנה': 'כוסות קטנות', 'קערה קטנה': 'קערות קטנות', 'בקבוק קטן': 'בקבוקים קטנים',
+  'מנה קטנה': 'מנות קטנות', 'מנה גדולה': 'מנות גדולות',
+  'ביצה': 'ביצים', 'פיתה': 'פיתות', 'לחמנייה': 'לחמניות', 'בננה': 'בננות', 'תפוח': 'תפוחים', 'תמר': 'תמרים',
+  'חטיף': 'חטיפים', 'עוגייה': 'עוגיות', 'קציצה': 'קציצות', 'כדור': 'כדורים', 'זית': 'זיתים', 'שרי': 'שרי'
+};
+
+/** "כוס וחצי", "חצי צלחת בינונית", "2 כוסות" — a count of a measure in words. */
+function countPhrase(n, label) {
+  const whole = Math.floor(n + 1e-9);
+  const frac = Math.round((n - whole) * 4) / 4;
+  const many = (k) => (PLURAL[label] ? `${k} ${PLURAL[label]}` : `${k} × ${label}`);
+  if (!whole) return frac === 0.5 ? `חצי ${label}` : frac === 0.25 ? `רבע ${label}` : `שלושה רבעים ${label}`;
+  const base = whole === 1 ? label : many(whole);
+  return frac === 0.5 ? `${base} וחצי` : frac === 0.25 ? `${base} ורבע` : frac === 0.75 ? `${base} ושלושה רבעים` : base;
+}
+
+/* Rounder is better: a plate beats three quarters of a plate. */
+const NICE = [[1, 0], [2, 0.01], [0.5, 0.02], [1.5, 0.02], [3, 0.02], [2.5, 0.04], [4, 0.04], [0.25, 0.06], [0.75, 0.06], [1.25, 0.06]];
+
+/**
+ * An amount in grams (or ml) said as an everyday measure, or null when no
+ * measure of this food comes within about 12%.
+ */
+export function describeAmount(food, grams) {
+  if (!(grams > 0) || food.serving) return null;
+  let best = null;
+  for (const u of unitsFor(food)) {
+    if (u.id === 'g' || u.g <= 1) continue;
+    const n = grams / u.g;
+    for (const [nice, penalty] of NICE) {
+      const score = Math.abs(n - nice) / nice + penalty;
+      if (score <= 0.15 && (!best || score < best.score)) best = { score, text: countPhrase(nice, u.label) };
+    }
+  }
+  return best ? best.text : null;
 }
 
 /** The portion a food opens on: one unit if it has one, else its usual
@@ -367,9 +446,12 @@ export function portion(food, unit, qty) {
   if (food.serving) {
     amount = qty === 1 ? food.serving : `${fmt(qty)} × ${food.serving}`;
   } else if (unit.id === 'g') {
-    amount = `${Math.round(grams)} ${unit.label}`;
+    const like = describeAmount(food, grams);
+    amount = `${Math.round(grams)} ${unit.label}${like ? ` (≈ ${like})` : ''}`;
   } else {
-    amount = `${qty === 1 ? unit.label : `${fmt(qty)} × ${unit.label}`} (${Math.round(grams)} ${food.ml ? 'מ״ל' : 'ג׳'})`;
+    /* "2 ביצים", "פיתה וחצי" when the count is a round one; "2.3 × כוס" otherwise. */
+    const words = Math.abs(qty * 4 - Math.round(qty * 4)) < 1e-6 && qty > 0 ? countPhrase(qty, unit.label) : `${fmt(qty)} × ${unit.label}`;
+    amount = `${words} (${Math.round(grams)} ${food.ml ? 'מ״ל' : 'ג׳'})`;
   }
   return {
     label: food.name, amount, cat: food.cat,
@@ -485,11 +567,21 @@ const UNIT_G = {
   'קופסה': 150, 'קופסת': 150,
   'מנה': 200, 'מנות': 200,
   'חופן': 28, 'חופנים': 28,
+  'צלחת': 250, 'צלחות': 250,
+  'קערה': 250, 'קערת': 250, 'קערות': 250,
+  'ספל': 300, 'ספלים': 300,
+  'פחית': 330, 'פחיות': 330,
+  'בקבוק': 500, 'בקבוקים': 500,
   'קילו': 1000, 'קילוגרם': 1000,
   'יחידה': 0, 'יחידות': 0
 };
 /* plural → the label a food's own measure uses */
-const UNIT_SINGULAR = { 'כוסות': 'כוס', 'כפות': 'כף', 'כפיות': 'כפית', 'פרוסות': 'פרוסה', 'קופסת': 'קופסה', 'חופנים': 'חופן' };
+const UNIT_SINGULAR = {
+  'כוסות': 'כוס', 'כפות': 'כף', 'כפיות': 'כפית', 'פרוסות': 'פרוסה', 'קופסת': 'קופסה', 'חופנים': 'חופן',
+  'צלחות': 'צלחת', 'קערת': 'קערה', 'קערות': 'קערה', 'ספלים': 'ספל', 'פחיות': 'פחית', 'בקבוקים': 'בקבוק'
+};
+/* A word for a measure → the labels a food's measures may carry for it. */
+const UNIT_LABELS = { 'צלחת': ['צלחת', 'צלחת בינונית'], 'קערה': ['קערה'], 'בקבוק': ['בקבוק', 'בקבוק קטן'] };
 
 const GRAM_WORDS = new Set(['גרם', 'גר', 'ג׳', 'ג', 'g', 'גראם']);
 
@@ -625,7 +717,8 @@ function toItem(food, { count, unit, grams }) {
     /* The food's own cup beats the generic one: a cup of rice is 160 g, a
        cup of milk 240. */
     const label = UNIT_SINGULAR[unit] || unit;
-    const own = units.find((u) => u.label === label);
+    const labels = UNIT_LABELS[label] || [label];
+    const own = units.find((u) => labels.includes(u.label));
     if (own) return portion(food, own, count || 1);
     return portion(food, gramUnit, UNIT_G[unit] * (count || 1));
   }

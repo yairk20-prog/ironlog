@@ -129,7 +129,7 @@ async function main() {
   await shot(page, '02-search');
   await sheet(page).locator('.food-row-main').first().click();
   await pause(page);
-  out.cottageUnits = await sheet(page).locator('.unit-chips .chip').allInnerTexts();
+  out.cottageUnits = await sheet(page).locator('.unit-chips .chip span').allInnerTexts();
   out.cottageDefaultKcal = await macro(page, 'kcal');           // one 250 g tub
   await sheet(page).locator('.qty-btn[aria-label="יותר"]').click();
   await pause(page, 150);
@@ -166,7 +166,7 @@ async function main() {
   await page.waitForSelector('#sheetBody .macro-grid');
   await pause(page);
   out.kinderTitle = (await page.locator('#sheetTitle').innerText()).trim();
-  out.kinderUnit = (await sheet(page).locator('.unit-chips .chip.on').innerText()).trim();
+  out.kinderUnit = (await sheet(page).locator('.unit-chips .chip.on span').innerText()).trim();
   out.kinderKcal = await macro(page, 'kcal');                     // one 21.5 g bar
   await sheet(page).locator('.btn.primary', { hasText: 'הוסף ל' }).click();
   await pause(page, 600);
@@ -324,6 +324,16 @@ async function main() {
   await sheet(page).locator('.food-row-main').first().click();
   await pause(page);
   await shot(page, '12-portion-360');
+  /* grams said as an everyday measure, and a measure said in grams */
+  await sheet(page).locator('.qty-in').fill('250');
+  await pause(page, 150);
+  out.likeText = (await sheet(page).locator('.amount-like').innerText()).trim();
+  await sheet(page).locator('.unit-chips .chip', { hasText: 'צלחת גדולה' }).click();
+  await pause(page, 150);
+  await sheet(page).locator('.qty-in').fill('1');
+  await pause(page, 150);
+  out.likeGrams = (await sheet(page).locator('.amount-like').innerText()).trim();
+  out.riceUnits = await sheet(page).locator('.unit-chips .chip span').allInnerTexts();
   out.portionOverflow360 = await page.evaluate(() => {
     const b = document.querySelector('#sheetBody');
     return b.scrollWidth > b.clientWidth + 1;
@@ -414,6 +424,9 @@ async function main() {
     out.editButton !== 'עדכן' && 'a logged item does not reopen for editing',
     !(out.pitaAfterEdit && out.pitaAfterEdit.kcal === 379.4) && `pita after +1: ${JSON.stringify(out.pitaAfterEdit)}`,
     out.overflow360 && 'the chooser overflows at 360px',
+    out.likeText !== 'זה בערך צלחת בינונית' && `250 g of rice should read as a medium plate: "${out.likeText}"`,
+    out.likeGrams !== '= 350 גרם' && `a large plate should read in grams: "${out.likeGrams}"`,
+    !['צלחת קטנה', 'צלחת בינונית', 'צלחת גדולה', 'כוס'].every((u) => out.riceUnits.includes(u)) && `rice measures: ${out.riceUnits}`,
     out.portionOverflow360 && 'the portion picker overflows at 360px',
     !out.noAiPhoto && 'without AI the photo option does not explain itself',
     out.noAiFileInput !== 0 && 'without AI the photo option still asks for a picture',
