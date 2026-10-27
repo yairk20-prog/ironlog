@@ -175,8 +175,16 @@ function dayStrip(ctx, date, logs) {
       el('span', { class: 'num', text: kcal ? `${kcal}` : '—' })
     ]));
   }
-  /* keep the chosen day in view */
-  requestAnimationFrame(() => strip.querySelector('.day-chip.on')?.scrollIntoView({ inline: 'center', block: 'nearest' }));
+  /* Keep the chosen day in view — by scrolling the strip sideways only.
+     scrollIntoView would also scroll the page, undoing the tab's
+     remembered position. */
+  requestAnimationFrame(() => {
+    const chip = strip.querySelector('.day-chip.on');
+    if (!chip) return;
+    const c = chip.getBoundingClientRect();
+    const s = strip.getBoundingClientRect();
+    strip.scrollBy({ left: c.left + c.width / 2 - (s.left + s.width / 2), behavior: 'instant' });
+  });
   return strip;
 }
 
