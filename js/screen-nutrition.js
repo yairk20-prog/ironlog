@@ -35,22 +35,64 @@ const foodIcon = (cat) => {
   return el('div', { class: 'food-ico', style: { color: c.color } }, [icon(c.ico, 17)]);
 };
 
+/* ---------- which day is on screen ----------
+   Today, unless an earlier day was picked from the strip or the list — then
+   that day, whole and still editable (yesterday's dinner is the meal people
+   forget to log). Leaving the screen goes back to today. */
+let viewDate = null;
+export function cleanup() { viewDate = null; }
+
+const DAY_MS = 86400000;
+const isoDaysAgo = (n) => todayISO(new Date(Date.now() - n * DAY_MS));
+
+/** "היום", "אתמול", or "יום ראשון, 25 באוקטובר". */
+function dayLabel(iso, long = false) {
+  if (iso === todayISO()) return 'היום';
+  if (iso === isoDaysAgo(1)) return 'אתמול';
+  return new Date(`${iso}T12:00:00`).toLocaleDateString('he-IL', long
+    ? { weekday: 'long', day: 'numeric', month: 'long' }
+    : { weekday: 'short', day: 'numeric', month: 'numeric' });
+}
+
+function showDay(ctx, iso) {
+  viewDate = iso === todayISO() ? null : iso;
+  ctx.reload();
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+
 export async function render(ctx) {
   const s = ctx.settings;
-  const date = todayISO();
-  ctx.setTitle('תזונה', new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' }));
+  const today = todayISO();
+  const date = viewDate && viewDate < today ? viewDate : today;
+  const isToday = date === today;
+  ctx.setTitle('תזונה', new Date(`${date}T12:00:00`).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' }));
 
   const day = await loadDay(date);
-  const trainedToday = (await recentWorkouts(10)).some((w) => w.date === date);
+  const workouts = await recentWorkouts(60);
+  const trainedOn = (iso) => workouts.some((w) => w.date === iso);
+  const trainedToday = trainedOn(date);
   const profile = { ...s, goals: goalList(s) };
   const pTarget = proteinTarget(profile, trainedToday);
   const kcalTarget = s.calorieTarget || calorieTarget(profile, trainedToday);
 
   /* Reminders compare the day against these; keep the server's copy true. */
-  reminders.setTargets({ water_target: s.waterTarget || 3000, protein_target: pTarget });
-  reminders.syncDay(day);
+  if (isToday) {
+    reminders.setTargets({ water_target: s.waterTarget || 3000, protein_target: pTarget });
+    reminders.syncDay(day);
+  }
 
   const wrap = el('div', { class: 'stack' });
+
+  /* ---- the last two weeks, one tap each ---- */
+  const logs = new Map((await db.all('nutrition_logs')).map((r) => [r.date, r]));
+  wrap.appendChild(dayStrip(ctx, date, logs));
+  if (!isToday) {
+    wrap.appendChild(el('div', { class: 'past-day' }, [
+      icon(ICONS.calendar, 18),
+      el('span', { class: 'grow', text: `מציג את ${dayLabel(date, true)} — אפשר גם להוסיף ולתקן` }),
+      el('button', { class: 'btn sm', onclick: () => showDay(ctx, today) }, ['להיום'])
+    ]));
+  }
 
   /* ---- the day at a glance ----
      Two rings, read from across the room: protein and calories, the number
@@ -58,7 +100,7 @@ export async function render(ctx) {
      food, to the meal the clock says you are on. */
   wrap.appendChild(el('div', { class: 'card day-hero' }, [
     el('div', { class: 'card-head' }, [
-      el('h3', { text: trainedToday ? 'יום אימון' : 'יום מנוחה' }),
+      el('h3', { text: `${isToday ? '' : `${dayLabel(date)} · `}${trainedToday ? 'יום אימון' : 'יום מנוחה'}` }),
       el('span', { class: 'badge accent', text: `${day.items.length} רישומים` })
     ]),
     el('div', { class: 'rings' }, [
@@ -69,17 +111,21 @@ export async function render(ctx) {
       macroTile('פחמימות', day.carbs_grams, 'var(--warn)'),
       macroTile('שומן', day.fat_grams, '#B98BFF')
     ]),
-    el('button', {
-      class: 'btn primary full',
-      onclick: () => mealSheet(ctx, day, MEALS.find((m) => m.id === currentMeal()))
-    }, [icon(ICONS.plus, 18), `הוסף מאכל · ${MEALS.find((m) => m.id === currentMeal()).name}`])
+    isToday
+      ? el('button', {
+        class: 'btn primary full',
+        onclick: () => mealSheet(ctx, day, MEALS.find((m) => m.id === currentMeal()))
+      }, [icon(ICONS.plus, 18), `הוסף מאכל · ${MEALS.find((m) => m.id === currentMeal()).name}`])
+      : el('button', {
+        class: 'btn primary full', onclick: () => pickMealSheet(ctx, day, date)
+      }, [icon(ICONS.plus, 18), `הוסף מאכל ל${dayLabel(date)}`])
   ]));
 
   /* ---- water, counted the way people drink it ---- */
   wrap.appendChild(waterCard(ctx, day, s));
 
   /* ---- the one-tap way into reminders, until they are on ---- */
-  const invite = await reminders.invite(ctx);
+  const invite = isToday ? await reminders.invite(ctx) : null;
   if (invite) wrap.appendChild(invite);
 
   /* Adding food happens on the meal you are adding it to, so the two
@@ -88,18 +134,102 @@ export async function render(ctx) {
   /* ---- today's items ---- */
   /* The day is a set of meals, not a list of foods: a plus on each one, so
      adding lunch is one tap and the day reads back the way it was eaten. */
-  wrap.appendChild(el('div', { class: 'section-title', text: 'הארוחות של היום' }));
-  MEALS.forEach((meal) => wrap.appendChild(mealCard(ctx, day, meal)));
+  wrap.appendChild(el('div', { class: 'section-title', text: isToday ? 'הארוחות של היום' : `הארוחות · ${dayLabel(date)}` }));
+  MEALS.forEach((meal) => wrap.appendChild(mealCard(ctx, day, meal, { isToday })));
 
-  /* ---- what to eat, given what you are training for ---- */
-  wrap.appendChild(el('div', { class: 'section-title', text: 'מה כדאי לאכול' }));
-  wrap.appendChild(guidanceCard(ctx, day, pTarget, kcalTarget, trainedToday));
+  if (isToday) {
+    /* ---- what to eat, given what you are training for ---- */
+    wrap.appendChild(el('div', { class: 'section-title', text: 'מה כדאי לאכול' }));
+    wrap.appendChild(guidanceCard(ctx, day, pTarget, kcalTarget, trainedToday));
+  }
 
-  /* ---- coach / dietitian notes ---- */
-  wrap.appendChild(el('div', { class: 'section-title', text: 'דגשים מהמאמן / תזונאית' }));
-  wrap.appendChild(await notesTile(ctx));
+  /* ---- the days before ---- */
+  wrap.appendChild(el('div', { class: 'section-title', text: 'הימים האחרונים' }));
+  wrap.appendChild(recentDays(ctx, date, logs, (iso) => proteinTarget(profile, trainedOn(iso))));
+
+  if (isToday) {
+    /* ---- coach / dietitian notes ---- */
+    wrap.appendChild(el('div', { class: 'section-title', text: 'דגשים מהמאמן / תזונאית' }));
+    wrap.appendChild(await notesTile(ctx));
+  }
 
   return wrap;
+}
+
+/** Fourteen days, newest first: weekday, date, and how much was logged. */
+function dayStrip(ctx, date, logs) {
+  const strip = el('div', { class: 'day-strip', role: 'tablist', 'aria-label': 'בחירת יום' });
+  for (let n = 0; n < 14; n++) {
+    const iso = isoDaysAgo(n);
+    const log = logs.get(iso);
+    const kcal = Math.round(log?.calories_consumed || 0);
+    const d = new Date(`${iso}T12:00:00`);
+    strip.appendChild(el('button', {
+      class: `day-chip${iso === date ? ' on' : ''}${kcal ? ' has' : ''}`,
+      role: 'tab', 'aria-selected': String(iso === date),
+      'aria-label': `${dayLabel(iso, true)}${kcal ? `, ${kcal} קלוריות` : ', לא נרשם'}`,
+      onclick: () => showDay(ctx, iso)
+    }, [
+      el('small', { text: n === 0 ? 'היום' : n === 1 ? 'אתמול' : d.toLocaleDateString('he-IL', { weekday: 'short' }) }),
+      el('b', { class: 'num', text: String(d.getDate()) }),
+      el('span', { class: 'num', text: kcal ? `${kcal}` : '—' })
+    ]));
+  }
+  /* keep the chosen day in view */
+  requestAnimationFrame(() => strip.querySelector('.day-chip.on')?.scrollIntoView({ inline: 'center', block: 'nearest' }));
+  return strip;
+}
+
+/**
+ * Every logged day of the last 30 except the one on screen: date, totals,
+ * whether protein was hit, and what was eaten at a glance. Tap to open it.
+ */
+function recentDays(ctx, date, logs, proteinFor) {
+  const rows = [];
+  for (let n = 0; n < 30; n++) {
+    const iso = isoDaysAgo(n);
+    const log = logs.get(iso);
+    if (iso === date || !log || !(log.items || []).length) continue;
+    const target = proteinFor(iso);
+    const hit = (log.protein_grams || 0) >= target * 0.95;
+    const names = [...new Set((log.items || []).map((i) => i.label))];
+    rows.push(el('button', { class: 'recent-day', onclick: () => showDay(ctx, iso) }, [
+      el('div', { class: 'rd-date' }, [
+        el('b', { text: n < 2 ? dayLabel(iso) : new Date(`${iso}T12:00:00`).toLocaleDateString('he-IL', { weekday: 'long' }) }),
+        el('small', { text: new Date(`${iso}T12:00:00`).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' }) })
+      ]),
+      el('div', { class: 'grow rd-body' }, [
+        el('div', { class: 'rd-nums' }, [
+          el('b', { class: 'num', text: `${Math.round(log.calories_consumed || 0)} קק״ל` }),
+          el('span', { class: `rd-p${hit ? ' hit' : ''}` }, [hit ? icon(ICONS.check, 12) : null, `${Math.round(log.protein_grams || 0)}/${Math.round(target)} ג׳ חלבון`]),
+          log.water_ml ? el('span', { class: 'rd-w', text: `${Math.round(log.water_ml / 250)} כוסות` }) : null
+        ]),
+        el('small', { text: names.slice(0, 5).join(' · ') + (names.length > 5 ? ` ועוד ${names.length - 5}` : '') })
+      ]),
+      icon(ICONS.chevron, 16)
+    ]));
+  }
+  if (!rows.length) {
+    return el('p', { class: 'tiny dim', style: { margin: 0 }, text: 'כאן יופיעו הימים הקודמים — מה אכלת, כמה קלוריות וחלבון — ברגע שיהיו רישומים.' });
+  }
+  return el('div', { class: 'recent-days' }, rows);
+}
+
+/** On an earlier day there is no "current meal": ask which one. */
+function pickMealSheet(ctx, day, date) {
+  openSheet(`הוספה ל${dayLabel(date)}`, () => el('div', { class: 'stack' }, MEALS.map((m) => el('button', {
+    class: 'opt', onclick: () => mealSheet(ctx, day, m)
+  }, [el('div', { class: 'grow' }, [el('b', { text: m.name }), el('small', { text: m.hint })]), icon(ICONS.chevron, 16)]))));
+}
+
+/** Copy an earlier day's meal onto today's — "the same breakfast as yesterday". */
+async function copyMealToToday(ctx, items, meal) {
+  const today = await loadDay(todayISO());
+  today.items.push(...items.map(({ ...it }) => ({ ...it, meal: meal.id })));
+  recompute(today);
+  await saveDay(today);
+  buzz(12);
+  toast(`${meal.name} נוספה גם להיום`, 'ok');
 }
 
 /* ---------- storage ---------- */
@@ -158,11 +288,11 @@ function currentMeal() {
   return (MEALS.find((m) => h >= m.from && h < m.to) || MEALS[0]).id;
 }
 
-function mealCard(ctx, day, meal) {
+function mealCard(ctx, day, meal, { isToday = true } = {}) {
   const items = day.items.filter((i) => (i.meal || 'other') === meal.id);
   const kcal = Math.round(items.reduce((a, i) => a + (i.kcal || 0), 0));
   const protein = round2(items.reduce((a, i) => a + (i.p || 0), 0));
-  const now = currentMeal() === meal.id;
+  const now = isToday && currentMeal() === meal.id;
 
   const rows = items.map((it) => {
     const index = day.items.indexOf(it);
@@ -199,7 +329,10 @@ function mealCard(ctx, day, meal) {
         onclick: () => mealSheet(ctx, day, meal)
       }, [icon(ICONS.plus, 20)])
     ]),
-    ...rows
+    ...rows,
+    !isToday && items.length ? el('button', {
+      class: 'meal-copy', onclick: () => copyMealToToday(ctx, items, meal)
+    }, [icon(ICONS.plus, 14), 'הוסף את הארוחה הזו גם להיום']) : null
   ]);
 }
 

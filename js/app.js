@@ -15,7 +15,7 @@ import { render as renderWorkout, cleanup as cleanupWorkout } from './screen-wor
 import { render as renderPlan } from './screen-plan.js';
 import { render as renderHistory } from './screen-history.js';
 import { render as renderSettings } from './screen-settings.js';
-import { render as renderNutrition } from './screen-nutrition.js';
+import { render as renderNutrition, cleanup as cleanupNutrition } from './screen-nutrition.js';
 import { render as renderMore } from './screen-more.js';
 import { render as renderCoach } from './screen-coach.js';
 import { render as renderPosture } from './screen-posture.js';
@@ -27,7 +27,7 @@ import { render as renderCardio, cleanup as cleanupCardio } from './screen-cardi
 const ROUTES = {
   home: { render: renderHome, title: 'היום' },
   plan: { render: renderPlan, title: 'תוכנית' },
-  nutrition: { render: renderNutrition, title: 'תזונה' },
+  nutrition: { render: renderNutrition, cleanup: cleanupNutrition, title: 'תזונה' },
   history: { render: renderHistory, title: 'התקדמות' },
   more: { render: renderMore, title: 'עוד' },
   workout: { render: renderWorkout, cleanup: cleanupWorkout, title: 'אימון', chrome: false },

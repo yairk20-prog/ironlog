@@ -1115,6 +1115,52 @@ body.login-open{overflow:hidden}
 .grid-2 input{min-width:0}
 .photo-preview{width:100%;max-height:min(46vh,320px);object-fit:cover;display:block}
 
+/* ---------- earlier days ----------
+   A strip of the last two weeks across the top (newest on the right), and
+   a list of logged days at the bottom. */
+.day-strip{
+  display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;
+  margin:0 calc(var(--pad) * -1);padding:2px var(--pad) 4px;scroll-snap-type:x proximity;
+}
+.day-strip::-webkit-scrollbar{display:none}
+.day-chip{
+  flex:none;width:58px;display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:8px 0 7px;background:var(--surface);border:1px solid var(--line-soft);
+  color:var(--text-2);scroll-snap-align:center;
+}
+.day-chip small{font-size:10.5px;font-weight:800;color:var(--text-3)}
+.day-chip b{font-size:19px;font-weight:900;color:var(--text);line-height:1.1}
+.day-chip span{font-size:10px;font-weight:700;color:var(--text-3)}
+.day-chip.has span{color:var(--ok)}
+.day-chip.on{background:var(--text);border-color:var(--text)}
+.day-chip.on small,.day-chip.on b,.day-chip.on span{color:#000}
+.past-day{
+  display:flex;align-items:center;gap:10px;padding:10px 12px;
+  background:var(--accent-dim);border:1px solid var(--accent);
+  font-size:var(--fs-tiny);font-weight:700;
+}
+.past-day svg{flex:none;color:var(--accent);width:18px;height:18px}
+.meal-copy{
+  display:flex;align-items:center;justify-content:center;gap:6px;width:100%;
+  padding:10px;border-top:1px solid var(--line-soft);
+  font-size:var(--fs-tiny);font-weight:800;color:var(--accent);
+}
+.meal-copy svg{width:14px;height:14px}
+.recent-days{display:flex;flex-direction:column;gap:1px;background:var(--line-soft)}
+.recent-day{display:flex;align-items:center;gap:12px;padding:11px 12px;background:var(--surface);text-align:start;color:inherit;width:100%}
+.recent-day > svg{flex:none;width:16px;height:16px;color:var(--text-3)}
+.rd-date{flex:none;width:72px}
+.rd-date b{display:block;font-size:14px;font-weight:800}
+.rd-date small{display:block;font-size:11px;color:var(--text-3);font-weight:600}
+.rd-body{min-width:0}
+.rd-nums{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}
+.rd-nums b{font-size:14px;font-weight:900}
+.rd-p,.rd-w{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;font-weight:700;color:var(--text-2)}
+.rd-p.hit{color:var(--ok)}
+.rd-p svg{width:12px;height:12px;stroke-width:3}
+.rd-w{color:#7CC0FF}
+.rd-body > small{display:block;margin-top:3px;font-size:11px;color:var(--text-3);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
 /* ---------- the day at a glance ----------
    Two rings big enough to read at arm's length, the number eaten in the
    middle — the first thing on the screen, because it is the question the
