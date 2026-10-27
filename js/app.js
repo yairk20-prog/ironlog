@@ -265,6 +265,10 @@ async function boot() {
      and image pre-cache should not wait behind it. */
   registerServiceWorker();
   announceUpdate();
+  listenForQuickAdds();
+  /* Read (and strip) a home-screen shortcut's ?quick= before anything else,
+     so even a first run, which ignores it, leaves a clean address. */
+  const quickKind = takeQuickParam();
 
   /* First run: sign in (or decline), then build the plan from the questionnaire. */
   if (!ctx.settings.onboarded) {
@@ -280,7 +284,46 @@ async function boot() {
     await applyAnswers(ctx, answers);
     await db.setSetting('rotationCursor', 0);
     await mount('home');
+    return;
   }
+
+  await handleQuick(quickKind);
+  /* The quick-add card shows today's numbers: redraw it on every open. */
+  import('./quick.js').then((q) => q.refreshCard()).catch(() => {});
+}
+
+/**
+ * A home-screen shortcut opened the app with ?quick=water|food|saved|photo.
+ * The parameter is removed from the address *before* acting on it, so a
+ * reload — including the one an update triggers — never adds twice.
+ */
+function takeQuickParam() {
+  const params = new URLSearchParams(location.search);
+  const kind = params.get('quick');
+  if (!kind) return null;
+  params.delete('quick');
+  const rest = params.toString();
+  history.replaceState(history.state, '', `${location.pathname}${rest ? `?${rest}` : ''}${location.hash}`);
+  return kind;
+}
+
+async function handleQuick(kind) {
+  if (!['water', 'food', 'saved', 'photo'].includes(kind)) return;
+  if (currentRoute !== 'nutrition') {
+    location.hash = '#/nutrition';
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    while (rendering) await new Promise((resolve) => setTimeout(resolve, 30));
+  }
+  const { quickAdd } = await import('./screen-nutrition.js');
+  await quickAdd(ctx, kind);
+}
+
+/** A notification button changed today (the service worker wrote it): show it. */
+function listenForQuickAdds() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data?.type === 'day-changed' && ['nutrition', 'home', 'history'].includes(currentRoute)) reload();
+  });
 }
 
 /**

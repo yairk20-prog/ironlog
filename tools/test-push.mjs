@@ -89,6 +89,7 @@ function verifyVapid(header, publicKey, endpoint) {
   const r1 = dueReminders({ ...base, progress: prog(250, 0) }, at(11));
   const w1 = r1.messages.find((m) => m.kind === 'water');
   check(w1 && /1 מתוך 12/.test(w1.body), `behind on water at 11 should remind with the count: ${JSON.stringify(r1.messages)}`);
+  check(w1?.actions?.[0]?.action === 'water', `a water reminder should carry the "drank a glass" button: ${JSON.stringify(w1?.actions)}`);
 
   const r2 = dueReminders({ ...base, progress: prog(250, 0), sent: r1.sent }, at(12));
   check(!r2.messages.some((m) => m.kind === 'water'), 'water reminded again within the interval');
@@ -101,6 +102,7 @@ function verifyVapid(header, publicKey, endpoint) {
   const p1 = dueReminders({ ...base, progress: prog(3000, 20) }, at(12, 20));
   const pm = p1.messages.find((m) => m.kind === 'protein');
   check(pm && /חסרים 130/.test(pm.title), `behind on protein at noon should name the gap: ${JSON.stringify(p1.messages)}`);
+  check(pm?.actions?.[0]?.action === 'food', `a protein reminder should carry the "add food" button: ${JSON.stringify(pm?.actions)}`);
   check(!dueReminders({ ...base, progress: prog(3000, 20), sent: p1.sent }, at(13)).messages.some((m) => m.kind === 'protein'), 'protein reminded twice for one checkpoint');
   check(dueReminders({ ...base, progress: prog(3000, 60), sent: p1.sent }, at(16, 5)).messages.some((m) => m.kind === 'protein'), 'no protein reminder at the 4pm checkpoint while behind');
   check(!dueReminders({ ...base, progress: prog(3000, 140) }, at(20)).messages.some((m) => m.kind === 'protein'), 'protein reminded while on track');

@@ -1292,6 +1292,13 @@ svg.chart{direction:ltr}
 .weigh-prompt > svg{color:var(--accent);flex:none}
 @media (max-width:359px){.week-nums{grid-template-columns:repeat(2,1fr)}}
 
+.quick-panel .qp-title{font-size:14.5px;font-weight:800}
+.qp-steps{margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:6px}
+.qp-steps li{font-size:var(--fs-tiny);color:var(--text-2);line-height:1.5;font-weight:600}
+.qw-line{display:flex;align-items:baseline;justify-content:center;gap:10px;padding:8px 0 4px}
+.qw-line b{font-size:clamp(44px,13vw,60px);font-weight:900;color:#7CC0FF;letter-spacing:-.04em;line-height:1}
+.qw-line span{font-size:var(--fs-body);font-weight:700;color:var(--text-2)}
+
 /* ---------- reminders ---------- */
 .remind-invite{
   display:flex;align-items:center;gap:12px;padding:12px 10px 12px 14px;

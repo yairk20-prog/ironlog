@@ -13,6 +13,7 @@ import {
 } from './food.js';
 import * as ai from './ai.js';
 import * as reminders from './reminders.js';
+import * as quick from './quick.js';
 import { goalList } from './programs.js';
 import { proteinTarget, calorieTarget, todayISO, round2 } from './logic.js';
 import { recentWorkouts } from './session.js';
@@ -248,8 +249,13 @@ async function loadDay(date) {
   return normalize({ id: db.uid('n'), date });
 }
 
+/* The water a copy of a day was read with. A notification button can add a
+   glass while the app holds that copy; if the copy's water is unchanged
+   when it is saved, the stored amount is the true one and is kept. */
+const waterAtLoad = new WeakMap();
+
 function normalize(row) {
-  return {
+  const day = {
     id: row.id,
     date: row.date,
     calories_consumed: row.calories_consumed || 0,
@@ -260,6 +266,8 @@ function normalize(row) {
     items: (row.items || []).map((i) => ({ meal: i.meal || 'other', ...i })),
     ai_raw_analysis: row.ai_raw_analysis || null
   };
+  waterAtLoad.set(day, day.water_ml);
+  return day;
 }
 
 function recompute(day) {
@@ -273,9 +281,70 @@ function recompute(day) {
 }
 
 const saveDay = async (day) => {
+  if (waterAtLoad.has(day) && day.water_ml === waterAtLoad.get(day)) {
+    const stored = await db.get('nutrition_logs', day.id).catch(() => null);
+    if (stored) day.water_ml = stored.water_ml || 0;
+  }
   await db.put('nutrition_logs', day);
+  waterAtLoad.set(day, day.water_ml);
   reminders.syncDay(day);
+  quick.refreshCard();
 };
+
+/* ---------- quick add (home-screen shortcuts, ?quick=…) ---------- */
+
+/**
+ * What a home-screen shortcut asked for. Always today, whatever day the
+ * screen was showing; the same sheets and the same maths as the app.
+ */
+export async function quickAdd(ctx, kind) {
+  viewDate = null;
+  const day = await loadDay(todayISO());
+  const meal = MEALS.find((m) => m.id === currentMeal());
+  const flow = { ctx, day, meal, added: [] };
+  if (kind === 'water') return quickWaterSheet(ctx);
+  if (kind === 'food') return mealSheet(ctx, day, meal, flow);
+  if (kind === 'saved') return savedSheet(flow);
+  if (kind === 'photo') return photoSheet(flow);
+  return null;
+}
+
+/** "Added a glass" — with today's count, another glass, a bottle, or take it back. */
+async function quickWaterSheet(ctx) {
+  const added = await quick.addWater(GLASS_ML);
+  reminders.syncDay(normalize(added));
+  quick.refreshCard();
+  buzz(12);
+  ctx.reload();
+  openSheet('כוס מים נוספה', () => {
+    const line = el('div', { class: 'qw-line', 'aria-live': 'polite' });
+    const paint = async () => {
+      const st = await quick.status();
+      line.replaceChildren(
+        el('b', { class: 'num', text: String(st.glasses) }),
+        el('span', { text: `מתוך ${st.total} כוסות היום` })
+      );
+    };
+    const change = async (ml, note) => {
+      const rec = await quick.addWater(ml);
+      reminders.syncDay(normalize(rec));
+      quick.refreshCard();
+      buzz(10);
+      toast(note, 'ok');
+      paint();
+      ctx.reload();
+    };
+    paint();
+    return el('div', { class: 'stack' }, [
+      line,
+      el('button', { class: 'btn water-add full', onclick: () => change(GLASS_ML, 'עוד כוס נוספה') }, [icon(ICONS.plus, 18), 'עוד כוס']),
+      el('div', { class: 'row', style: { gap: '8px' } }, [
+        el('button', { class: 'btn grow', onclick: () => change(BOTTLE_ML, 'בקבוק נוסף') }, [icon(ICONS.bottle, 16), 'בקבוק']),
+        el('button', { class: 'btn grow ghost', onclick: () => change(-GLASS_ML, 'כוס הורדה') }, [icon(ICONS.minus, 16), 'בטל כוס'])
+      ])
+    ]);
+  });
+}
 
 /* ---------- meals ---------- */
 
@@ -429,8 +498,16 @@ function waterCard(ctx, day, s) {
   const litres = (ml) => (Math.round(ml / 100) / 10).toLocaleString('he-IL');
 
   const add = async (ml) => {
-    day.water_ml = Math.max(0, day.water_ml + ml);
-    await saveDay(day);
+    if (day.date === todayISO()) {
+      /* Today's water goes through the same single read-modify-write as the
+         notification button, so neither can overwrite the other. */
+      const rec = await quick.addWater(ml);
+      reminders.syncDay(normalize(rec));
+      quick.refreshCard();
+    } else {
+      day.water_ml = Math.max(0, day.water_ml + ml);
+      await saveDay(day);
+    }
     buzz(10);
     ctx.reload();
   };

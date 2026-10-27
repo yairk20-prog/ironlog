@@ -12,6 +12,7 @@ import * as gdrive from './gdrive.js';
 import * as cloud from './cloud.js';
 import { BUILD, swVersion } from './version.js';
 import * as reminders from './reminders.js';
+import * as quick from './quick.js';
 import { cardioPlanControl } from './screen-plan.js';
 
 /**
@@ -160,6 +161,7 @@ export async function render(ctx) {
   /* ---- water and protein reminders ---- */
   const rem = await reminders.settings();
   wrap.appendChild(section('תזכורות מים וחלבון', rem.on ? 'פעילות' : 'כבויות', [reminders.panel(ctx)]));
+  wrap.appendChild(section('הוספה מהירה מהמסך הראשי', (await quick.cardOn()) ? 'כרטיס בהתראות פעיל' : 'כפתורים במסך הבית', [quick.panel()]));
 
   /* ---- backup: the easy one first, the account one second ---- */
   const cloudOn = await cloud.available();

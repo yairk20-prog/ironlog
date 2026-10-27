@@ -60,7 +60,9 @@ export function dueReminders(rec, now = Date.now()) {
         title: 'זמן לכוס מים',
         body: drunk ? `שתית ${drunk} מתוך ${total} כוסות היום. עוד כוס עכשיו?` : `עוד לא נרשמו מים היום — היעד ${total} כוסות. מתחילים בכוס אחת.`,
         tag: 'ironlog-water',
-        url: '/#/nutrition'
+        url: '/#/nutrition',
+        /* logs the glass from the notification itself (sw.js) */
+        actions: [{ action: 'water', title: 'שתיתי כוס' }]
       });
       sent.water = now;
     }
@@ -79,7 +81,8 @@ export function dueReminders(rec, now = Date.now()) {
           ? `${Math.round(protein)} מתוך ${Math.round(proteinTarget)} ג׳. יוגורט חלבון או קוטג׳ יסגרו את הפער.`
           : `${Math.round(protein)} מתוך ${Math.round(proteinTarget)} ג׳. בארוחה הבאה: חזה עוף, טונה, ביצים או סקופ חלבון.`,
         tag: 'ironlog-protein',
-        url: '/#/nutrition'
+        url: '/#/nutrition',
+        actions: [{ action: 'food', title: 'הוספת מאכל' }]
       });
       sent.protein = { date, slots: [...done, check[0]] };
     } else if (check && !done.includes(check[0])) {

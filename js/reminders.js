@@ -61,8 +61,15 @@ let progress = null;
 let targets = { water_target: 3000, protein_target: 120 };
 let timer = null;
 
-/** The nutrition screen says what today's targets are. */
-export function setTargets(t) { targets = { ...targets, ...t }; }
+/** The nutrition screen says what today's targets are. Kept on the device
+    too, so a notification button (service worker) can report a glass with
+    the right targets and the quick card can show protein against target. */
+export function setTargets(t) {
+  const next = { ...targets, ...t };
+  const changed = JSON.stringify(next) !== JSON.stringify(targets);
+  targets = next;
+  if (changed) db.setSetting('reminderTargets', targets).catch(() => {});
+}
 
 /** Report a day's water and protein (debounced; nothing if reminders are off). */
 export function syncDay(day) {

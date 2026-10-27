@@ -3,7 +3,7 @@
    Keep VERSION in step with BUILD in js/version.js; tools/e2e10.mjs fails the
    build if they drift, because the number shown in Settings is the only way
    anyone can tell from a phone whether an update actually landed. */
-const VERSION = 'ironlog-v5.14.0';
+const VERSION = 'ironlog-v5.15.0';
 
 /* Every request for code goes out with the browser's HTTP cache bypassed.
    Without this the service worker's "network-first" rule is a lie: fetch()
@@ -12,6 +12,9 @@ const VERSION = 'ironlog-v5.14.0';
    times it reloads. Revalidating costs one 304. */
 const fresh = (url) => new Request(url, { cache: 'reload', credentials: 'same-origin' });
 const IMG_INDEX = './img/ex/index.json';
+
+/* Quick add from a notification button: the same code the app uses. */
+importScripts('./js/sw-quick.js');
 const SHELL = [
   './',
   './index.html',
@@ -45,6 +48,8 @@ const SHELL = [
   './js/screen-cardio.js',
   './js/body.js',
   './js/progress.js',
+  './js/quick.js',
+  './js/sw-quick.js',
   './js/reminders.js',
   './js/feed.js',
   './js/body-paths.js',
@@ -64,7 +69,11 @@ const SHELL = [
   './icons/logo.svg',
   './icons/icon-180.png',
   './icons/icon-192.png',
-  './icons/icon-512.png'
+  './icons/icon-512.png',
+  './icons/sc-water.png',
+  './icons/sc-food.png',
+  './icons/sc-saved.png',
+  './icons/sc-workout.png'
 ];
 
 self.addEventListener('install', (e) => {
@@ -116,6 +125,12 @@ self.addEventListener('message', (e) => {
      page's own constant: if the two disagree the update is half-applied, and
      that is exactly the state worth being able to see from a phone. */
   if (e.data === 'version') e.source?.postMessage({ swVersion: VERSION });
+  /* The same path a notification button takes, reachable from a page —
+     how tools/e2e19.mjs exercises it, since no test can tap a real
+     notification. It only ever does what that button does. */
+  if (e.data?.type === 'notification-action') {
+    e.waitUntil(notificationAction(e.data.action, e.data.data || {}, e.data.tag || ''));
+  }
 });
 
 /* ---------- reminders ----------
@@ -132,18 +147,58 @@ self.addEventListener('push', (e) => {
     dir: 'rtl',
     lang: 'he',
     icon: './icons/icon-192.png',
+    /* "שתיתי כוס" on a water reminder, "הוספת מאכל" on a protein one */
+    actions: Array.isArray(d.actions) ? d.actions.slice(0, 2) : [],
     data: { url: d.url || './#/nutrition' }
   }));
 });
 
-self.addEventListener('notificationclick', (e) => {
-  e.notification.close();
-  const url = new URL(e.notification.data?.url || './', self.registration.scope).href;
-  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+/** Bring the app forward on a URL — the open window if there is one. */
+function openApp(url) {
+  const href = new URL(url, self.registration.scope).href;
+  return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
     const win = wins.find((w) => 'focus' in w);
-    if (win) return win.focus().then((w) => (w || win).navigate?.(url)).catch(() => {});
-    return self.clients.openWindow(url);
-  }));
+    if (win) return win.focus().then((w) => (w || win).navigate?.(href)).catch(() => {});
+    return self.clients.openWindow(href);
+  });
+}
+
+/**
+ * What a notification button does.
+ * · water — one glass on today, written here with the app closed; the open
+ *   app (if any) is told to refresh, the reminders server hears the new
+ *   total, and the notification is replaced by today's updated numbers.
+ * · food — open the app straight on adding food (?quick=food).
+ * · anything else (a tap on the body) — open the notification's page.
+ */
+async function notificationAction(action, data, tag) {
+  if (action === 'water') {
+    const rec = await IronlogQuick.addWater(IronlogQuick.GLASS_ML);
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    wins.forEach((w) => w.postMessage({ type: 'day-changed' }));
+    await IronlogQuick.syncProgress(rec).catch(() => false);
+    const st = await IronlogQuick.status();
+    if (data.quick || st.card) {
+      const { title, options } = await IronlogQuick.cardNotification();
+      await self.registration.showNotification(title, options);
+    } else {
+      await self.registration.showNotification('נוספה כוס מים', {
+        body: st.text, tag: tag || 'ironlog-water', silent: true, dir: 'rtl', lang: 'he',
+        icon: './icons/icon-192.png', data: { url: './index.html#/nutrition' }
+      });
+    }
+    return;
+  }
+  if (action === 'food') return openApp('./index.html?quick=food#/nutrition');
+  return openApp(data.url || './index.html#/nutrition');
+}
+
+self.addEventListener('notificationclick', (e) => {
+  const data = e.notification.data || {};
+  const tag = e.notification.tag;
+  /* The quick card is replaced, not dismissed, by its water button. */
+  if (!(e.action === 'water' && data.quick)) e.notification.close();
+  e.waitUntil(notificationAction(e.action, data, tag));
 });
 
 self.addEventListener('fetch', (e) => {

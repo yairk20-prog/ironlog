@@ -43,24 +43,54 @@
   ],
   "shortcuts": [
     {
-      "name": "התחל אימון",
-      "short_name": "אימון",
-      "url": "./index.html#/workout",
+      "name": "כוס מים",
+      "short_name": "כוס מים",
+      "description": "מוסיף כוס מים (250 מ״ל) להיום",
+      "url": "./index.html?quick=water#/nutrition",
       "icons": [
         {
-          "src": "icons/icon-192.png",
-          "sizes": "192x192"
+          "src": "icons/sc-water.png",
+          "sizes": "192x192",
+          "type": "image/png"
         }
       ]
     },
     {
-      "name": "היסטוריה",
-      "short_name": "היסטוריה",
-      "url": "./index.html#/history",
+      "name": "הוספת מאכל",
+      "short_name": "הוסף מאכל",
+      "description": "חיפוש, צילום או תיאור — לארוחה של עכשיו",
+      "url": "./index.html?quick=food#/nutrition",
       "icons": [
         {
-          "src": "icons/icon-192.png",
-          "sizes": "192x192"
+          "src": "icons/sc-food.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "מאכלים שמורים",
+      "short_name": "שמורים",
+      "description": "מה שאכלת לאחרונה ומועדפים — בלחיצה",
+      "url": "./index.html?quick=saved#/nutrition",
+      "icons": [
+        {
+          "src": "icons/sc-saved.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "התחל אימון",
+      "short_name": "אימון",
+      "description": "האימון של היום",
+      "url": "./index.html#/home",
+      "icons": [
+        {
+          "src": "icons/sc-workout.png",
+          "sizes": "192x192",
+          "type": "image/png"
         }
       ]
     }

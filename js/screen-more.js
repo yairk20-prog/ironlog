@@ -51,6 +51,10 @@ export async function render(ctx) {
   wrap.appendChild(link(ICONS.user, 'יציבה וניידות', 'הערכה עצמית ופרוטוקולים מתקנים', () => ctx.go('posture')));
   wrap.appendChild(link(ICONS.calendar, 'סנכרון ליומן', 'ייצוא התוכנית כקובץ ICS עם תזכורות', () => calendarSheet(ctx)));
   wrap.appendChild(link(ICONS.sync, 'הגדרות', 'מטרה, ציוד, חשבון Google וגיבוי', () => ctx.go('settings')));
+  wrap.appendChild(link(ICONS.glass, 'הוספה מהירה מהמסך הראשי', 'כוס מים ומאכל בלי להיכנס לאפליקציה', async () => {
+    const quick = await import('./quick.js');
+    openSheet('הוספה מהירה', () => quick.panel());
+  }));
   wrap.appendChild(link(ICONS.user, 'שתף עם בן/בת זוג', 'קישור להתקנה — תוכנית ונתונים משלה, עדכונים לשניכם', shareSheet));
 
   /* ---- install hint ---- */
