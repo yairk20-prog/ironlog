@@ -186,6 +186,7 @@ async function applyActions(w, actions) {
         s.ex = a.to;
         s.warmups = [];
         s.rest = target.rest;
+        s.restSet = false;
         s.note = 'הוחלף על ידי המאמן';
         done.push(`${from} → ${target.name}`);
         break;
@@ -202,7 +203,7 @@ async function applyActions(w, actions) {
         if (a.weight >= 0) { s.targetWeight = Number(a.weight); done.push(`${exerciseName(s.ex)}: ${fmtW(a.weight)}`); }
         break;
       case 'rest':
-        if (a.seconds >= 15 && a.seconds <= 600) { s.rest = Number(a.seconds); done.push(`${exerciseName(s.ex)}: מנוחה ${a.seconds} שניות`); }
+        if (a.seconds >= 15 && a.seconds <= 600) { s.rest = Number(a.seconds); s.restSet = true; done.push(`${exerciseName(s.ex)}: מנוחה ${a.seconds} שניות`); }
         break;
       default:
         break;

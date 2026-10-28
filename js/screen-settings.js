@@ -4,7 +4,7 @@
 
 import * as db from './db.js';
 import { el, icon, ICONS, toast, buzz, openSheet, confirmSheet } from './ui.js';
-import { GOALS, ROTATIONS, DURATIONS, DEFAULTS, goalList, resolveGoal, durationFor } from './programs.js';
+import { GOALS, ROTATIONS, DURATIONS, DEFAULTS, goalList, resolveGoal, durationFor, restLabel, REST_MIN, REST_MAX } from './programs.js';
 import { proteinPlan, PLATE_COLORS } from './logic.js';
 import { BODY_TYPES, silhouette } from './body.js';
 import * as ai from './ai.js';
@@ -143,7 +143,9 @@ export async function render(ctx) {
   wrap.appendChild(section('עיצוב', 'צבע נושא', [themePicker(ctx, s)]));
 
   /* ---- behaviour ---- */
-  wrap.appendChild(section('התנהגות', 'טיימר, רטט, חימום, RIR', [el('div', { class: 'card stack' }, [
+  wrap.appendChild(section('התנהגות', `מנוחה ${s.restFixed ? restLabel(s.restSeconds || 90) : 'אוטומטית'}, טיימר, רטט, חימום, RIR`, [el('div', { class: 'card stack' }, [
+    restControl(ctx),
+    el('div', { class: 'divider' }),
     toggle('טיימר מנוחה אוטומטי', s.autoTimer !== false, (v) => ctx.saveSetting('autoTimer', v)),
     toggle('רטט במכשיר', s.vibrate !== false, (v) => ctx.saveSetting('vibrate', v)),
     toggle('צליל בסיום המנוחה (נשמע גם עם אוזניות)', s.soundAlert !== false, (v) => ctx.saveSetting('soundAlert', v)),
@@ -568,6 +570,67 @@ async function busy(e, label, fn) {
  * summoning a keyboard, missing the field, and fixing a typo; two big targets
  * and a held finger do not.
  */
+/**
+ * The rest between sets: worked out per exercise and goal, or one number
+ * chosen here for every work set. Typed, nudged by 15 s, or a preset.
+ */
+function restControl(ctx) {
+  const box = el('div', { class: 'stack rest-control' });
+  const paint = () => {
+    const s = ctx.settings;
+    const fixed = !!s.restFixed;
+    const sec = s.restSeconds || 90;
+    const set = async (patch) => {
+      for (const [k, v] of Object.entries(patch)) await ctx.saveSetting(k, v);
+      buzz(6);
+      paint();
+    };
+    const input = el('input', {
+      type: 'number', inputmode: 'numeric', min: String(REST_MIN), max: String(REST_MAX), step: '5',
+      value: String(sec), 'aria-label': 'מנוחה בשניות', class: 'rest-sec-in'
+    });
+    input.value = String(sec);
+    const commit = () => {
+      const v = Math.round(Number(input.value));
+      if (!(v >= REST_MIN && v <= REST_MAX)) {
+        toast(`בין ${REST_MIN} ל-${REST_MAX} שניות`, 'bad');
+        input.value = String(sec);
+        return;
+      }
+      if (v !== sec) set({ restSeconds: v });
+    };
+    input.addEventListener('change', commit);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+    const nudge = (d) => set({ restSeconds: Math.min(REST_MAX, Math.max(REST_MIN, sec + d)) });
+
+    box.replaceChildren(
+      el('div', { class: 'field-label', text: 'אורך מנוחה בין סטים' }),
+      el('div', { class: 'row', style: { gap: '8px' } }, [
+        el('button', { class: `chip grow${fixed ? '' : ' on'}`, 'aria-pressed': String(!fixed), onclick: () => set({ restFixed: false }) }, ['אוטומטי']),
+        el('button', { class: `chip grow${fixed ? ' on' : ''}`, 'aria-pressed': String(fixed), onclick: () => set({ restFixed: true, restSeconds: sec }) }, ['מספר קבוע'])
+      ]),
+      fixed
+        ? el('div', { class: 'stack' }, [
+          el('div', { class: 'stepper' }, [
+            el('div', { class: 'grow' }, [
+              el('span', { class: 'step-label', text: 'מנוחה' }),
+              el('div', { class: 'step-read' }, [input, el('small', { text: `שניות · ${restLabel(sec)}` })])
+            ]),
+            el('button', { class: 'step-btn', 'aria-label': 'הקטן מנוחה', onclick: () => nudge(-15) }, [icon(ICONS.minus, 18)]),
+            el('button', { class: 'step-btn', 'aria-label': 'הגדל מנוחה', onclick: () => nudge(15) }, [icon(ICONS.plus, 18)])
+          ]),
+          el('div', { class: 'row', style: { gap: '6px', flexWrap: 'wrap' } }, [45, 60, 90, 120, 180].map((p) => el('button', {
+            class: `chip${p === sec ? ' on' : ''}`, onclick: () => set({ restSeconds: p })
+          }, [restLabel(p)]))),
+          el('p', { class: 'tiny dim', style: { margin: 0, lineHeight: '1.55' }, text: 'אחרי כל סט עבודה, בכל התרגילים. סטי חימום נשארים 45 שניות, ובאימון עצמו אפשר עדיין לשנות לתרגיל מסוים (⋯ ← זמן מנוחה).' })
+        ])
+        : el('p', { class: 'tiny dim', style: { margin: 0, lineHeight: '1.55' }, text: 'לפי התרגיל והמטרה: תרגילים כבדים מקבלים יותר מנוחה, תרגילי בידוד פחות; "להתחזק" מאריך, "להתחטב" ו"לרדת במשקל" מקצרים.' })
+    );
+  };
+  paint();
+  return box;
+}
+
 function stepper(label, value, step, min, max, unit, onSave) {
   let v = Number(value) || min;
   const read = el('b', { class: 'num', text: String(v) });

@@ -11,7 +11,7 @@ import {
 } from './ui.js';
 import * as timer from './timer.js';
 import { getExercise, substitutes, sameMuscle, CATEGORIES, search } from './exercises.js';
-import { repRange, restFor, GOALS, goalList } from './programs.js';
+import { repRange, restFor, restAfterSet, restLabel, REST_MIN, REST_MAX, GOALS, goalList } from './programs.js';
 import {
   platesFor, warmupSets, PLATE_COLORS, oneRM, fmtW, fmtDuration,
   stepFor, roundToStep, round2, todayISO
@@ -204,7 +204,7 @@ async function openFeedMode(ctx) {
       s.done = Array.from({ length: s.sets }, (_, i) => getLog(s.ex, i + 1)).every(Boolean);
       await saveWorkout(W);
       if (ctx.settings.autoTimer !== false) {
-        timer.start(s.rest || restFor(goalList(ctx.settings), ex), `מנוחה · ${ex.name}`);
+        timer.start(restAfterSet(ctx.settings, s, ex), `מנוחה · ${ex.name}`);
       }
     },
     onFinish: () => finishFlow(ctx),
@@ -345,7 +345,7 @@ function toolsSheet(s, ex) {
     if (ex.bar) box.appendChild(item(ICONS.plate, 'מחשבון פלטות', 'איזה דיסקיות לשים על המוט', () => platesSheet(s, ex)));
     box.appendChild(item(ICONS.flame, s.warmups?.length ? 'הסר סטי חימום' : 'הוסף סטי חימום', 'סולם עליות עד משקל העבודה', () => toggleWarmup(s, ex)));
     box.appendChild(item(ICONS.swap, 'החלף תרגיל', 'המכונה תפוסה או משהו כואב', () => swapSheet(s, ex)));
-    box.appendChild(item(ICONS.timer, 'זמן מנוחה', `כרגע ${s.rest || ex.rest} שניות`, () => restSheet(s, ex)));
+    box.appendChild(item(ICONS.timer, 'זמן מנוחה', `כרגע ${restLabel(restAfterSet(CTX.settings, s, ex))}`, () => restSheet(s, ex)));
     box.appendChild(item(ICONS.muscle, 'שרירים ופרטים', 'מפת שרירים, היסטוריה וטיפים', () => detailSheet(ex)));
     box.appendChild(item(ICONS.note, 'הערת כיוונון', 'גובה ספסל, אחיזה, מספר מושב', () => noteSheet(ex)));
     box.appendChild(item(ICONS.plus, 'הוסף תרגיל לאימון', 'תרגיל נוסף שלא בתוכנית — מתיחה, בטן, כל דבר', () => addExerciseSheet()));
@@ -536,7 +536,7 @@ async function toggleSet(s, ex, order, refs) {
   /* rest timer */
   let rest = 0;
   if (CTX.settings.autoTimer !== false) {
-    rest = refs.isWarmup ? 45 : (s.rest || restFor(goalList(CTX.settings), ex));
+    rest = refs.isWarmup ? 45 : restAfterSet(CTX.settings, s, ex);
     timer.start(rest, `מנוחה · ${ex.name}`);
   }
 
@@ -739,6 +739,7 @@ function swapSheet(s, ex) {
       const prev = await lastSessionSets(id, W.id);
       s.ex = id;
       s.rest = restFor(goalList(CTX.settings), target);
+      s.restSet = false;
       s.warmups = [];
       if (prev.length) {
         const top = Math.max(...prev.map((p) => p.weight_kg));
@@ -807,25 +808,59 @@ function noteSheet(ex) {
   });
 }
 
+/**
+ * Rest for this exercise in this workout only. The first option is the
+ * default (the fixed rest from Settings, or the plan's); the others, or a
+ * number typed in, override it for this exercise until it is swapped.
+ */
 function restSheet(s, ex) {
   openSheet('זמן מנוחה', (close) => {
     const box = el('div', { class: 'stack' });
-    [60, 90, 120, 180, 240].forEach((sec) => {
+    const settings = CTX.settings;
+    const fallback = restAfterSet(settings, { ...s, restSet: false }, ex);
+    const current = restAfterSet(settings, s, ex);
+    const pick = async (sec, own) => {
+      s.rest = own ? sec : restFor(goalList(settings), ex);
+      s.restSet = own;
+      await saveWorkout(W);
+      close();
+      timer.start(sec, `מנוחה · ${ex.name}`);
+    };
+    box.appendChild(el('button', { class: `opt${s.restSet ? '' : ' on'}`, onclick: () => pick(fallback, false) }, [
+      el('div', { class: 'grow' }, [
+        el('b', { text: `ברירת המחדל · ${restLabel(fallback)}` }),
+        el('small', { text: settings.restFixed ? 'המנוחה הקבועה שבחרת בהגדרות' : 'לפי התרגיל והמטרה שלך' })
+      ])
+    ]));
+    [60, 90, 120, 180, 240].filter((sec) => sec !== fallback).forEach((sec) => {
       box.appendChild(el('button', {
-        class: `opt${s.rest === sec ? ' on' : ''}`,
-        onclick: async () => {
-          s.rest = sec;
-          await saveWorkout(W);
-          close();
-          timer.start(sec, `מנוחה · ${ex.name}`);
-        }
+        class: `opt${s.restSet && current === sec ? ' on' : ''}`,
+        onclick: () => pick(sec, true)
       }, [
         el('div', { class: 'grow' }, [
-          el('b', { text: `${sec >= 60 ? `${sec / 60} דקות` : `${sec} שניות`}` }),
+          el('b', { text: restLabel(sec) }),
           el('small', { text: sec >= 180 ? 'תרגילים מורכבים / כוח' : sec >= 120 ? 'מורכב בינוני' : 'תרגילי בידוד' })
         ])
       ]));
     });
+    /* any other number */
+    const input = el('input', {
+      type: 'number', inputmode: 'numeric', min: String(REST_MIN), max: String(REST_MAX), step: '5',
+      placeholder: 'שניות', 'aria-label': 'מנוחה בשניות', class: 'rest-own-in'
+    });
+    if (s.restSet && ![60, 90, 120, 180, 240].includes(current)) input.value = String(current);
+    box.appendChild(el('div', { class: 'row', style: { gap: '8px' } }, [
+      input,
+      el('button', {
+        class: 'btn grow', text: 'קבע לתרגיל הזה',
+        onclick: () => {
+          const sec = Math.round(Number(input.value));
+          if (!(sec >= REST_MIN && sec <= REST_MAX)) { toast(`בין ${REST_MIN} ל-${REST_MAX} שניות`, 'bad'); return; }
+          pick(sec, true);
+        }
+      })
+    ]));
+    box.appendChild(el('p', { class: 'tiny dim', style: { margin: 0 }, text: 'לכל האימונים: הגדרות ← התנהגות ← אורך מנוחה.' }));
     return box;
   });
 }

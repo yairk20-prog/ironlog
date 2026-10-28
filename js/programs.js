@@ -506,6 +506,24 @@ export function restFor(goal, exercise) {
   return Math.round((exercise?.rest ?? 90) * g.restMul);
 }
 
+/** Bounds of a rest someone types in: a quarter minute to ten minutes. */
+export const REST_MIN = 15;
+export const REST_MAX = 600;
+
+/**
+ * The rest after a work set, in seconds. A rest picked for this exercise
+ * during the workout wins; then the fixed rest chosen in Settings
+ * (restFixed + restSeconds); then the plan's own, by exercise and goal.
+ */
+export function restAfterSet(settings, slot, exercise) {
+  if (slot?.restSet && slot.rest > 0) return slot.rest;
+  if (settings?.restFixed && settings.restSeconds > 0) return settings.restSeconds;
+  return slot?.rest || restFor(goalList(settings), exercise);
+}
+
+/** 90 → "1:30 דק׳", 45 → "45 שניות". */
+export const restLabel = (sec) => (sec < 60 ? `${sec} שניות` : `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')} דק׳`);
+
 /* ==========================================================================
    Cardio days in the plan.
 
