@@ -149,7 +149,7 @@ export async function render(ctx) {
     toggle('טיימר מנוחה אוטומטי', s.autoTimer !== false, (v) => ctx.saveSetting('autoTimer', v)),
     toggle('רטט במכשיר', s.vibrate !== false, (v) => ctx.saveSetting('vibrate', v)),
     toggle('צליל בסיום המנוחה וספירה 3-2-1 (נשמע גם עם אוזניות)', s.soundAlert !== false, (v) => ctx.saveSetting('soundAlert', v)),
-    toggle('התראה לטלפון בסוף כל מנוחה (גם כשהמסך כבוי)', s.bgNotify === true, async (v) => {
+    toggle('התראות לטלפון: סוף מנוחה, ובאירובי כל מעבר שלב (גם כשהמסך כבוי)', s.bgNotify === true, async (v) => {
       if (v && 'Notification' in window && Notification.permission !== 'granted') {
         const perm = await Notification.requestPermission().catch(() => 'denied');
         if (perm !== 'granted') toast('ההתראות נחסמו בדפדפן/במכשיר — אפשר לאשר בהגדרות המערכת', 'bad');
@@ -622,7 +622,7 @@ function restControl(ctx) {
           el('div', { class: 'row', style: { gap: '6px', flexWrap: 'wrap' } }, [45, 60, 90, 120, 180].map((p) => el('button', {
             class: `chip${p === sec ? ' on' : ''}`, onclick: () => set({ restSeconds: p })
           }, [restLabel(p)]))),
-          el('p', { class: 'tiny dim', style: { margin: 0, lineHeight: '1.55' }, text: 'אחרי כל סט עבודה, בכל התרגילים. סטי חימום נשארים 45 שניות, ובאימון עצמו אפשר עדיין לשנות לתרגיל מסוים (⋯ ← זמן מנוחה).' })
+          el('p', { class: 'tiny dim', style: { margin: 0, lineHeight: '1.55' }, text: 'אחרי כל סט, בכל התרגילים — גם אחרי סטי חימום. באימון עצמו אפשר עדיין לשנות לתרגיל מסוים (עוד אפשרויות ← זמן מנוחה).' })
         ])
         : el('p', { class: 'tiny dim', style: { margin: 0, lineHeight: '1.55' }, text: 'לפי התרגיל והמטרה: תרגילים כבדים מקבלים יותר מנוחה, תרגילי בידוד פחות; "להתחזק" מאריך, "להתחטב" ו"לרדת במשקל" מקצרים.' })
     );

@@ -15,7 +15,7 @@
 import * as db from './db.js';
 import { getExercise } from './exercises.js';
 import { goalList, planDays } from './programs.js';
-import { fmtDuration, todayISO } from './logic.js';
+import { fmtDuration, fmtTime, todayISO } from './logic.js';
 
 export const ZONES = {
   warm: { name: 'חימום', color: '#FFC93D' },
@@ -203,6 +203,46 @@ export function kcalFor(run, elapsed, weightKg) {
 export function cardioElapsed(run, now = Date.now()) {
   const end = run.pausedAt || now;
   return Math.max(0, (end - run.startedAt - (run.pausedMs || 0)) / 1000);
+}
+
+/* ---------- what to tell the runner, and when ----------
+   Every phase change is known in advance — the timeline is wall-clock — so
+   the cues can be handed to the service worker ahead of time and shown as
+   notifications on time with the screen off and music playing. */
+
+const EASY = new Set(['rest', 'walk', 'recover']);
+
+/** The words for arriving at a phase. */
+export function cueFor(phase, next) {
+  const z = ZONES[phase.zone] || ZONES.steady;
+  const lead = EASY.has(phase.zone) ? 'עוברים למנוחה'
+    : phase.zone === 'cool' ? 'שחרור — כמעט סיימת'
+      : phase.zone === 'warm' ? 'חימום'
+        : 'משנים קצב';
+  return {
+    title: `${lead}: ${phase.label}`,
+    body: `${z.name} · ${fmtTime(phase.seconds)}${next ? ` · אחר כך: ${next.label}` : ''}`
+  };
+}
+
+/**
+ * The cues still ahead, with the moment each is due (epoch ms): every phase
+ * start after the current one, and the end. Nothing while paused — the
+ * times are not known until it resumes.
+ * @param {number} horizon only cues due within this many seconds
+ * @returns {Array<{id:string, at:number, title:string, body:string}>}
+ */
+export function upcomingCues(run, now = Date.now(), horizon = Infinity) {
+  if (!run || run.pausedAt || run.ending) return [];
+  const zero = run.startedAt + (run.pausedMs || 0);
+  const out = [];
+  let t = 0;
+  run.phases.forEach((phase, i) => {
+    if (i > 0) out.push({ id: `${run.id}:${i}`, at: zero + t * 1000, ...cueFor(phase, run.phases[i + 1]) });
+    t += phase.seconds;
+  });
+  out.push({ id: `${run.id}:end`, at: zero + t * 1000, title: 'סיימת את האימון', body: 'כל הכבוד — אפשר לשמור אותו באפליקציה' });
+  return out.filter((c) => c.at > now && c.at <= now + horizon * 1000);
 }
 
 /* ---------- the run in progress ---------- */

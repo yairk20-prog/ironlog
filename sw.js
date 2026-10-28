@@ -3,7 +3,7 @@
    Keep VERSION in step with BUILD in js/version.js; tools/e2e10.mjs fails the
    build if they drift, because the number shown in Settings is the only way
    anyone can tell from a phone whether an update actually landed. */
-const VERSION = 'ironlog-v5.18.0';
+const VERSION = 'ironlog-v5.19.0';
 
 /* Every request for code goes out with the browser's HTTP cache bypassed.
    Without this the service worker's "network-first" rule is a lie: fetch()
@@ -45,6 +45,7 @@ const SHELL = [
   './js/login.js',
   './js/rest.js',
   './js/cardio.js',
+  './js/gps.js',
   './js/screen-cardio.js',
   './js/body.js',
   './js/progress.js',
@@ -132,62 +133,89 @@ self.addEventListener('message', (e) => {
     e.waitUntil(notificationAction(e.data.action, e.data.data || {}, e.data.tag || ''));
   }
   if (e.data?.type === 'rest-schedule') e.waitUntil(scheduleRest(e.data));
-  if (e.data?.type === 'rest-cancel') cancelRest();
+  if (e.data?.type === 'rest-cancel') cancelGroup('rest');
+  if (e.data?.type === 'cardio-schedule') e.waitUntil(scheduleCardio(e.data));
+  if (e.data?.type === 'cardio-cancel') cancelGroup('cardio');
+  if (e.data?.type === 'cardio-status') e.source?.postMessage({ cardioStatus: { waiting: waitingIn('cardio'), last: lastShown.cardio || null } });
   /* for tools/e2e22.mjs: what is waiting, and what was last shown */
-  if (e.data?.type === 'rest-status') e.source?.postMessage({ restStatus: { waiting: restWait ? restWait.endAt : 0, last: lastRest } });
+  if (e.data?.type === 'rest-status') e.source?.postMessage({ restStatus: { waiting: waitingIn('rest') ? restEndAt : 0, last: lastShown.rest || null } });
 });
 
-/* ---------- end of rest ----------
-   The app says when the current rest ends (js/timer.js); this waits for it
-   and shows the notification — on time even with the screen off or the app
-   in the background, where the page's own clock is throttled. The wait is
-   held open with waitUntil, which Chrome allows for about five minutes;
-   the app hands a longer rest over again before then. A new rest, or the
-   rest being skipped, replaces or cancels the one waiting. */
-let restWait = null;
-let lastRest = null;
-let restGen = 0;   // a cancel or a newer schedule outdates one still setting up
+/* ---------- notifications at a set time ----------
+   The app says when something is due — the end of a rest (js/timer.js),
+   each phase change of a run and its end (js/screen-cardio.js) — and this
+   waits for it and shows the notification: on time with the screen off or
+   the app in the background, where the page's own clock is throttled or
+   frozen, and as a real notification it plays the phone's notification
+   sound, which comes through headphones over music. The wait is held open
+   with waitUntil, which Chrome allows for about five minutes; the app hands
+   over what is due within that window and hands it over again before it
+   runs out. A newer schedule for a group replaces the old one; a cancel
+   (rest skipped, run paused or ended) drops it. */
+const groups = {};      // group → { timers, resolve, gen }
+let lastShown = {};     // group → { title, body, at } — for the tests
 
-function cancelRest() {
-  restGen += 1;
-  if (!restWait) return;
-  clearTimeout(restWait.timer);
-  restWait.resolve();
-  restWait = null;
+const VIBRATE = [500, 200, 500, 200, 500];
+
+function cancelGroup(group) {
+  const g = groups[group] || (groups[group] = { timers: [], resolve: null, gen: 0 });
+  g.gen += 1;
+  g.timers.forEach(clearTimeout);
+  g.timers = [];
+  g.left = 0;
+  g.resolve?.();
+  g.resolve = null;
+  return g;
 }
 
-function scheduleRest({ endAt, label }) {
-  cancelRest();
-  const gen = restGen;
-  /* "rest is over" from the previous rest is old news now */
-  const clearOld = self.registration.getNotifications({ tag: 'ironlog-rest' })
-    .then((list) => list.forEach((n) => n.close())).catch(() => {});
+/**
+ * @param {string} group 'rest' | 'cardio'
+ * @param {Array<{at:number, title:string, body:string, tag:string, url:string}>} items
+ */
+function scheduleGroup(group, items, { clear = false } = {}) {
+  const g = cancelGroup(group);
+  const gen = g.gen;
+  /* a new rest: the last one's "rest is over" is old news now (a run's cues
+     are handed over again every minute — those stay until replaced) */
+  const tags = clear ? [...new Set(items.map((i) => i.tag))] : [];
+  const clearOld = Promise.all(tags.map((tag) => self.registration.getNotifications({ tag })
+    .then((list) => list.forEach((n) => n.close())).catch(() => {})));
   return clearOld.then(() => new Promise((resolve) => {
-    if (gen !== restGen) { resolve(); return; }
-    const timer = setTimeout(async () => {
-      restWait = null;
-      const what = String(label || '').replace(/^מנוחה\s*·\s*/, '');
-      const options = {
-        body: what ? `הסט הבא: ${what}` : 'הסט הבא מחכה',
-        tag: 'ironlog-rest',
-        renotify: true,
-        silent: false,
-        requireInteraction: false,
-        vibrate: [500, 200, 500, 200, 500],
-        dir: 'rtl',
-        lang: 'he',
-        icon: './icons/icon-192.png',
-        badge: './icons/icon-192.png',
-        timestamp: endAt,
-        /* the app is mid-workout: bring it forward as it is, no reload */
-        data: { url: './index.html#/workout', focusOnly: true }
-      };
-      lastRest = { title: 'המנוחה הסתיימה', body: options.body, at: Date.now() };
-      try { await self.registration.showNotification('המנוחה הסתיימה', options); } catch { /* no permission */ }
-      resolve();
-    }, Math.max(0, endAt - Date.now()));
-    restWait = { timer, resolve, endAt };
+    if (gen !== g.gen || !items.length) { resolve(); return; }
+    g.resolve = resolve;
+    g.left = items.length;
+    g.timers = items.map((item) => setTimeout(async () => {
+      lastShown[group] = { title: item.title, body: item.body, at: Date.now() };
+      try {
+        await self.registration.showNotification(item.title, {
+          body: item.body, tag: item.tag, renotify: true, silent: false, requireInteraction: false,
+          vibrate: VIBRATE, dir: 'rtl', lang: 'he',
+          icon: './icons/icon-192.png', badge: './icons/icon-192.png', timestamp: item.at,
+          /* the app is mid-workout: bring it forward as it is, no reload */
+          data: { url: item.url, focusOnly: true }
+        });
+      } catch { /* no permission */ }
+      if (gen === g.gen && --g.left === 0) { g.resolve = null; g.timers = []; resolve(); }
+    }, Math.max(0, item.at - Date.now())));
   }));
+}
+
+const waitingIn = (group) => groups[group]?.left || 0;
+
+let restEndAt = 0;
+function scheduleRest({ endAt, label }) {
+  restEndAt = endAt;
+  const what = String(label || '').replace(/^מנוחה\s*·\s*/, '');
+  return scheduleGroup('rest', [{
+    at: endAt, title: 'המנוחה הסתיימה', body: what ? `הסט הבא: ${what}` : 'הסט הבא מחכה',
+    tag: 'ironlog-rest', url: './index.html#/workout'
+  }], { clear: true });
+}
+
+function scheduleCardio({ cues }) {
+  return scheduleGroup('cardio', (cues || []).map((c) => ({
+    at: c.at, title: c.title, body: c.body, tag: 'ironlog-cardio', url: './index.html#/cardio'
+  })));
 }
 
 /* ---------- reminders ----------

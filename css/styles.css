@@ -1684,3 +1684,27 @@ body.no-tabs .timer-dock{bottom:calc(var(--safe-b) + 14px)}
 .bt-grid.compact .bt{padding:7px 1px 6px}
 .bt-grid.compact .bt-fig{width:70%}
 .pick-tag{margin-inline-start:7px;vertical-align:2px;padding:2px 6px;font-size:9.5px}
+
+/* ---- cardio: GPS check, live GPS line, notifications row, pocket mode ---- */
+.gps-status{display:flex;gap:12px;align-items:flex-start;padding:14px;background:var(--surface-2);border:1px solid var(--line)}
+.gps-status b{display:block;font-size:15px}
+.gps-status small{display:block;margin-top:4px;color:var(--text-2);line-height:1.55}
+.gps-dot{width:12px;height:12px;border-radius:50%;background:var(--text-3);flex:none;margin-top:5px}
+.gps-status.ok .gps-dot,.gps-live.ok .gps-dot{background:var(--ok);box-shadow:0 0 0 4px rgba(52,208,106,.18)}
+.gps-status.warn .gps-dot,.gps-live.warn .gps-dot{background:var(--warn)}
+.gps-status.bad .gps-dot,.gps-live.bad .gps-dot{background:var(--bad,#FF4D6D)}
+.gps-status.wait .gps-dot{animation:gpsPulse 1.2s ease-in-out infinite}
+@keyframes gpsPulse{50%{opacity:.25}}
+.gps-live{display:flex;align-items:center;gap:8px;font-size:var(--fs-tiny);font-weight:700;color:var(--text-2);line-height:1.45}
+.gps-live .gps-dot{margin-top:0;width:10px;height:10px}
+.gps-live .btn{flex:none}
+.notice-row{display:flex;align-items:center;gap:10px;padding:12px;background:var(--surface-2);border:1px solid var(--line)}
+.notice-row b{display:block;font-size:13.5px}
+.notice-row small{display:block;margin-top:2px;font-size:11.5px;color:var(--text-3);line-height:1.45}
+.notice-ico{width:34px;height:34px;display:grid;place-items:center;background:var(--surface);color:var(--accent);flex:none}
+.notice-row .btn,.notice-row .badge{flex:none}
+.pocket{position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;touch-action:none;user-select:none;-webkit-user-select:none}
+.pocket-clock{font-size:72px;font-weight:900;color:#2b2b2b;letter-spacing:-.04em}
+.pocket small{color:#3a3a3a;font-size:13px;font-weight:700}
+.pocket-hold{height:4px;width:0;background:#555}
+.pocket.holding .pocket-hold{width:60%;transition:width 2s linear}

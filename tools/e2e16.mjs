@@ -108,6 +108,13 @@ async function main() {
 
   /* start the planned session from the hero, then finish it */
   await page.locator('.hero .btn.primary', { hasText: 'התחל' }).click();
+  /* an outdoor session goes through the GPS check first (v5.19); this
+     context has no location, so start without it */
+  await page.waitForTimeout(500);
+  if (await page.locator('.gps-check').count()) {
+    out.heroGpsCheck = true;
+    await page.locator('.gps-check .btn.ghost', { hasText: 'בלי GPS' }).click();
+  }
   await page.waitForFunction(() => location.hash === '#/cardio', null, { timeout: 6000 });
   await pause(page, 600);
   out.runPlanned = await page.evaluate(async () => (await (await import('./js/cardio.js')).getActiveCardio())?.planned === true);

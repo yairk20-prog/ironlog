@@ -521,6 +521,9 @@ export function restAfterSet(settings, slot, exercise) {
   return slot?.rest || restFor(goalList(settings), exercise);
 }
 
+/** The rest after a warm-up set: the fixed rest when one is chosen, else 45 s. */
+export const warmupRest = (settings) => (settings?.restFixed && settings.restSeconds > 0 ? settings.restSeconds : 45);
+
 /** 90 → "1:30 דק׳", 45 → "45 שניות". */
 export const restLabel = (sec) => (sec < 60 ? `${sec} שניות` : `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')} דק׳`);
 

@@ -15,19 +15,48 @@ import { tile } from './screen-summary.js';
 import {
   CARDIO, ZONES, buildPhases, totalSeconds, phaseAt, kcalFor, cardioElapsed, cardioName, cardioPic,
   getActiveCardio, saveActiveCardio, clearActiveCardio, startCardio, finishCardio, paceOf,
-  recommendCardio, weeklyCardioMinutes, WEEKLY_CARDIO_TARGET, plannedCardioCursor, plannedProgram
+  recommendCardio, weeklyCardioMinutes, WEEKLY_CARDIO_TARGET, plannedCardioCursor, plannedProgram,
+  upcomingCues
 } from './cardio.js';
+import * as gps from './gps.js';
+import * as timer from './timer.js';
 
 let LOOP = null;     // the 250 ms ticker
 let WAKE = null;     // screen wake lock
 let WATCH = null;    // geolocation watch id
 let DEMO = null;     // photo crossfade
+let POCKET = null;   // closes the pocket-mode screen
 let LIVE = null;     // the run on screen — saved on the way out, so GPS
                      // distance since the last periodic save isn't lost
+
+/* ---------- phase notifications ----------
+   The service worker shows them (sw.js, group "cardio"); it can hold a wait
+   for about five minutes, so what is due in the next ~5 minutes is handed
+   over now and again every minute while the app runs — on any screen, not
+   only this one, so leaving the run screen does not silence the run. */
+const HORIZON = 280;
+let ARM = null;
+
+export function armCues(run) {
+  if (!timer.noticesOn() || !run || run.pausedAt || run.ending) {
+    timer.toWorker({ type: 'cardio-cancel' });
+    return false;
+  }
+  timer.toWorker({ type: 'cardio-schedule', cues: upcomingCues(run, Date.now(), HORIZON) });
+  if (!ARM) {
+    ARM = setInterval(async () => {
+      const live = LIVE || await getActiveCardio().catch(() => null);
+      if (!live || live.pausedAt || live.ending) { clearInterval(ARM); ARM = null; }
+      armCues(live);
+    }, 60000);
+  }
+  return true;
+}
 
 export function cleanup() {
   if (LIVE) saveActiveCardio(LIVE);
   LIVE = null;
+  POCKET?.();
   clearInterval(LOOP); LOOP = null;
   DEMO?.stop(); DEMO = null;
   if (WATCH != null) navigator.geolocation?.clearWatch(WATCH);
@@ -139,22 +168,122 @@ function programSheet(ctx, p) {
       } }, [
         el('div', { class: 'grow' }, [
           el('b', { text: 'מדידת מרחק וקצב ב-GPS' }),
-          el('small', { text: 'בריצה בחוץ. המדידה רצה כל עוד המסך הזה פתוח.' })
+          el('small', { text: 'בריצה או הליכה בחוץ — לפני היציאה נוודא שה-GPS באמת מחובר.' })
         ]),
         el('span', { class: 'opt-check on' }, [icon(ICONS.check, 16)])
       ]);
       box.appendChild(gpsRow);
     }
 
+    box.appendChild(noticeRow(ctx));
+
     box.appendChild(el('button', {
       class: 'btn primary full',
       onclick: async () => {
-        await startCardio(p.id, ctx.settings, { variant, gps });
+        /* outdoors with GPS: make sure it really works first */
+        if (gps) { gpsSheet(ctx, p, variant); return; }
+        await startCardio(p.id, ctx.settings, { variant, gps: false });
         close();
         buzz([0, 30, 60, 30]);
         ctx.reload();
       }
-    }, [icon(ICONS.play, 18), 'התחל']));
+    }, [icon(ICONS.play, 18), gps ? 'המשך — בדיקת GPS' : 'התחל']));
+    return box;
+  });
+}
+
+/**
+ * Start a program from outside this screen (the home screen's planned
+ * session): outdoors, through the same GPS check; then to the run.
+ */
+export async function startProgram(ctx, programId) {
+  const p = CARDIO[programId];
+  if (p.outdoor) { gpsSheet(ctx, p, null, () => ctx.go('cardio')); return; }
+  await startCardio(p.id, ctx.settings, { gps: false });
+  ctx.go('cardio');
+}
+
+/** "Notify me at every change" — on, or one tap to turn on. */
+function noticeRow(ctx) {
+  const row = el('div', { class: 'notice-row' });
+  const paint = () => {
+    const on = timer.noticesOn();
+    row.replaceChildren(
+      el('div', { class: 'notice-ico' }, [icon(ICONS.bell, 18)]),
+      el('div', { class: 'grow' }, [
+        el('b', { text: 'התראה בכל מעבר: מנוחה, שינוי קצב, סיום' }),
+        el('small', { text: on ? 'פעיל — עם רטט וצליל, גם כשהמסך כבוי ושומעים מוזיקה' : 'עם רטט וצליל, גם כשהמסך כבוי ושומעים מוזיקה' })
+      ]),
+      on ? el('span', { class: 'badge ok', text: 'פעיל' })
+        : el('button', {
+          class: 'btn sm primary', onclick: async (e) => {
+            e.currentTarget.disabled = true;
+            const why = await timer.askNotices(ctx.saveSetting);
+            if (why) toast(why, 'bad');
+            paint();
+          }
+        }, ['הפעל'])
+    );
+  };
+  paint();
+  return row;
+}
+
+/**
+ * Before an outdoor run: ask for the location, wait for a real fix, and say
+ * exactly what to do when there is none — the site can ask, but only the
+ * person can switch the phone's location on.
+ */
+function gpsSheet(ctx, p, variant, started = () => ctx.reload()) {
+  let stop = () => {};
+  openSheet('בדיקת GPS', (close) => {
+    const box = el('div', { class: 'stack gps-check' });
+    const status = el('div', { class: 'gps-status' });
+    const startBtn = el('button', { class: 'btn primary full', disabled: true }, [icon(ICONS.play, 18), 'התחל']);
+    const retry = el('button', { class: 'btn full', hidden: true }, [icon(ICONS.target, 18), 'בדוק שוב']);
+    let state = 'searching';
+
+    const paint = (st, fix) => {
+      state = st;
+      const d = gps.describe(st, fix?.coords?.accuracy);
+      status.className = `gps-status ${d.tone}`;
+      status.replaceChildren(
+        el('div', { class: 'gps-dot' }),
+        el('div', { class: 'grow' }, [el('b', { text: d.title }), el('small', { text: d.text })])
+      );
+      startBtn.disabled = !d.ok;
+      retry.hidden = !['denied', 'off', 'timeout', 'unsupported'].includes(st);
+    };
+    const look = () => { stop(); stop = gps.probe(paint); };
+
+    retry.addEventListener('click', look);
+    startBtn.addEventListener('click', async () => {
+      stop();
+      await startCardio(p.id, ctx.settings, { variant, gps: true });
+      close();
+      buzz([0, 30, 60, 30]);
+      started();
+    });
+
+    look();
+    /* the sheet closed or moved on, any way at all: stop asking for the location */
+    const guard = setInterval(() => {
+      if (!box.isConnected || document.querySelector('#sheet')?.hidden) { stop(); clearInterval(guard); }
+    }, 800);
+    box.append(
+      status,
+      startBtn,
+      retry,
+      el('p', { class: 'tiny dim', style: { margin: 0, lineHeight: '1.6' }, text: 'במהלך הריצה: כדי שהמרחק יימדד, הדפדפן צריך את המסך דולק — "מצב כיס" משאיר אותו שחור ונעול בכיס, חוסך סוללה, והמוזיקה ממשיכה. אם המסך בכל זאת כבה, הזמן וההתראות ממשיכים, והקטע הזה נמדד בקו ישר כשהמסך חוזר.' }),
+      el('button', {
+        class: 'btn ghost full', onclick: async () => {
+          stop();
+          await startCardio(p.id, ctx.settings, { variant, gps: false });
+          close();
+          started();
+        }
+      }, ['התחל בלי GPS (מרחק ידני בסוף)'])
+    );
     return box;
   });
 }
@@ -219,7 +348,7 @@ function runView(ctx, run) {
   const bar = el('div');
   const next = el('div', { class: 'cardio-next' });
   const stats = el('div', { class: 'cardio-stats' });
-  const gpsNote = el('p', { class: 'tiny dim', style: { margin: 0, textAlign: 'center' } });
+  const gpsNote = el('div', { class: 'gps-live' });
 
   const pauseBtn = el('button', { class: 'btn primary full cardio-pause', onclick: () => togglePause() });
   const skipBtn = el('button', { class: 'btn full', onclick: () => skip() }, [icon(ICONS.chevron, 17), 'דלג']);
@@ -227,7 +356,8 @@ function runView(ctx, run) {
   let lastIndex = -1;
   let lastPic = null;
   let lastSave = 0;
-  let lastFix = null;
+  let lastFixAt = 0;     // when the GPS last answered with a usable fix
+  let gpsProblem = null; // 'denied' | 'off' | null
 
   function paint() {
     const elapsed = cardioElapsed(run);
@@ -269,26 +399,80 @@ function runView(ctx, run) {
     pauseBtn.replaceChildren(icon(run.pausedAt ? ICONS.play : ICONS.pause, 18), el('span', { text: run.pausedAt ? 'המשך' : 'השהה' }));
     media.classList.toggle('paused', !!run.pausedAt);
 
+    if (run.gps) paintGps();
     if (Date.now() - lastSave > 5000) { lastSave = Date.now(); saveActiveCardio(run); }
   }
 
+  /* What the GPS is doing, in a line — and the one button that helps when it is not. */
+  let gpsShown = '';
+  function paintGps() {
+    let text;
+    let tone = '';
+    let fix = false;
+    if (gpsProblem) {
+      const d = gps.describe(gpsProblem);
+      text = `${d.title} — ${d.text}`;
+      tone = 'bad';
+      fix = true;
+    } else if (run.pausedAt) {
+      text = 'GPS · מושהה';
+    } else if (!lastFixAt) {
+      text = 'מחפש GPS…';
+      tone = 'warn';
+    } else if (Date.now() - lastFixAt > 20000) {
+      text = `אין אות GPS כבר ${Math.round((Date.now() - lastFixAt) / 1000)} שניות — בדוק שה"מיקום" דולק`;
+      tone = 'warn';
+      fix = true;
+    } else {
+      text = `GPS מחובר${run.gapM > 30 ? ` · ${Math.round(run.gapM)} מ׳ נמדדו בקו ישר כשהמסך היה כבוי` : ''}`;
+      tone = 'ok';
+    }
+    const key = `${tone}|${text}|${fix}`;
+    if (key === gpsShown) return;
+    gpsShown = key;
+    gpsNote.className = `gps-live ${tone}`;
+    gpsNote.replaceChildren(...[
+      el('span', { class: 'gps-dot' }),
+      el('span', { class: 'grow', text }),
+      fix ? el('button', { class: 'btn sm', onclick: () => watchGps() }, ['בדוק שוב']) : null
+    ].filter(Boolean));
+  }
+
   function announce(phase) {
+    /* With the app hidden the notification (sw.js) has already said it, on
+       time; a chime from a throttled page would only come late. */
+    if (document.hidden) return;
     chime();
     buzz([0, 120, 80, 120]);
     speak(phase.label);
+  }
+
+  /** Every whole kilometre: the distance and the pace so far. */
+  function split(km) {
+    const pace = paceOf(cardioElapsed(run), run.distanceM / 1000);
+    const text = `קילומטר ${km}${pace ? ` · קצב ממוצע ${pace}` : ''}`;
+    if (!document.hidden) { chime(); buzz([0, 150, 80, 150]); speak(text.replace(' · ', ', ')); }
+    if (timer.noticesOn()) {
+      navigator.serviceWorker?.ready.then((reg) => reg.showNotification(text, {
+        body: cardioName(run), tag: 'ironlog-split', renotify: true, silent: false,
+        vibrate: [300, 150, 300], dir: 'rtl', lang: 'he', icon: './icons/icon-192.png',
+        data: { url: './index.html#/cardio', focusOnly: true }
+      })).catch(() => {});
+    }
   }
 
   async function togglePause() {
     if (run.pausedAt) {
       run.pausedMs += Date.now() - run.pausedAt;
       run.pausedAt = null;
-      lastFix = null; // the gap while paused is not distance run
+      run.lastFix = null; // the gap while paused is not distance run
       acquireWake();
     } else {
       run.pausedAt = Date.now();
     }
     buzz(15);
     await saveActiveCardio(run);
+    armCues(run);   // paused: the cues are cancelled; resumed: re-timed
     paint();
   }
 
@@ -300,6 +484,7 @@ function runView(ctx, run) {
     run.pausedMs -= at.left * 1000;
     if (run.pausedAt) run.pausedAt = Date.now();
     await saveActiveCardio(run);
+    armCues(run);
     paint();
   }
 
@@ -311,32 +496,35 @@ function runView(ctx, run) {
     run.ending = true;
     if (!run.pausedAt) run.pausedAt = run.startedAt + run.pausedMs + total * 1000;
     await saveActiveCardio(run);
+    armCues(run);
     ctx.reload();
   }
 
-  /* GPS — accumulate only plausible movement: a fix worse than 35 m is
-     noise, a jump implying faster than 25 km/h is a GPS teleport, and under
-     4 m is standing still with a wobbling signal. */
-  if (run.gps && 'geolocation' in navigator) {
-    gpsNote.textContent = 'מחפש GPS…';
+  /* GPS: each usable fix adds plausible movement (gps.addFix); the last
+     fix lives on the run, so a reload or a frozen page bridges the gap. */
+  function watchGps() {
+    if (WATCH != null) navigator.geolocation?.clearWatch(WATCH);
+    WATCH = null;
+    gpsProblem = null;
+    gpsShown = '';
+    if (!gps.supported()) { gpsProblem = 'unsupported'; return; }
     WATCH = navigator.geolocation.watchPosition((pos) => {
-      const { latitude, longitude, accuracy } = pos.coords;
-      gpsNote.textContent = accuracy > 35 ? 'אות GPS חלש — מחכה לדיוק טוב יותר' : '';
-      if (run.pausedAt || accuracy > 35) return;
-      const fix = { lat: latitude, lon: longitude, t: pos.timestamp || Date.now() };
-      if (lastFix) {
-        const d = haversine(lastFix, fix);
-        const dt = Math.max(1, (fix.t - lastFix.t) / 1000);
-        if (d < 4) return;
-        if (d / dt < 7) run.distanceM += d;
-      }
-      lastFix = fix;
+      gpsProblem = null;
+      if (pos.coords.accuracy <= gps.GOOD_ACCURACY) lastFixAt = Date.now();
+      if (run.pausedAt) return;
+      const km = Math.floor(run.distanceM / 1000);
+      gps.addFix(run, { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy, t: pos.timestamp || Date.now() });
+      const now = Math.floor(run.distanceM / 1000);
+      if (now > km && now > (run.splitKm || 0)) { run.splitKm = now; split(now); }
     }, (err) => {
-      gpsNote.textContent = err.code === 1
-        ? 'אין הרשאת מיקום — אפשר להזין מרחק ידנית בסוף'
-        : 'GPS לא זמין כרגע — אפשר להזין מרחק ידנית בסוף';
+      if (err.code === 1) gpsProblem = 'denied';
+      else if (err.code === 2) gpsProblem = 'off';
     }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
   }
+  if (run.gps) watchGps();
+
+  /* The cues for the next few minutes go to the service worker now. */
+  armCues(run);
 
   acquireWake();
   REFRESH = () => { acquireWake(); paint(); };
@@ -350,13 +538,58 @@ function runView(ctx, run) {
     bar,
     next,
     stats,
-    gpsNote,
+    run.gps ? gpsNote : null,
     el('div', { class: 'cardio-controls' }, [pauseBtn, skipBtn]),
+    el('button', { class: 'btn full ghost', onclick: () => pocketMode(() => fmtTime(phaseAt(run.phases, cardioElapsed(run)).left)) }, [icon(ICONS.lock, 17), 'מצב כיס — מסך שחור ונעול']),
+    timer.noticesOn() ? null : noticeRow(ctx),
     el('p', {
       class: 'tiny dim', style: { margin: '2px 0 0', textAlign: 'center', lineHeight: '1.5' },
-      text: 'צליל ורטט בכל מעבר שלב — נשמע גם עם אוזניות. המסך נשאר דולק; אם הטלפון ננעל, הזמן ממשיך להימדד נכון.'
+      text: run.gps
+        ? 'בכל מעבר שלב: צליל, רטט והתראה לטלפון — גם עם מוזיקה באוזניות. למדידת מרחק המסך צריך להישאר דולק: "מצב כיס" שומר אותו שחור ונעול בכיס.'
+        : 'בכל מעבר שלב: צליל, רטט והתראה לטלפון — גם עם מוזיקה באוזניות ועם מסך כבוי.'
     })
   ]);
+}
+
+/**
+ * Pocket mode: the screen stays on (so the browser keeps the GPS going) but
+ * black and locked against a pocket's touches; holding a finger on it for
+ * two seconds brings the run back. Black pixels are off on most phone
+ * screens, so it costs little battery. The clock is drawn faintly, for a
+ * glance.
+ */
+function pocketMode(clockText) {
+  POCKET?.();
+  const clock = el('b', { class: 'pocket-clock num' });
+  const bar = el('div', { class: 'pocket-hold' });
+  const wrap = el('div', { class: 'pocket', role: 'dialog', 'aria-label': 'מצב כיס' }, [
+    clock,
+    el('small', { text: 'מצב כיס · החזק אצבע 2 שניות כדי לחזור' }),
+    bar
+  ]);
+  const paint = () => { clock.textContent = clockText(); };
+  const tick = setInterval(paint, 1000);
+  let hold = null;
+  const exit = () => {
+    clearInterval(tick);
+    clearTimeout(hold);
+    wrap.remove();
+    POCKET = null;
+  };
+  wrap.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    wrap.classList.add('holding');
+    hold = setTimeout(() => { buzz(30); exit(); }, 2000);
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => wrap.addEventListener(ev, () => {
+    clearTimeout(hold);
+    wrap.classList.remove('holding');
+  }));
+  wrap.addEventListener('contextmenu', (e) => e.preventDefault());
+  paint();
+  document.body.appendChild(wrap);
+  acquireWake();
+  POCKET = exit;
 }
 
 async function acquireWake() {
@@ -383,21 +616,13 @@ function speak(text) {
   } catch { /* speech is a bonus */ }
 }
 
-function haversine(a, b) {
-  const R = 6371000;
-  const rad = (x) => (x * Math.PI) / 180;
-  const dLat = rad(b.lat - a.lat);
-  const dLon = rad(b.lon - a.lon);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
-
 async function endEarly(ctx, run) {
   const ok = await confirmSheet('לסיים את האימון?', 'מה שעשית עד עכשיו יישמר.', 'סיים', false);
   if (!ok) return;
   if (!run.pausedAt) run.pausedAt = Date.now();
   run.ending = true;
   await saveActiveCardio(run);
+  armCues(run);
   ctx.reload();
 }
 

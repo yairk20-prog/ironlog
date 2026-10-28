@@ -8,7 +8,7 @@ import {
   DAY_TYPES, VENUES, VENUE_DAYS, restFor, goalList, resolveGoal, templateForIndex, planSlots, venueToday, sessionName, CHALLENGES,
   TEMPLATES, FUNCTIONAL, dayAt
 } from './programs.js';
-import { CARDIO, getActiveCardio, cardioElapsed, cardioPic, cardioLine, cardioDay, recommendCardio, plannedProgram, startCardio, buildPhases, totalSeconds } from './cardio.js';
+import { CARDIO, getActiveCardio, cardioElapsed, cardioPic, cardioLine, cardioDay, recommendCardio, plannedProgram, buildPhases, totalSeconds } from './cardio.js';
 import { dayCard, restDayCard, cardioDayCard } from './screen-plan.js';
 import { exerciseName, search, CATEGORIES } from './exercises.js';
 import { frameUrl, hasImages, thumb } from './media.js';
@@ -241,8 +241,8 @@ function heroPlannedCardio(ctx, up) {
     el('button', {
       class: 'btn primary full', style: { marginTop: '14px' },
       onclick: async () => {
-        await startCardio(p.id, ctx.settings, { gps: p.outdoor });
-        ctx.go('cardio');
+        const { startProgram } = await import('./screen-cardio.js');
+        await startProgram(ctx, p.id);
       }
     }, [icon(ICONS.play, 18), 'התחל']),
     el('div', { class: 'row', style: { marginTop: '8px', gap: '8px' } }, [

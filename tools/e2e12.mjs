@@ -207,7 +207,10 @@ async function main() {
   await page.waitForTimeout(600);
   await page.locator('.cardio-card', { hasText: 'ריצה קלה' }).click();
   await page.waitForTimeout(400);
-  await page.locator('#sheetBody .btn.primary', { hasText: 'התחל' }).click();
+  /* outdoors: through the GPS check (v5.19), which waits for a real fix */
+  await page.locator('#sheetBody .btn.primary', { hasText: 'בדיקת GPS' }).click();
+  await page.waitForSelector('.gps-check .btn.primary:not([disabled])', { timeout: 8000 });
+  await page.locator('.gps-check .btn.primary').click();
   await page.waitForTimeout(900);
   for (let i = 1; i <= 12; i++) {
     await ctx.setGeolocation({ latitude: 32.0853 + i * 0.000045, longitude: 34.7818, accuracy: 8 });

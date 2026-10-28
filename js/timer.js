@@ -244,7 +244,7 @@ export function setBgNotify(on) {
   else cancelNotice();
 }
 
-function toWorker(msg) {
+export function toWorker(msg) {
   try {
     const sw = navigator.serviceWorker;
     if (!sw) return false;
@@ -252,6 +252,22 @@ function toWorker(msg) {
     sw.ready.then((reg) => reg.active?.postMessage(msg)).catch(() => {});
     return true;
   } catch { return false; }
+}
+
+/** Notifications are on, and the phone allows them. */
+export const noticesOn = () => bgNotifyOn && 'Notification' in window && Notification.permission === 'granted';
+
+/**
+ * Turn the notifications on: ask the phone, then save the setting.
+ * @param {(key:string, value:any) => Promise<void>} save ctx.saveSetting
+ * @returns {Promise<string|null>} null when on, else why not (to show)
+ */
+export async function askNotices(save) {
+  if (!('Notification' in window)) return 'הדפדפן הזה לא תומך בהתראות';
+  const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission().catch(() => 'denied');
+  if (perm !== 'granted') return 'ההתראות נחסמו — אפשר לאשר אותן בהגדרות הטלפון';
+  await save('bgNotify', true);
+  return null;
 }
 
 function scheduleNotice() {

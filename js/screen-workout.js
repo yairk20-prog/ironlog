@@ -11,7 +11,7 @@ import {
 } from './ui.js';
 import * as timer from './timer.js';
 import { getExercise, substitutes, sameMuscle, CATEGORIES, search } from './exercises.js';
-import { repRange, restFor, restAfterSet, restLabel, REST_MIN, REST_MAX, GOALS, goalList } from './programs.js';
+import { repRange, restFor, restAfterSet, warmupRest, restLabel, REST_MIN, REST_MAX, GOALS, goalList } from './programs.js';
 import {
   platesFor, warmupSets, PLATE_COLORS, oneRM, fmtW, fmtDuration,
   stepFor, roundToStep, round2, todayISO
@@ -546,7 +546,7 @@ async function toggleSet(s, ex, order, refs) {
   /* rest timer */
   let rest = 0;
   if (CTX.settings.autoTimer !== false) {
-    rest = refs.isWarmup ? 45 : restAfterSet(CTX.settings, s, ex);
+    rest = refs.isWarmup ? warmupRest(CTX.settings) : restAfterSet(CTX.settings, s, ex);
     timer.start(rest, `מנוחה · ${ex.name}`);
   }
 
@@ -570,10 +570,8 @@ let noticeOfferedFor = null;   // the workout whose rest screen already offered 
 
 /** Turn on the notification at the end of each rest (asks for permission). */
 async function enableRestNotice() {
-  if (!('Notification' in window)) { toast('הדפדפן הזה לא תומך בהתראות', 'bad'); return false; }
-  const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission().catch(() => 'denied');
-  if (perm !== 'granted') { toast('ההתראות נחסמו — אפשר לאשר אותן בהגדרות הטלפון', 'bad'); return false; }
-  await CTX.saveSetting('bgNotify', true);
+  const why = await timer.askNotices(CTX.saveSetting);
+  if (why) { toast(why, 'bad'); return false; }
   toast('תקבל התראה בסוף כל מנוחה', 'ok');
   return true;
 }
