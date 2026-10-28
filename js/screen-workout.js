@@ -22,6 +22,7 @@ import {
   getNote, setNote, addFreeSlot
 } from './session.js';
 import { demo, thumb, exerciseDetail, hasImages } from './media.js';
+import { dayWater } from './food.js';
 
 /** In-memory view state for the session; rebuilt on every mount. */
 let W = null;          // workout record
@@ -163,7 +164,7 @@ async function openFeedMode(ctx) {
   let glassesLeft = 0;
   try {
     const today = await db.byIndex('nutrition_logs', 'date', IDBKeyRange.only(todayISO()));
-    const ml = today?.[0]?.water_ml || 0;
+    const ml = dayWater(today?.[0]);
     const targetMl = ctx.settings.waterTarget || 3000;
     glassesLeft = Math.max(0, Math.round((targetMl - ml) / 250));
   } catch { /* the nutrition log is optional */ }
@@ -564,7 +565,7 @@ async function showRest({ slot: s, exercise: ex, allDone }) {
   let glassesLeft = 0;
   try {
     const today = await db.byIndex('nutrition_logs', 'date', IDBKeyRange.only(todayISO()));
-    const ml = today?.[0]?.water_ml || 0;
+    const ml = dayWater(today?.[0]);
     const targetMl = CTX.settings.waterTarget || 3000;
     glassesLeft = Math.max(0, Math.round((targetMl - ml) / 250));
   } catch { /* the nutrition log is optional */ }

@@ -85,6 +85,7 @@ export const ICONS = {
   camera: '<path d="M4 8h3l2-3h6l2 3h3v12H4z"/><circle cx="12" cy="13" r="4"/>',
   scale: '<path d="M5 7h14l2 13H3z"/><path d="M9 7a3 3 0 0 1 6 0"/>',
   glass: '<path d="M6 3h12l-1.5 17h-9z"/><path d="M6.6 10h10.8"/>',
+  cup: '<path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M8 3.5v2.5M12 3.5v2.5"/>',
   /* A figure standing tall, and a figure folded over a reach: the two
      off-plan sessions read instantly as what they are at 22px. */
   posture: '<circle cx="12" cy="4" r="2"/><path d="M12 7v8M8 10h8M9.5 21l2.5-6 2.5 6"/>',

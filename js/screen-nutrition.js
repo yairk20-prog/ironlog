@@ -9,7 +9,8 @@ import * as db from './db.js';
 import { el, icon, ICONS, toast, openSheet, closeSheet, confirmSheet, buzz } from './ui.js';
 import {
   parseMeal, searchFoods, foodById, foodCount, POPULAR, norm, unitsFor, defaultPortion,
-  portion, portionForGrams, foodFromItem, makeFood, foodFromAiItem, isKnownFood, describeAmount
+  portion, portionForGrams, foodFromItem, makeFood, foodFromAiItem, isKnownFood, describeAmount,
+  hydration, itemWater, drinksWater, dayWater, isAlcohol
 } from './food.js';
 import * as ai from './ai.js';
 import * as reminders from './reminders.js';
@@ -211,7 +212,7 @@ function recentDays(ctx, date, logs, proteinFor) {
         el('div', { class: 'rd-nums' }, [
           el('b', { class: 'num', text: `${Math.round(log.calories_consumed || 0)} קק״ל` }),
           el('span', { class: `rd-p${hit ? ' hit' : ''}` }, [hit ? icon(ICONS.check, 12) : null, `${Math.round(log.protein_grams || 0)}/${Math.round(target)} ג׳ חלבון`]),
-          log.water_ml ? el('span', { class: 'rd-w', text: `${Math.round(log.water_ml / 250)} כוסות` }) : null
+          dayWater(log) ? el('span', { class: 'rd-w', text: `${Math.round(dayWater(log) / 250)} כוסות` }) : null
         ]),
         el('small', { text: names.slice(0, 5).join(' · ') + (names.length > 5 ? ` ועוד ${names.length - 5}` : '') })
       ]),
@@ -245,7 +246,14 @@ async function copyMealToToday(ctx, items, meal) {
 
 async function loadDay(date) {
   const rows = await db.byIndex('nutrition_logs', 'date', IDBKeyRange.only(date));
-  if (rows.length) return normalize(rows[0]);
+  if (rows.length) {
+    const day = normalize(rows[0]);
+    /* Logged before drinks counted as water: store the water they brought,
+       so the quick-add card and the reminders (which read the record as
+       stored) see the same total as this screen. */
+    if ((rows[0].drinks_ml ?? -1) !== day.drinks_ml) await saveDay(day);
+    return day;
+  }
   return normalize({ id: db.uid('n'), date });
 }
 
@@ -263,9 +271,17 @@ function normalize(row) {
     carbs_grams: row.carbs_grams || 0,
     fat_grams: row.fat_grams || 0,
     water_ml: row.water_ml || 0,
-    items: (row.items || []).map((i) => ({ meal: i.meal || 'other', ...i })),
+    items: (row.items || []).map((i) => {
+      const it = { meal: i.meal || 'other', ...i };
+      if (it.water_ml == null) {
+        const w = itemWater(it);
+        if (w) it.water_ml = w;
+      }
+      return it;
+    }),
     ai_raw_analysis: row.ai_raw_analysis || null
   };
+  day.drinks_ml = drinksWater(day.items);
   waterAtLoad.set(day, day.water_ml);
   return day;
 }
@@ -278,6 +294,8 @@ function recompute(day) {
   day.protein_grams = round2(t.p);
   day.carbs_grams = round2(t.c);
   day.fat_grams = round2(t.f);
+  /* coffee, tea, juice… count toward the day's water (see hydration) */
+  day.drinks_ml = drinksWater(day.items);
 }
 
 const saveDay = async (day) => {
@@ -341,7 +359,14 @@ async function quickWaterSheet(ctx) {
       el('div', { class: 'row', style: { gap: '8px' } }, [
         el('button', { class: 'btn grow', onclick: () => change(BOTTLE_ML, 'בקבוק נוסף') }, [icon(ICONS.bottle, 16), 'בקבוק']),
         el('button', { class: 'btn grow ghost', onclick: () => change(-GLASS_ML, 'כוס הורדה') }, [icon(ICONS.minus, 16), 'בטל כוס'])
-      ])
+      ]),
+      el('button', {
+        class: 'btn full ghost', onclick: async () => {
+          /* It was coffee, not water: take the glass back and log the drink. */
+          await change(-GLASS_ML, 'הכוס הורדה — בחר את המשקה');
+          drinkSheet(ctx, await loadDay(todayISO()));
+        }
+      }, [icon(ICONS.cup, 16), 'זה היה קפה, תה או משקה אחר'])
     ]);
   });
 }
@@ -380,7 +405,7 @@ function mealCard(ctx, day, meal, { isToday = true } = {}) {
         foodIcon(it.cat),
         el('div', { class: 'grow' }, [
           el('b', { text: it.label }),
-          el('small', { text: `${it.amount || ''} · ${Math.round(it.kcal)} קק״ל · ${round2(it.p)} ג׳ חלבון` })
+          el('small', { text: `${it.amount || ''} · ${Math.round(it.kcal)} קק״ל · ${round2(it.p)} ג׳ חלבון${it.water_ml ? ` · ${Math.round(it.water_ml)} מ״ל למים` : ''}` })
         ])
       ]),
       el('button', {
@@ -491,9 +516,15 @@ const BOTTLE_ML = 750;
 function waterCard(ctx, day, s) {
   const targetMl = s.waterTarget || 3000;
   const targetGlasses = Math.max(1, Math.round(targetMl / GLASS_ML));
-  const drunk = day.water_ml / GLASS_ML;
-  const full = Math.floor(drunk + 0.001);
-  const pct = Math.min(1, day.water_ml / targetMl);
+  /* Glasses and bottles, plus the water in coffee, tea and other drinks
+     logged with the meals. */
+  const totalMl = day.water_ml + (day.drinks_ml || 0);
+  const full = Math.floor(totalMl / GLASS_ML + 0.001);
+  /* The glasses that are plain water come first; the rest of the filled
+     ones were drunk as something else, and are taken back by editing that
+     drink, not by tapping the glass. */
+  const plain = Math.min(full, Math.floor(day.water_ml / GLASS_ML + 0.001));
+  const pct = Math.min(1, totalMl / targetMl);
   const left = Math.max(0, targetGlasses - full);
   const litres = (ml) => (Math.round(ml / 100) / 10).toLocaleString('he-IL');
 
@@ -516,11 +547,15 @@ function waterCard(ctx, day, s) {
   const glasses = el('div', { class: 'glasses' });
   for (let i = 0; i < targetGlasses; i++) {
     const filled = i < full;
+    const fromDrink = filled && i >= plain;
     glasses.appendChild(el('button', {
-      class: `glass${filled ? ' full' : ''}`,
-      'aria-label': filled ? `כוס ${i + 1}, שתויה` : `כוס ${i + 1}`,
-      onclick: () => add(filled ? -GLASS_ML : (i + 1 - full) * GLASS_ML)
-    }, [icon(ICONS.glass, 20)]));
+      class: `glass${filled ? ' full' : ''}${fromDrink ? ' drink' : ''}`,
+      'aria-label': fromDrink ? `כוס ${i + 1}, משתייה אחרת` : filled ? `כוס ${i + 1}, שתויה` : `כוס ${i + 1}`,
+      onclick: () => {
+        if (fromDrink) { toast('הכוס הזו מהשתייה שברשימת הארוחות — לשינוי, ערוך או מחק את המשקה שם'); return; }
+        add(filled ? -GLASS_ML : (i + 1 - full) * GLASS_ML);
+      }
+    }, [icon(fromDrink ? ICONS.cup : ICONS.glass, 20)]));
   }
 
   /* The tank fills as the day does — the one picture that says "drink"
@@ -546,19 +581,63 @@ function waterCard(ctx, day, s) {
           el('span', { class: `badge ${left ? 'water' : 'ok'}`, text: left ? `עוד ${left} כוסות` : 'הושלם' })
         ]),
         el('div', { class: 'water-line' }, [
-          el('b', { class: 'num', text: litres(day.water_ml) }),
+          el('b', { class: 'num', text: litres(totalMl) }),
           el('span', { text: ` מתוך ${litres(targetMl)} ליטר` })
         ]),
+        day.drinks_ml ? el('div', { class: 'water-drinks' }, [
+          icon(ICONS.cup, 14),
+          el('span', { text: `כולל ${Math.round(day.drinks_ml)} מ״ל מהשתייה שבארוחות` })
+        ]) : null,
         el('button', { class: 'btn water-add full', onclick: () => add(GLASS_ML) }, [icon(ICONS.plus, 18), 'כוס מים']),
         el('div', { class: 'row', style: { gap: '8px' } }, [
           el('button', { class: 'btn sm grow', onclick: () => add(BOTTLE_ML) }, [icon(ICONS.bottle, 15), 'בקבוק']),
-          full ? el('button', { class: 'btn sm ghost', 'aria-label': 'בטל כוס אחרונה', onclick: () => add(-GLASS_ML) }, [icon(ICONS.minus, 15), 'בטל']) : null
+          day.water_ml > 0 ? el('button', { class: 'btn sm ghost', 'aria-label': 'בטל כוס אחרונה', onclick: () => add(-GLASS_ML) }, [icon(ICONS.minus, 15), 'בטל']) : null
         ])
       ])
     ]),
     glasses,
-    el('div', { class: 'tiny dim', text: `כוס = ${GLASS_ML} מ״ל · בקבוק = ${BOTTLE_ML} מ״ל` })
+    el('button', { class: 'btn sm full water-other', onclick: () => drinkSheet(ctx, day) }, [icon(ICONS.cup, 16), 'שתיתי קפה, תה או משקה אחר']),
+    el('div', { class: 'tiny dim', text: `כוס = ${GLASS_ML} מ״ל · בקבוק = ${BOTTLE_ML} מ״ל · קפה, תה ושתייה אחרת נספרים לפי כמות המים שבהם` })
   ]);
+}
+
+/* ---------- other drinks ---------- */
+
+/* What people drink besides water, in the order they reach for it. */
+const DRINKS = [
+  'קפה שחור', 'קפה הפוך', 'תה', 'סודה', 'מים בטעמים', 'חלב 1%', 'חלב 3%', 'מיץ תפוזים',
+  'קולה', 'קולה זירו', 'לימונדה', 'שוקו', 'חלב סויה', 'חלב שקדים', 'משקה ספורט', 'משקה אנרגיה', 'שייק פירות'
+].map((n) => foodById(`f:${n}`)).filter(Boolean);
+
+/**
+ * Coffee, tea, juice… logged like any food (calories and all) on the meal
+ * the clock is on, and its water counted toward the day's.
+ */
+function drinkSheet(ctx, day) {
+  const isToday = day.date === todayISO();
+  const meal = MEALS.find((m) => m.id === (isToday ? currentMeal() : 'other'));
+  const flow = { ctx, day, meal, added: [] };
+  openDrinks(flow);
+}
+
+function openDrinks(flow) {
+  page(flow, 'שתייה אחרת', () => {
+    const list = el('div', { class: 'food-list' });
+    const here = () => openDrinks(flow);
+    const row = (f) => foodRow(f, () => portionSheet(flow, f, { back: here }));
+    customFoods().then((mine) => {
+      const own = mine.filter((f) => f.cat === 'drink' || f.ml);
+      if (own.length) {
+        list.prepend(...[el('div', { class: 'section-title', text: 'המשקאות שלי' }), ...own.slice(0, 6).map(row)]);
+      }
+    });
+    DRINKS.forEach((f) => list.appendChild(row(f)));
+    return [
+      el('p', { class: 'tiny dim', style: { margin: 0, lineHeight: '1.55' }, text: 'נרשם עם הקלוריות שלו, ונספר במים לפי כמות המים שבו: קפה ותה כמעט במלואם, מיץ, חלב ומשקה מוגז כ-90%. אלכוהול לא נספר.' }),
+      list,
+      el('button', { class: 'btn full ghost', onclick: () => searchSheet(flow) }, [icon(ICONS.search, 18), 'משקה אחר — חיפוש במאגר'])
+    ];
+  }, { back: null });
 }
 
 /**
@@ -728,7 +807,7 @@ async function learnFoods(items) {
 function page(flow, title, build, { back = () => mealSheet(flow.ctx, flow.day, flow.meal, flow) } = {}) {
   openSheet(title, (close) => {
     const box = el('div', { class: 'stack' });
-    box.appendChild(el('button', { class: 'linkish add-back', onclick: back }, [icon(ICONS.chevron, 16), 'חזרה']));
+    if (back) box.appendChild(el('button', { class: 'linkish add-back', onclick: back }, [icon(ICONS.chevron, 16), 'חזרה']));
     const body = build(close);
     (Array.isArray(body) ? body : [body]).filter(Boolean).forEach((n) => box.appendChild(n));
     if (flow.added.length) box.appendChild(doneBar(flow, close));
@@ -802,7 +881,7 @@ function foodRow(food, onclick, extra = null) {
       foodIcon(food.cat),
       el('div', { class: 'grow' }, [
         el('b', { text: food.name }),
-        el('small', { text: `${it.amount} · ${macroLine(it)}` })
+        el('small', { text: `${it.amount} · ${macroLine(it)}${it.water_ml ? ` · ${it.water_ml} מ״ל למים` : ''}` })
       ]),
       food.custom ? el('span', { class: 'badge', text: food.src === 'ai' ? 'AI' : 'שלי' }) : null
     ]),
@@ -901,6 +980,9 @@ function portionSheet(flow, food, { back, grams = null, onSave = null } = {}) {
     /* What the amount is, in the other language: grams said as a plate or a
        cup, a plate said in grams. */
     const grams_ = el('div', { class: 'amount-like' });
+    /* A drink says how much it adds to the day's water. */
+    const hy = hydration(food);
+    const waterNote = el('div', { class: 'water-note' });
 
     const step = () => (unit.id === 'g' ? (qty >= 100 ? 10 : 5) : 0.5);
     const draw = () => {
@@ -936,6 +1018,12 @@ function portionSheet(flow, food, { back, grams = null, onSave = null } = {}) {
         ? (like ? [icon(ICONS.plate, 15), el('span', { text: `זה בערך ${like}` })] : [])
         : [el('span', { text: `= ${Math.round(it.grams)} ${food.ml ? 'מ״ל' : 'גרם'}` })]));
       grams_.hidden = !grams_.childNodes.length;
+      waterNote.replaceChildren(...(it.water_ml
+        ? [icon(ICONS.glass, 15), el('span', { text: `נספר במים: ${it.water_ml} מ״ל` })]
+        : (food.ml || food.cat === 'drink') && !hy && isAlcohol(food.name)
+          ? [el('span', { text: 'משקה אלכוהולי — לא נספר במים' })]
+          : []));
+      waterNote.hidden = !waterNote.childNodes.length;
     };
     const cell = (label, value, unitText, cls) => el('div', { class: `macro-cell ${cls}` }, [
       el('small', { text: label }), el('b', { class: 'num', text: String(value) }), el('span', { text: unitText })
@@ -989,6 +1077,7 @@ function portionSheet(flow, food, { back, grams = null, onSave = null } = {}) {
         el('button', { class: 'qty-btn', 'aria-label': 'יותר', onclick: () => nudge(1) }, [icon(ICONS.plus, 18)])
       ]),
       grams_,
+      waterNote,
       grid,
       go
     ];
@@ -1202,12 +1291,22 @@ function photoBody(flow) {
 }
 
 /** AI rows arrive as whatever the model wrote; make them numbers. */
-const cleanItem = (i) => ({
-  label: String(i.label || 'פריט'), amount: String(i.amount || 'מנה'), cat: i.cat || 'dish',
-  kcal: round1(Number(i.kcal) || 0), p: round1(Number(i.p) || 0), c: round1(Number(i.c) || 0), f: round1(Number(i.f) || 0),
-  ...(Number(i.grams) > 0 ? { grams: Number(i.grams) } : {}),
-  src: 'ai'
-});
+const cleanItem = (i) => {
+  const item = {
+    label: String(i.label || 'פריט'), amount: String(i.amount || 'מנה'), cat: i.cat || 'dish',
+    kcal: round1(Number(i.kcal) || 0), p: round1(Number(i.p) || 0), c: round1(Number(i.c) || 0), f: round1(Number(i.f) || 0),
+    ...(Number(i.grams) > 0 ? { grams: Number(i.grams) } : {}),
+    src: 'ai'
+  };
+  /* A drink the AI measured counts toward the day's water, by the same
+     rule as the database's drinks (its solids are not water). */
+  if (item.cat === 'drink' && item.grams) {
+    const w = Math.round(item.grams * hydration({ cat: 'drink', name: item.label, ml: true,
+      p: (item.p / item.grams) * 100, c: (item.c / item.grams) * 100, f: (item.f / item.grams) * 100 }));
+    if (w > 0) item.water_ml = w;
+  }
+  return item;
+};
 
 /** Detected or parsed items, each removable, with the total under them. */
 function itemRows(items, onRemove) {

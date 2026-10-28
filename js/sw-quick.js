@@ -9,7 +9,9 @@
 
    It writes the same nutrition_logs record the app writes (same fields,
    same id shape, the local date as the key) and only ever touches water_ml,
-   so it cannot disturb food logged in the app.
+   so it cannot disturb food logged in the app. The day's whole water is
+   water_ml plus drinks_ml — what coffee, tea and other drinks logged as
+   food brought (the app keeps drinks_ml in step with the items).
    ========================================================================== */
 
 (function (scope) {
@@ -21,6 +23,9 @@
     const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
     return z.toISOString().slice(0, 10);
   }
+
+  /** Glasses and bottles plus the water in logged drinks. */
+  const totalWater = (rec) => (rec ? (rec.water_ml || 0) + (rec.drinks_ml || 0) : 0);
 
   const uid = () => `n_${(scope.crypto && scope.crypto.randomUUID) ? scope.crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36)}`;
 
@@ -93,7 +98,7 @@
       const s = await settings(db, ['waterTarget', 'reminderTargets', 'quickCard']);
       const waterTarget = s.waterTarget || 3000;
       const proteinTarget = (s.reminderTargets && s.reminderTargets.protein_target) || null;
-      const water = (rec && rec.water_ml) || 0;
+      const water = totalWater(rec);
       const protein = Math.round((rec && rec.protein_grams) || 0);
       const glasses = Math.floor(water / GLASS_ML + 0.001);
       const total = Math.max(1, Math.round(waterTarget / GLASS_ML));
@@ -147,7 +152,7 @@
         body: JSON.stringify({
           action: 'progress', id: s.pushId,
           progress: {
-            date: rec.date, water_ml: rec.water_ml || 0, protein: rec.protein_grams || 0,
+            date: rec.date, water_ml: totalWater(rec), protein: rec.protein_grams || 0,
             water_target: t.water_target || 3000, protein_target: t.protein_target || 120
           }
         })
@@ -158,5 +163,5 @@
     }
   }
 
-  scope.IronlogQuick = { GLASS_ML, todayISO, addWater, status, cardNotification, syncProgress };
+  scope.IronlogQuick = { GLASS_ML, todayISO, totalWater, addWater, status, cardNotification, syncProgress };
 })(self);

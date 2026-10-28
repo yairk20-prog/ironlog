@@ -16,6 +16,8 @@
          d  = a normal portion in grams, when the food has no natural unit
          u  = extra household measures, { label: grams }
          ml = measured by volume (drinks are, by category)
+         hy = share of the volume that counts as drinking water, when the
+              general rule (see hydration) is wrong for it — alcohol
    Sources: USDA FoodData Central and Israeli package labels, rounded. */
 const ROWS = [
   /* ---- protein ---- */
@@ -209,6 +211,9 @@ const ROWS = [
   ['sweet', 'גלידה', 'גלידות|כדור גלידה|ארטיק', 207, 3.5, 24, 11, { d: 120, u: { 'כדור': 60 } }],
 
   /* ---- drinks ---- */
+  ['drink', 'מים', 'כוס מים|מים מינרליים|בקבוק מים|מי ברז', 0, 0, 0, 0, { d: 250, u: { 'כוס': 250, 'בקבוק': 750 } }],
+  ['drink', 'סודה', 'מים מוגזים|מי סודה|סודה לשתייה', 0, 0, 0, 0, { d: 250, u: { 'כוס': 250, 'בקבוק': 500 } }],
+  ['drink', 'מים בטעמים', 'מים בטעם|נביעות בטעמים|מי עדן בטעמים', 8, 0, 2, 0, { d: 500, u: { 'בקבוק': 500, 'כוס': 250 } }],
   ['drink', 'קולה', 'קוקה קולה|קוקה-קולה|פפסי|משקה מוגז|שתייה מתוקה', 42, 0, 10.6, 0, { d: 330, u: { 'כוס': 240, 'פחית': 330, 'בקבוק חצי': 500 } }],
   ['drink', 'קולה זירו', 'קולה דיאט|זירו|דיאט|משקה דיאט', 0.4, 0, 0, 0, { d: 330, u: { 'כוס': 240, 'פחית': 330 } }],
   ['drink', 'מיץ תפוזים', 'מיץ|מיץ טבעי|מיץ סחוט', 45, 0.7, 10.4, 0.2, { d: 240, u: { 'כוס': 240 } }],
@@ -217,8 +222,8 @@ const ROWS = [
   ['drink', 'שייק פירות', 'סמותי|שייק בננה', 60, 1, 14, 0.3, { d: 300, u: { 'כוס': 300 } }],
   ['drink', 'משקה ספורט', 'משקה איזוטוני|גטורייד|פאוורייד', 26, 0, 6.4, 0, { d: 500, u: { 'בקבוק': 500 } }],
   ['drink', 'משקה אנרגיה', 'רד בול|XL|אקס אל|בלו', 45, 0, 11, 0, { d: 250, u: { 'פחית': 250 } }],
-  ['drink', 'בירה', 'בירות|גולדסטאר|קרלסברג|היינקן', 42, 0.45, 3.3, 0, { d: 330, u: { 'בקבוק': 330, 'חצי ליטר': 500 } }],
-  ['drink', 'יין', 'יין אדום|יין לבן|כוס יין', 83, 0.1, 2.6, 0, { d: 150, u: { 'כוס': 150 } }],
+  ['drink', 'בירה', 'בירות|גולדסטאר|קרלסברג|היינקן', 42, 0.45, 3.3, 0, { d: 330, hy: 0, u: { 'בקבוק': 330, 'חצי ליטר': 500 } }],
+  ['drink', 'יין', 'יין אדום|יין לבן|כוס יין', 83, 0.1, 2.6, 0, { d: 150, hy: 0, u: { 'כוס': 150 } }],
   ['drink', 'קפה הפוך', 'קפוצ׳ינו|הפוך|קפה עם חלב|לאטה|נס קפה', 45, 2.5, 4, 2, { g: 200, ul: 'כוס' }],
   ['drink', 'תה', 'תה ירוק|תה צמחים|חליטה', 1, 0, 0.2, 0, { d: 240, u: { 'כוס': 240 } }],
   ['drink', 'קפה שחור', 'אספרסו|קפה|קפה טורקי|אמריקנו', 2, 0.1, 0, 0, { d: 240, u: { 'כוס': 240, 'אספרסו': 30 } }],
@@ -251,7 +256,8 @@ function toFood([cat, name, aliases, kcal, p, c, f, o = {}]) {
     g: o.g || null, ul: o.ul || null,
     d: o.d || o.g || 100,
     u: o.u || null,
-    ml: !!(o.ml || cat === 'drink')
+    ml: !!(o.ml || cat === 'drink'),
+    ...(o.hy != null ? { hy: o.hy } : {})
   };
 }
 
@@ -327,6 +333,42 @@ export const POPULAR = [
   'ביצה', 'חזה עוף', 'קוטג׳ 5%', 'יוגורט יווני', 'סקופ אבקת חלבון', 'אורז מבושל',
   'פרוסת לחם', 'בננה', 'טונה במים', 'שיבולת שועל', 'אבוקדו', 'סלט ירקות'
 ].map((n) => BY_ID.get(`f:${n}`)).filter(Boolean);
+
+/* ==========================================================================
+   Water from drinks.
+
+   Coffee, tea, juice, milk — whatever is drunk counts toward the day's
+   water, by how much of it is water. A drink's solids are its protein,
+   carbs and fat, so per 100 ml the rest is close enough to water: tea and
+   black coffee count whole, cola and juice about 89%, milk about 88%.
+   Alcohol does not count — it takes away more than it brings.
+   ========================================================================== */
+
+const ALCOHOL = /בירה|בירות|יין|וודקה|ויסקי|ערק|אלכוהול|קוקטייל|שמפניה|ליקר|טקילה|קאווה|סיידר/;
+export const isAlcohol = (name) => ALCOHOL.test(String(name || ''));
+
+/** The share (0–1) of a food's volume that counts as water; 0 for food. */
+export function hydration(food) {
+  if (!food || food.serving) return 0;
+  if (food.hy != null) return food.hy;
+  if (!food.ml && food.cat !== 'drink') return 0;
+  if (isAlcohol(food.name)) return 0;
+  return Math.max(0, Math.min(1, 1 - ((food.p || 0) + (food.c || 0) + (food.f || 0)) / 100));
+}
+
+/** Water an item brings: what it was logged with, else worked out again
+    from its food (items logged before drinks counted). */
+export function itemWater(item, lookup = foodById) {
+  if (!item) return 0;
+  if (item.water_ml != null) return item.water_ml || 0;
+  const food = item.fid && item.grams ? lookup(item.fid) : null;
+  return food ? Math.round(item.grams * hydration(food)) : 0;
+}
+
+export const drinksWater = (items, lookup) => (items || []).reduce((a, i) => a + itemWater(i, lookup), 0);
+
+/** A day's whole water: glasses and bottles, plus what came in drinks. */
+export const dayWater = (rec) => (rec ? (rec.water_ml || 0) + (rec.drinks_ml ?? drinksWater(rec.items)) : 0);
 
 /* ==========================================================================
    Portions
@@ -453,10 +495,12 @@ export function portion(food, unit, qty) {
     const words = Math.abs(qty * 4 - Math.round(qty * 4)) < 1e-6 && qty > 0 ? countPhrase(qty, unit.label) : `${fmt(qty)} × ${unit.label}`;
     amount = `${words} (${Math.round(grams)} ${food.ml ? 'מ״ל' : 'ג׳'})`;
   }
+  const water = Math.round(grams * hydration(food));
   return {
     label: food.name, amount, cat: food.cat,
     kcal: round1(food.kcal * k), p: round1(food.p * k), c: round1(food.c * k), f: round1(food.f * k),
-    fid: food.id, grams: Math.round(grams * 10) / 10
+    fid: food.id, grams: Math.round(grams * 10) / 10,
+    ...(water > 0 ? { water_ml: water } : {})
   };
 }
 
@@ -502,7 +546,8 @@ export function makeFood({ id, name, cat = 'dish', kcal, p, c, f, g, ul, d, src,
     kcal: clean(kcal), p: clean(p), c: clean(c), f: clean(f),
     g: Number(g) > 0 ? Number(g) : null, ul: g ? (ul || 'יחידה') : null,
     d: Number(d) > 0 ? Number(d) : (Number(g) > 0 ? Number(g) : 100),
-    u: null, custom: true, src: src || 'manual'
+    u: null, custom: true, src: src || 'manual',
+    ...(cat === 'drink' ? { ml: true } : {})
   };
   /* A serving with no known weight: its values are per serving, measured
      in servings only (see unitsFor). */

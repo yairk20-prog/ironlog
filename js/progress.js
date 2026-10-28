@@ -11,6 +11,7 @@
 import * as db from './db.js';
 import { el, icon, ICONS, toast, openSheet, buzz } from './ui.js';
 import { todayISO, round2 } from './logic.js';
+import { dayWater } from './food.js';
 
 const DAY = 86400000;
 const dayNum = (iso) => Math.round(new Date(`${iso}T12:00:00`).getTime() / DAY);
@@ -159,7 +160,7 @@ export async function weekNumbers(settings, proteinFor) {
   let protein = 0, water = 0;
   for (const d of days) {
     if ((d.protein_grams || 0) >= proteinFor(trained.has(d.date)) * 0.95) protein++;
-    if ((d.water_ml || 0) >= waterTarget) water++;
+    if (dayWater(d) >= waterTarget) water++;
   }
   return { workouts: workouts.length, protein, water };
 }

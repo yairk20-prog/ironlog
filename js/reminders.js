@@ -74,7 +74,8 @@ export function setTargets(t) {
 /** Report a day's water and protein (debounced; nothing if reminders are off). */
 export function syncDay(day) {
   if (!day || day.date !== todayISO()) return;
-  progress = { date: day.date, water_ml: day.water_ml || 0, protein: day.protein_grams || 0, ...targets };
+  /* water_ml here is the day's whole water, drinks included */
+  progress = { date: day.date, water_ml: (day.water_ml || 0) + (day.drinks_ml || 0), protein: day.protein_grams || 0, ...targets };
   clearTimeout(timer);
   timer = setTimeout(async () => {
     const r = await settings();
