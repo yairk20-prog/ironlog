@@ -704,6 +704,8 @@ body.rest-open{overflow:hidden}
 .rest-sub{display:block;font-size:11px;font-weight:700;color:var(--text-3);margin-top:6px}
 .rest-actions{display:flex;gap:8px;width:100%;max-width:420px}
 .rest-actions .btn{flex:1}
+.rest-notify{width:100%;max-width:420px;display:flex;align-items:center;justify-content:center;gap:8px}
+div.rest-notify.on{font-size:var(--fs-tiny);font-weight:700;color:var(--ok);padding:8px 0}
 
 .rest-next{
   display:flex;align-items:center;gap:12px;width:100%;max-width:420px;

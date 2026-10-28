@@ -90,7 +90,8 @@ async function main() {
   out.restHasRing = await page.locator('.rest-progress').count();
   out.restNext = await page.locator('.rest-next b').innerText().catch(() => '');
   out.restTip = (await page.locator('.rest-tip b').innerText().catch(() => '')).trim();
-  out.restControls = await page.locator('.rest-screen button').count();
+  /* the one-time "notify me" offer (first rest of a workout, until it is on) is not a control */
+  out.restControls = await page.locator('.rest-screen button:not(.rest-notify)').count();
   await shot(page, '03-rest');
 
   /* the ring actually moves, and the dock agrees with the screen */

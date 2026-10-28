@@ -83,7 +83,12 @@ function tips({ next, isLastSet, settings, glassesLeft, note }) {
  * @param {number}  p.glassesLeft
  * @param {string}  p.note  saved note from the last time this exercise was logged
  */
-export function openRest({ nextId, isLastSet = false, setLabel = '', settings = {}, glassesLeft = 0, note = '' }) {
+/**
+ * @param {object} p
+ * @param {() => Promise<boolean>} [p.onNotify] turns on the rest-is-over
+ *   notification; given only while it is off, and shown as a button
+ */
+export function openRest({ nextId, isLastSet = false, setLabel = '', settings = {}, glassesLeft = 0, note = '', onNotify = null }) {
   closeCurrent?.();
 
   const next = getExercise(nextId);
@@ -160,6 +165,17 @@ export function openRest({ nextId, isLastSet = false, setLabel = '', settings = 
       el('button', { class: 'btn sm', text: '+30 שניות', onclick: () => { timer.add(30); buzz(8); } }),
       el('button', { class: 'btn sm primary', text: 'דלג על המנוחה', onclick: () => { timer.stop(); close(); } })
     ]),
+    onNotify && 'Notification' in window && Notification.permission !== 'denied'
+      ? (() => {
+        const b = el('button', { class: 'btn sm ghost rest-notify' }, [icon(ICONS.bell, 16), 'התראה לטלפון כשהמנוחה נגמרת']);
+        b.addEventListener('click', async () => {
+          b.disabled = true;
+          if (await onNotify()) b.replaceWith(el('div', { class: 'rest-notify on' }, [icon(ICONS.check, 16), 'תקבל התראה בסוף כל מנוחה — גם כשהמסך כבוי']));
+          else b.disabled = false;
+        });
+        return b;
+      })()
+      : null,
     preview,
     tipBox
   ]);

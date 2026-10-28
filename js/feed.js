@@ -13,7 +13,7 @@
    drags on an input do nothing; the card tracks the finger everywhere else.
    ========================================================================== */
 
-import { el, icon, ICONS, buzz, toast } from './ui.js';
+import { el, icon, ICONS, buzz, toast, numberField } from './ui.js';
 import * as timer from './timer.js';
 import { getExercise, MUSCLES, CATEGORIES } from './exercises.js';
 import { exerciseDemo } from './media.js';
@@ -33,7 +33,7 @@ const THRESHOLD = 70;
  * @param {Object<string,string>} [p.notes]  exercise id → saved note from last time
  * @param {number} [p.glassesLeft]  water glasses still owed today
  */
-export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, settings = {}, notes = {}, glassesLeft = 0, defaults = null, onDraft = null, hasDraft = null }) {
+export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, settings = {}, notes = {}, glassesLeft = 0, defaults = null, onDraft = null }) {
   const cards = [];
   const figures = [];
   let at = 0;
@@ -69,23 +69,31 @@ export function openFeed({ workout, onLogSet, getLog, onFinish, onClose, setting
         const w = el('input', {
           type: 'number', inputmode: 'decimal', step: '0.5',
           value: log ? shownW(round2(log.weight_kg)) : shownW(start.w),
-          placeholder: bw ? 'גוף' : '0', 'aria-label': bw ? `משקל נוסף, סט ${order}` : `משקל סט ${order}`
+          placeholder: bw ? 'גוף' : '–', 'aria-label': bw ? `משקל נוסף, סט ${order}` : `משקל סט ${order}`
         });
         const r = el('input', {
           type: 'number', inputmode: 'numeric',
           value: log ? log.reps : start.r,
-          placeholder: '0', 'aria-label': `חזרות סט ${order}`
+          placeholder: '–', 'aria-label': `חזרות סט ${order}`
         });
-        const me = { order, w, r, logged: !!log };
+        numberField(w);
+        numberField(r);
+        const me = { order, w, r, logged: !!log, last: { w: w.value, r: r.value } };
         inputs.push(me);
         if (!log && onDraft) {
-          /* a change carries to every later set not typed into itself */
+          /* The same rule as the list: a change carries to the later sets
+             that were showing what this one showed (they follow it), into
+             their drafts too; a set with numbers of its own keeps them. */
           const keep = () => {
+            const before = me.last;
+            me.last = { w: w.value, r: r.value };
             onDraft(index, order, w.value, r.value);
             for (const later of inputs.slice(inputs.indexOf(me) + 1)) {
-              if (later.logged || (hasDraft && hasDraft(index, later.order))) continue;
+              if (later.logged || later.w.value !== before.w || later.r.value !== before.r) continue;
               later.w.value = w.value;
               later.r.value = r.value;
+              later.last = { w: w.value, r: r.value };
+              onDraft(index, later.order, w.value, r.value);
             }
           };
           w.addEventListener('input', keep);

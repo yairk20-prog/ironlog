@@ -153,27 +153,86 @@ function ensureAudio() {
 }
 document.addEventListener('pointerdown', () => { ensureAudio()?.resume().catch(() => {}); }, { once: true });
 
-/** Three short beeps — a kitchen timer, not a notification ding. */
+/* Everything goes through a limiter set hard, then out at full level: the
+   beeps come out as loud as the phone's media volume allows — the same
+   volume the music is at — without clipping into a crackle. */
+let master = null;
+function output(ctx) {
+  if (master) return master;
+  const limiter = ctx.createDynamicsCompressor();
+  limiter.threshold.value = -6;
+  limiter.knee.value = 0;
+  limiter.ratio.value = 20;
+  limiter.attack.value = 0.001;
+  limiter.release.value = 0.08;
+  limiter.connect(ctx.destination);
+  master = limiter;
+  return master;
+}
+
+/** One beep: a square wave (its overtones cut through bass-heavy music) over a sine for body. */
+function beep(ctx, at, freq, dur, level = 1) {
+  [['square', 0.32], ['sine', 0.7]].forEach(([type, vol]) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, at);
+    gain.gain.linearRampToValueAtTime(vol * level, at + 0.008);
+    gain.gain.setValueAtTime(vol * level, at + dur - 0.02);
+    gain.gain.linearRampToValueAtTime(0, at + dur);
+    osc.connect(gain).connect(output(ctx));
+    osc.start(at);
+    osc.stop(at + dur + 0.01);
+  });
+}
+
+function audioReady() {
+  if (!soundOn) return null;
+  const ctx = ensureAudio();
+  if (!ctx) return null;
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  return ctx;
+}
+
+/** Rest is over: an alarm, not a ding — three rising double beeps, twice. */
 export function chime() {
-  if (!soundOn) return;
   try {
-    const ctx = ensureAudio();
+    const ctx = audioReady();
     if (!ctx) return;
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-    const start = ctx.currentTime + 0.02;
-    [0, 0.26, 0.52].forEach((offset) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = 1046.5; // C6 — cuts through low bass without being shrill
-      gain.gain.setValueAtTime(0, start + offset);
-      gain.gain.linearRampToValueAtTime(0.35, start + offset + 0.015);
-      gain.gain.linearRampToValueAtTime(0, start + offset + 0.16);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(start + offset);
-      osc.stop(start + offset + 0.18);
+    const t0 = ctx.currentTime + 0.03;
+    [0, 1.25].forEach((round) => {
+      [[0, 1568], [0.13, 1568], [0.36, 1976], [0.49, 1976], [0.72, 2349], [0.85, 2349]].forEach(([dt, f]) => beep(ctx, t0 + round + dt, f, 0.1));
     });
-  } catch { /* unsupported or blocked — vibration still fires */ }
+  } catch { /* unsupported or blocked — vibration and the notification still fire */ }
+}
+
+/** The last three seconds: a short pip each, so the end is not a surprise. */
+export function pip(n) {
+  try {
+    const ctx = audioReady();
+    if (!ctx) return;
+    beep(ctx, ctx.currentTime + 0.02, n === 1 ? 1319 : 988, 0.09, 0.8);
+  } catch { /* unsupported */ }
+}
+
+/* ---------- number fields typed on a phone ---------- */
+
+/**
+ * Tapping the field selects what is in it, so what is typed replaces it —
+ * no "06" from typing 6 after a 0 or a 3 already in the box — and a leading
+ * zero left in front of a number is dropped as it is typed. Call before
+ * adding the field's own input listeners, so they see the clean value.
+ */
+export function numberField(input) {
+  input.addEventListener('focus', () => {
+    /* after the browser has placed its caret, or it undoes the selection */
+    setTimeout(() => { try { if (document.activeElement === input) input.select(); } catch { /* not selectable */ } }, 0);
+  });
+  input.addEventListener('input', () => {
+    if (/^0\d/.test(input.value)) input.value = String(Number(input.value));
+  });
+  return input;
 }
 
 /* ---------- bottom sheet ---------- */

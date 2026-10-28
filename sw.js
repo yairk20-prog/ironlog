@@ -3,7 +3,7 @@
    Keep VERSION in step with BUILD in js/version.js; tools/e2e10.mjs fails the
    build if they drift, because the number shown in Settings is the only way
    anyone can tell from a phone whether an update actually landed. */
-const VERSION = 'ironlog-v5.17.0';
+const VERSION = 'ironlog-v5.18.0';
 
 /* Every request for code goes out with the browser's HTTP cache bypassed.
    Without this the service worker's "network-first" rule is a lie: fetch()
@@ -131,7 +131,64 @@ self.addEventListener('message', (e) => {
   if (e.data?.type === 'notification-action') {
     e.waitUntil(notificationAction(e.data.action, e.data.data || {}, e.data.tag || ''));
   }
+  if (e.data?.type === 'rest-schedule') e.waitUntil(scheduleRest(e.data));
+  if (e.data?.type === 'rest-cancel') cancelRest();
+  /* for tools/e2e22.mjs: what is waiting, and what was last shown */
+  if (e.data?.type === 'rest-status') e.source?.postMessage({ restStatus: { waiting: restWait ? restWait.endAt : 0, last: lastRest } });
 });
+
+/* ---------- end of rest ----------
+   The app says when the current rest ends (js/timer.js); this waits for it
+   and shows the notification — on time even with the screen off or the app
+   in the background, where the page's own clock is throttled. The wait is
+   held open with waitUntil, which Chrome allows for about five minutes;
+   the app hands a longer rest over again before then. A new rest, or the
+   rest being skipped, replaces or cancels the one waiting. */
+let restWait = null;
+let lastRest = null;
+let restGen = 0;   // a cancel or a newer schedule outdates one still setting up
+
+function cancelRest() {
+  restGen += 1;
+  if (!restWait) return;
+  clearTimeout(restWait.timer);
+  restWait.resolve();
+  restWait = null;
+}
+
+function scheduleRest({ endAt, label }) {
+  cancelRest();
+  const gen = restGen;
+  /* "rest is over" from the previous rest is old news now */
+  const clearOld = self.registration.getNotifications({ tag: 'ironlog-rest' })
+    .then((list) => list.forEach((n) => n.close())).catch(() => {});
+  return clearOld.then(() => new Promise((resolve) => {
+    if (gen !== restGen) { resolve(); return; }
+    const timer = setTimeout(async () => {
+      restWait = null;
+      const what = String(label || '').replace(/^מנוחה\s*·\s*/, '');
+      const options = {
+        body: what ? `הסט הבא: ${what}` : 'הסט הבא מחכה',
+        tag: 'ironlog-rest',
+        renotify: true,
+        silent: false,
+        requireInteraction: false,
+        vibrate: [500, 200, 500, 200, 500],
+        dir: 'rtl',
+        lang: 'he',
+        icon: './icons/icon-192.png',
+        badge: './icons/icon-192.png',
+        timestamp: endAt,
+        /* the app is mid-workout: bring it forward as it is, no reload */
+        data: { url: './index.html#/workout', focusOnly: true }
+      };
+      lastRest = { title: 'המנוחה הסתיימה', body: options.body, at: Date.now() };
+      try { await self.registration.showNotification('המנוחה הסתיימה', options); } catch { /* no permission */ }
+      resolve();
+    }, Math.max(0, endAt - Date.now()));
+    restWait = { timer, resolve, endAt };
+  }));
+}
 
 /* ---------- reminders ----------
    Sent by the site's server once an hour (netlify/functions/push-tick.js)
@@ -153,11 +210,13 @@ self.addEventListener('push', (e) => {
   }));
 });
 
-/** Bring the app forward on a URL — the open window if there is one. */
-function openApp(url) {
+/** Bring the app forward on a URL — the open window if there is one
+    (focusOnly: as it is, without navigating it). */
+function openApp(url, focusOnly = false) {
   const href = new URL(url, self.registration.scope).href;
   return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
     const win = wins.find((w) => 'focus' in w);
+    if (win && focusOnly) return win.focus().catch(() => {});
     if (win) return win.focus().then((w) => (w || win).navigate?.(href)).catch(() => {});
     return self.clients.openWindow(href);
   });
@@ -190,7 +249,7 @@ async function notificationAction(action, data, tag) {
     return;
   }
   if (action === 'food') return openApp('./index.html?quick=food#/nutrition');
-  return openApp(data.url || './index.html#/nutrition');
+  return openApp(data.url || './index.html#/nutrition', !!data.focusOnly);
 }
 
 self.addEventListener('notificationclick', (e) => {

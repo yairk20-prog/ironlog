@@ -7,7 +7,7 @@
 import * as db from './db.js';
 import {
   el, icon, ICONS, toast, buzz, openSheet, closeSheet,
-  confirmSheet, celebratePR, emptyState
+  confirmSheet, celebratePR, emptyState, numberField
 } from './ui.js';
 import * as timer from './timer.js';
 import { getExercise, substitutes, sameMuscle, CATEGORIES, search } from './exercises.js';
@@ -92,16 +92,21 @@ function rowDefaults(s, order, defWeight, defReps, isWarmup) {
 const isBodyweight = (ex, s) => ex?.cat === 'Bodyweight' && !s?.seconds;
 
 /**
- * Typing into one set carries to every later open set that has not been
- * typed into itself — the change shows at once, not only on the next visit.
+ * Typing into one set carries to every later open set that was showing the
+ * same numbers as it — the sets that follow it — at once, and into their
+ * drafts, so the list, the swipe view and a reload all read the same thing.
+ * A later set given numbers of its own keeps them.
+ * @param {{w:string,r:string}} before what the typed set showed before this keystroke
  */
-function carryForward(rows, from) {
+function carryForward(rows, from, before) {
   const src = rows[from];
   for (let j = from + 1; j < rows.length; j++) {
     const r = rows[j];
-    if (r.logged || getDraft(r.ex, r.order)) continue;
+    if (r.logged || r.wInput.value !== before.w || r.rInput.value !== before.r) continue;
     r.wInput.value = src.wInput.value;
     r.rInput.value = src.rInput.value;
+    r.last = { w: r.wInput.value, r: r.rInput.value };
+    setDraft(r.ex, r.order, r.wInput.value, r.rInput.value);
   }
 }
 
@@ -181,7 +186,6 @@ async function openFeedMode(ctx) {
       return rowDefaults(s, order, s.targetWeight, s.seconds || s.targetReps, false);
     },
     onDraft: (slotIndex, order, w, r) => setDraft(W.slots[slotIndex].ex, order, w, r),
-    hasDraft: (slotIndex, order) => !!getDraft(W.slots[slotIndex].ex, order),
     onLogSet: async (slotIndex, order, weight, reps) => {
       const s = W.slots[slotIndex];
       const ex = getExercise(s.ex);
@@ -433,20 +437,26 @@ function setRow(s, ex, order, defWeight, defReps, isWarmup, label, rows = null) 
   const wInput = el('input', {
     type: 'number', inputmode: 'decimal', step: '0.5', min: '0',
     value: log ? shownW(round2(log.weight_kg)) : shownW(start.w),
-    placeholder: bw ? 'גוף' : '0',
+    /* an empty field reads as empty — a grey 0 looked like a typed one */
+    placeholder: bw ? 'גוף' : '–',
     'aria-label': bw ? `משקל נוסף על משקל הגוף, סט ${order}` : `משקל, סט ${isWarmup ? (label || 'חימום') : order}`
   });
   const rInput = el('input', {
     type: 'number', inputmode: 'numeric', step: '1', min: '0',
     value: log ? log.reps : start.r,
-    placeholder: '0', 'aria-label': `${timed ? 'שניות' : 'חזרות'}, סט ${isWarmup ? (label || 'חימום') : order}`
+    placeholder: '–', 'aria-label': `${timed ? 'שניות' : 'חזרות'}, סט ${isWarmup ? (label || 'חימום') : order}`
   });
+  numberField(wInput);
+  numberField(rInput);
   const me = { ex: s.ex, order, wInput, rInput, logged: !!log };
+  me.last = { w: wInput.value, r: rInput.value };
   if (rows && !isWarmup) rows.push(me);
   if (!log) {
     const keep = () => {
+      const before = me.last;
+      me.last = { w: wInput.value, r: rInput.value };
       setDraft(s.ex, order, wInput.value, rInput.value);
-      if (rows && !isWarmup) carryForward(rows, rows.indexOf(me));
+      if (rows && !isWarmup) carryForward(rows, rows.indexOf(me), before);
     };
     wInput.addEventListener('input', keep);
     rInput.addEventListener('input', keep);
@@ -556,6 +566,18 @@ async function toggleSet(s, ex, order, refs) {
   }
 }
 
+let noticeOfferedFor = null;   // the workout whose rest screen already offered it
+
+/** Turn on the notification at the end of each rest (asks for permission). */
+async function enableRestNotice() {
+  if (!('Notification' in window)) { toast('הדפדפן הזה לא תומך בהתראות', 'bad'); return false; }
+  const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission().catch(() => 'denied');
+  if (perm !== 'granted') { toast('ההתראות נחסמו — אפשר לאשר אותן בהגדרות הטלפון', 'bad'); return false; }
+  await CTX.saveSetting('bgNotify', true);
+  toast('תקבל התראה בסוף כל מנוחה', 'ok');
+  return true;
+}
+
 /** Hand the rest screen everything it needs to be worth looking at. */
 async function showRest({ slot: s, exercise: ex, allDone }) {
   const upcoming = allDone && W.cursor < W.slots.length - 1 ? W.slots[W.cursor + 1] : null;
@@ -582,6 +604,8 @@ async function showRest({ slot: s, exercise: ex, allDone }) {
       : `סט ${Math.min(done + 1, s.sets)} מתוך ${s.sets} · ${ex.name}`,
     glassesLeft,
     note,
+    /* offered on the first rest of a workout only: the rest screen stays three controls */
+    onNotify: CTX.settings.bgNotify === true || noticeOfferedFor === W.id ? null : (noticeOfferedFor = W.id, enableRestNotice),
     settings: {
       barWeight: CTX.settings.barWeight,
       plates: CTX.settings.plates,

@@ -5,7 +5,7 @@
    PWA is resumed minutes later. State survives a reload via localStorage.
    ========================================================================== */
 
-import { $, buzz, chime } from './ui.js';
+import { $, buzz, chime, pip } from './ui.js';
 import { fmtTime } from './logic.js';
 
 const KEY = 'ironlog.timer';
@@ -15,6 +15,7 @@ const state = {
   total: 0,      // seconds originally set
   label: 'מנוחה',
   fired: false,
+  pipped: 0,     // the last countdown second that beeped (3, 2, 1)
   tick: null
 };
 
@@ -130,7 +131,9 @@ export function start(seconds, label = 'מנוחה') {
   state.endAt = Date.now() + seconds * 1000;
   state.label = label;
   state.fired = false;
+  state.pipped = 0;
   persist();
+  scheduleNotice();
   render();
   if (!state.tick) state.tick = setInterval(render, 250);
   dock.hidden = false;
@@ -147,6 +150,7 @@ export function stop() {
   releaseWake();
   state.fired = false;
   persist();
+  cancelNotice();
   clearInterval(state.tick);
   state.tick = null;
   dock.hidden = true;
@@ -165,8 +169,10 @@ export function add(seconds) {
   state.total = Math.max(5, state.total + delta);
   buzz(8);
   state.fired = false;
+  state.pipped = 0;
   dock.classList.remove('over');
   persist();
+  scheduleNotice();
   render();
 }
 
@@ -188,6 +194,14 @@ function render() {
   if (!state.endAt) { listeners.forEach((fn) => fn(0, 0)); return; }
   const remainMs = state.endAt - Date.now();
   const remain = remainMs / 1000;
+
+  /* 3, 2, 1 — only while the app is on screen; a pip that arrives late is noise */
+  if (remain > 0 && remain <= 3 && !document.hidden) {
+    const sec = Math.ceil(remain);
+    if (sec !== state.pipped && (!state.pipped || sec < state.pipped)) { state.pipped = sec; pip(sec); }
+  }
+  /* A long rest outlives the worker's five-minute wait: hand it over again. */
+  if (remain > 5 && bgNotifyOn && Date.now() - lastScheduled > 240000) scheduleNotice();
 
   if (remain <= 0) {
     if (!state.fired) {
@@ -212,16 +226,50 @@ function render() {
   listeners.forEach((fn) => fn(remain, state.total));
 }
 
-/* Off by default and only ever turned on from Settings. Browser permission on
-   its own is not consent: a site-wide grant made for something else must not
-   silently switch this on, and switching the setting back off has to actually
-   stop the notifications. */
-let bgNotifyOn = false;
-export const setBgNotify = (on) => { bgNotifyOn = on === true; };
+/* Off by default and only ever turned on by the person (Settings, or the
+   button on the rest screen). Browser permission on its own is not consent:
+   a site-wide grant made for something else must not silently switch this
+   on, and switching the setting back off has to actually stop them.
 
+   The notification is shown by the service worker, which is told when the
+   rest ends: it fires on time with the screen off or the app in the
+   background — where this page's own clock is throttled or frozen — and as
+   a real notification it plays the phone's notification sound, which
+   Android lets through headphones over music. */
+let bgNotifyOn = false;
+let lastScheduled = 0;
+export function setBgNotify(on) {
+  bgNotifyOn = on === true;
+  if (bgNotifyOn && state.endAt) scheduleNotice();
+  else cancelNotice();
+}
+
+function toWorker(msg) {
+  try {
+    const sw = navigator.serviceWorker;
+    if (!sw) return false;
+    if (sw.controller) { sw.controller.postMessage(msg); return true; }
+    sw.ready.then((reg) => reg.active?.postMessage(msg)).catch(() => {});
+    return true;
+  } catch { return false; }
+}
+
+function scheduleNotice() {
+  if (!bgNotifyOn || !state.endAt) return;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  lastScheduled = Date.now();
+  toWorker({ type: 'rest-schedule', endAt: state.endAt, label: state.label });
+}
+
+function cancelNotice() {
+  lastScheduled = 0;
+  toWorker({ type: 'rest-cancel' });
+}
+
+/** Without a service worker: the page's own notification, if it is still alive. */
 function notify() {
   try {
-    if (!bgNotifyOn) return;
+    if (!bgNotifyOn || navigator.serviceWorker?.controller) return;
     if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
       const n = new Notification('IRONLOG', { body: `${state.label} הסתיימה — לסט הבא`, silent: false, tag: 'rest' });
       /* Only meaningful while the page/tab is still alive in the background —
@@ -271,6 +319,7 @@ export function restore() {
     state.fired = false;
     dock.hidden = false;
     document.body.classList.add('timer-on');
+    scheduleNotice();
     render();
     state.tick = setInterval(render, 250);
     keepAwake();
