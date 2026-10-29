@@ -16,6 +16,7 @@
 import * as db from './db.js';
 import './sw-quick.js';
 import { el, icon, ICONS, toast, buzz } from './ui.js';
+import * as install from './install.js';
 
 const Q = () => self.IronlogQuick;
 
@@ -72,24 +73,89 @@ export const status = () => Q().status();
 export const GLASS_ML = 250;
 
 /**
- * The panel in Settings and in "עוד": how to put the buttons on the home
- * screen, and the notification card switch.
+ * What stands between this phone and the home-screen buttons, worked out
+ * from where the app is running — and the one thing to do about it.
+ * @returns {Promise<{tone:'ok'|'warn'|'bad', title:string, text:string, action:null|'install'|'copy'}>}
+ */
+export async function diagnose() {
+  const env = install.environment();
+  const served = await install.servedShortcuts();
+  const BROWSER = { samsung: 'Samsung Internet', firefox: 'Firefox', other: 'דפדפן שאינו Chrome' };
+  if (env.os === 'ios') {
+    return { tone: 'bad', title: 'באייפון אין כפתורים כאלה', text: 'אפל לא מאפשרת לאפליקציות רשת כפתורים בלחיצה ארוכה או ווידג׳טים. מה שעובד באייפון: האפליקציה המותקנת והתזכורות.', action: null };
+  }
+  if (served === 0) {
+    return { tone: 'bad', title: 'האתר עוד לא מעודכן', text: 'הגרסה שהאתר מגיש עכשיו בלי הכפתורים. רענן את האפליקציה בעוד כמה דקות.', action: null };
+  }
+  if (env.os === 'android' && env.browser !== 'chrome') {
+    return {
+      tone: 'bad', title: `פתוח ב-${BROWSER[env.browser]}`,
+      text: 'הכפתורים קיימים רק כש-IRONLOG מותקן מ-Chrome. העתק את הקישור, פתח אותו ב-Chrome ← תפריט ⋮ ← "התקן אפליקציה". הנתונים לא עוברים לבד בין דפדפנים: קודם הגדרות ← גיבוי בענן כאן, ושחזור עם הקוד ב-Chrome.',
+      action: 'copy'
+    };
+  }
+  if (install.canInstall()) {
+    return { tone: 'warn', title: 'IRONLOG עוד לא מותקן מ-Chrome', text: 'התקנה מכאן נותנת את הכפתורים מיד: לחיצה ארוכה על האייקון החדש.', action: 'install' };
+  }
+  if (!env.standalone) {
+    return { tone: 'warn', title: 'אתה בדפדפן, לא באפליקציה', text: 'נראה שהאפליקציה כבר מותקנת. פתח אותה מהאייקון שלה במסך הבית — ושם לחיצה ארוכה על האייקון.', action: null };
+  }
+  return {
+    tone: 'ok', title: 'מותקן — הכפתורים בלחיצה ארוכה על האייקון',
+    text: 'לא מופיעים? ההתקנה שלך קודמת לכפתורים, ו-Chrome מוסיף אותם רק כשהוא מעדכן את האפליקציה — לרוב תוך יום-יומיים, כשפותחים אותה. לקבל אותם מיד: גיבוי בענן (הגדרות), הסרת האייקון, ואז הקישור ב-Chrome ← ⋮ ← "התקן אפליקציה".',
+    action: 'copy'
+  };
+}
+
+/** The card is really in the shade (a phone setting can hide it silently). */
+async function cardShown() {
+  const reg = await registration();
+  if (!reg) return false;
+  return (await reg.getNotifications({ tag: 'ironlog-quick' }).catch(() => [])).length > 0;
+}
+
+/**
+ * The panel in Settings and in "עוד": what this phone needs for the
+ * home-screen buttons (checked, not just described), and the card switch —
+ * which works on any Android phone, installed or not.
  */
 export function panel() {
   const box = el('div', { class: 'card stack quick-panel' });
+  let off = null;
   const paint = async () => {
     const on = await cardOn();
-    box.replaceChildren(
+    const d = await diagnose();
+    const check = el('div', { class: `qp-check ${d.tone}` }, [
+      el('span', { class: 'gps-dot' }),
+      el('div', { class: 'grow' }, [el('b', { text: d.title }), el('small', { text: d.text })])
+    ]);
+    const action = d.action === 'install'
+      ? el('button', {
+        class: 'btn primary full', onclick: async () => {
+          const r = await install.install();
+          if (r === 'accepted') { buzz(12); toast('מותקן — עכשיו לחיצה ארוכה על האייקון החדש', 'ok'); }
+          paint();
+        }
+      }, [icon(ICONS.plus, 17), 'התקן עכשיו'])
+      : d.action === 'copy'
+        ? el('button', {
+          class: 'btn full', onclick: async () => {
+            try { await navigator.clipboard.writeText(install.appUrl()); toast('הקישור הועתק', 'ok'); } catch { toast(install.appUrl()); }
+          }
+        }, ['העתק קישור להתקנה'])
+        : null;
+    box.replaceChildren(...[
       el('b', { class: 'qp-title', text: 'כפתורים במסך הבית' }),
       el('ol', { class: 'qp-steps' }, [
         el('li', { text: 'לחיצה ארוכה על האייקון של IRONLOG במסך הבית.' }),
         el('li', { text: 'מופיעים: "כוס מים", "הוספת מאכל", "מאכלים שמורים", "התחל אימון".' }),
         el('li', { text: 'גוררים כל אחד מהם למסך הבית — והוא נשאר שם ככפתור נפרד. לחיצה עליו מוסיפה ישר.' })
       ]),
-      el('p', { class: 'tiny dim', style: { margin: 0, lineHeight: '1.5' }, text: 'עובד באנדרואיד כשהאפליקציה מותקנת. באייפון אין כפתורים כאלה לאפליקציות רשת.' }),
+      check,
+      action,
       el('div', { class: 'divider' }),
       el('b', { class: 'qp-title', text: 'כרטיס קבוע בהתראות' }),
-      el('p', { class: 'tiny dim', style: { margin: 0, lineHeight: '1.5' }, text: 'כרטיס בהתראות של הטלפון עם המצב של היום ושני כפתורים: "+ כוס מים" (נרשם בלי לפתוח את האפליקציה) ו"+ מאכל".' }),
+      el('p', { class: 'tiny dim', style: { margin: 0, lineHeight: '1.5' }, text: 'עובד בכל אנדרואיד, גם בלי התקנה: כרטיס בהתראות עם המצב של היום ושני כפתורים — "+ כוס מים" (נרשם בלי לפתוח את האפליקציה) ו"+ מאכל".' }),
       cardSupported()
         ? el('button', {
           class: `btn full${on ? '' : ' primary'}`,
@@ -97,14 +163,24 @@ export function panel() {
             const btn = e.currentTarget;
             btn.disabled = true;
             try {
-              if (on) { await disableCard(); toast('הכרטיס הוסר'); } else { await enableCard(); buzz(12); toast('הכרטיס מופיע בהתראות', 'ok'); }
+              if (on) { await disableCard(); toast('הכרטיס הוסר'); } else {
+                await enableCard();
+                buzz(12);
+                await new Promise((r) => setTimeout(r, 300));
+                const shown = await cardShown();
+                toast(shown
+                  ? 'הכרטיס מופיע בהתראות — משיכה של המסך מלמעלה'
+                  : 'ההתראות של IRONLOG מושתקות בטלפון: הגדרות ← אפליקציות ← IRONLOG (או Chrome) ← התראות', shown ? 'ok' : 'bad');
+              }
             } catch (err) { toast(err.message, 'bad'); }
             paint();
           }
         }, [icon(ICONS.bell, 17), on ? 'הסר את הכרטיס' : 'הצג כרטיס בהתראות'])
         : el('p', { class: 'tiny bad', style: { margin: 0 }, text: 'לא זמין במכשיר הזה.' })
-    );
+    ].filter(Boolean));
   };
   paint();
+  /* Chrome's install offer can arrive after the panel is open */
+  off = install.onChange(() => { if (box.isConnected) paint(); else off?.(); });
   return box;
 }

@@ -5,6 +5,8 @@
    ========================================================================== */
 
 import * as db from './db.js';
+/* first, so Chrome's install offer is caught whenever it comes */
+import './install.js';
 import { DEFAULTS } from './programs.js';
 import { $, clear, toast, setHaptics, setSoundAlert, historySettled } from './ui.js';
 import * as timer from './timer.js';

@@ -1708,3 +1708,12 @@ body.no-tabs .timer-dock{bottom:calc(var(--safe-b) + 14px)}
 .pocket small{color:#3a3a3a;font-size:13px;font-weight:700}
 .pocket-hold{height:4px;width:0;background:#555}
 .pocket.holding .pocket-hold{width:60%;transition:width 2s linear}
+
+/* the home-screen buttons check (js/quick.js) */
+.qp-check{display:flex;gap:10px;align-items:flex-start;padding:12px;background:var(--surface-2);border:1px solid var(--line)}
+.qp-check b{display:block;font-size:14px}
+.qp-check small{display:block;margin-top:4px;color:var(--text-2);line-height:1.55;font-size:12.5px}
+.qp-check .gps-dot{margin-top:4px}
+.qp-check.ok .gps-dot{background:var(--ok)}
+.qp-check.warn .gps-dot{background:var(--warn)}
+.qp-check.bad .gps-dot{background:var(--bad,#FF4D6D)}

@@ -61,7 +61,8 @@ export async function render(ctx) {
   if (!window.matchMedia('(display-mode: standalone)').matches) {
     wrap.appendChild(el('div', { class: 'card stack' }, [
       el('h3', { style: { margin: 0, fontSize: '15px' }, text: 'התקנה למסך הבית' }),
-      el('p', { class: 'tiny dim', style: { margin: 0 }, text: 'אנדרואיד: תפריט הדפדפן ואז "התקן אפליקציה". אייפון: שיתוף ואז "הוסף למסך הבית". אחרי ההתקנה האפליקציה נפתחת במסך מלא ועובדת גם בלי רשת.' })
+      el('p', { class: 'tiny dim', style: { margin: 0 }, text: 'אנדרואיד: ב-Chrome, תפריט ⋮ ואז "התקן אפליקציה" — כך מקבלים גם את הכפתורים בלחיצה ארוכה על האייקון. אייפון: שיתוף ואז "הוסף למסך הבית". אחרי ההתקנה האפליקציה נפתחת במסך מלא ועובדת גם בלי רשת.' }),
+      installButton()
     ]));
   }
 
@@ -71,6 +72,19 @@ export async function render(ctx) {
   }));
 
   return wrap;
+}
+
+/** Chrome's own install dialog, when Chrome offers it (js/install.js). */
+function installButton() {
+  const slot = el('div');
+  import('./install.js').then((install) => {
+    const paint = () => slot.replaceChildren(...(install.canInstall() ? [el('button', {
+      class: 'btn primary full', onclick: async () => { await install.install(); paint(); }
+    }, [icon(ICONS.plus, 17), 'התקן עכשיו'])] : []));
+    paint();
+    const off = install.onChange(() => { if (slot.isConnected) paint(); else off(); });
+  });
+  return slot;
 }
 
 const link = (iconPath, title, sub, onclick) => el('button', { class: 'list-link', onclick }, [
