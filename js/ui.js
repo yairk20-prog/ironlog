@@ -152,7 +152,60 @@ function ensureAudio() {
   audioCtx = new Ctx();
   return audioCtx;
 }
-document.addEventListener('pointerdown', () => { ensureAudio()?.resume().catch(() => {}); }, { once: true });
+document.addEventListener('pointerdown', () => {
+  ensureAudio()?.resume().catch(() => {});
+  if (alarmByMedia()) alarmElement().load();
+}, { once: true });
+
+/* ---- the alarm as a media clip (Android) ----
+   A Web Audio tone gets no audio focus: Android mixes it in at the music's
+   level, and with music in the headphones it is lost. A short media clip
+   (under five seconds) is played by Chrome with "transient, may duck"
+   focus: the music is turned down while it plays and comes back after.
+   sounds/rest-end.wav is the same alarm as below (tools/build-sounds.mjs).
+   Not on iPhone, where a media clip would stop the music instead. */
+const alarmByMedia = () => /android/i.test(navigator.userAgent);
+let alarmEl = null;
+function alarmElement() {
+  if (!alarmEl) {
+    alarmEl = new Audio('sounds/rest-end.wav');
+    alarmEl.preload = 'auto';
+  }
+  return alarmEl;
+}
+
+/* ---- staying awake while the screen is locked ----
+   With the screen locked Chrome slows a silent page to a crawl and then
+   freezes it, so a rest that ends then rings late or not at all. A page
+   that is playing sound is left running. While a rest (or a run) is on
+   and the app is hidden, a 25 Hz tone at −60 dBFS plays: far below hearing
+   at that pitch and level, and it takes no audio focus, so the music is
+   untouched — but the page counts as playing and its clock keeps time. */
+let keeper = null;
+const keepers = new Set();   // who wants it: 'rest', 'cardio'
+export function keepAlive(on, who = 'rest') {
+  if (on) keepers.add(who); else keepers.delete(who);
+  on = keepers.size > 0;
+  try {
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    if (on && !keeper) {
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = 25;
+      gain.gain.value = 0.001;
+      osc.connect(gain).connect(ctx.destination);
+      osc.start();
+      keeper = osc;
+    } else if (!on && keeper) {
+      keeper.stop();
+      keeper.disconnect();
+      keeper = null;
+    }
+  } catch { /* no audio: the notification still comes */ }
+}
+export const keepingAlive = () => !!keeper;
 
 /* Everything goes through a limiter set hard, then out at full level: the
    beeps come out as loud as the phone's media volume allows — the same
@@ -198,6 +251,21 @@ function audioReady() {
 
 /** Rest is over: an alarm, not a ding — three rising double beeps, twice. */
 export function chime() {
+  if (!soundOn) return;
+  if (alarmByMedia()) {
+    const a = alarmElement();
+    try {
+      a.currentTime = 0;
+      a.volume = 1;
+      const played = a.play();
+      if (played?.catch) played.catch(() => toneChime());
+      return;
+    } catch { /* fall through to the tone */ }
+  }
+  toneChime();
+}
+
+function toneChime() {
   try {
     const ctx = audioReady();
     if (!ctx) return;

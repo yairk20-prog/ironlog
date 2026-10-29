@@ -149,7 +149,7 @@ export async function render(ctx) {
     toggle('טיימר מנוחה אוטומטי', s.autoTimer !== false, (v) => ctx.saveSetting('autoTimer', v)),
     toggle('רטט במכשיר', s.vibrate !== false, (v) => ctx.saveSetting('vibrate', v)),
     toggle('צליל בסיום המנוחה וספירה 3-2-1 (נשמע גם עם אוזניות)', s.soundAlert !== false, (v) => ctx.saveSetting('soundAlert', v)),
-    toggle('התראות לטלפון: סוף מנוחה, ובאירובי כל מעבר שלב (גם כשהמסך כבוי)', s.bgNotify === true, async (v) => {
+    toggle('התראות לטלפון: סוף מנוחה, ובאירובי כל מעבר שלב (גם כשהמסך כבוי)', s.bgNotify !== false && 'Notification' in window && Notification.permission === 'granted', async (v) => {
       if (v && 'Notification' in window && Notification.permission !== 'granted') {
         const perm = await Notification.requestPermission().catch(() => 'denied');
         if (perm !== 'granted') toast('ההתראות נחסמו בדפדפן/במכשיר — אפשר לאשר בהגדרות המערכת', 'bad');

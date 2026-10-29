@@ -5,7 +5,7 @@
    PWA is resumed minutes later. State survives a reload via localStorage.
    ========================================================================== */
 
-import { $, buzz, chime, pip } from './ui.js';
+import { $, buzz, chime, pip, keepAlive } from './ui.js';
 import { fmtTime } from './logic.js';
 
 const KEY = 'ironlog.timer';
@@ -134,6 +134,7 @@ export function start(seconds, label = 'מנוחה') {
   state.pipped = 0;
   persist();
   scheduleNotice();
+  if (document.hidden) keepAlive(true);
   render();
   if (!state.tick) state.tick = setInterval(render, 250);
   dock.hidden = false;
@@ -148,6 +149,7 @@ export function stop() {
   bind();
   state.endAt = 0;
   releaseWake();
+  keepAlive(false);
   state.fired = false;
   persist();
   cancelNotice();
@@ -211,6 +213,8 @@ function render() {
       dock.classList.add('over');
       labelEl.textContent = 'המנוחה הסתיימה — קדימה';
       notify();
+      /* the alarm has rung: let the page rest again once it has played */
+      setTimeout(() => { if (state.fired || !state.endAt) keepAlive(false); }, 4000);
     }
     read.textContent = `+${fmtTime(-remain)}`;
     fill.style.width = '100%';
@@ -226,10 +230,10 @@ function render() {
   listeners.forEach((fn) => fn(remain, state.total));
 }
 
-/* Off by default and only ever turned on by the person (Settings, or the
-   button on the rest screen). Browser permission on its own is not consent:
-   a site-wide grant made for something else must not silently switch this
-   on, and switching the setting back off has to actually stop them.
+/* On by default (people asked for it: the phone is on a bench, the screen
+   is locked) — but only ever with the phone's permission, which is asked
+   for from a tap (the rest screen's button, or Settings); switching the
+   setting off has to actually stop them.
 
    The notification is shown by the service worker, which is told when the
    rest ends: it fires on time with the screen off or the app in the
@@ -283,16 +287,25 @@ function cancelNotice() {
 }
 
 /** Without a service worker: the page's own notification, if it is still alive. */
+/**
+ * The page's own "rest is over" notification, as a second line behind the
+ * worker's: the page is kept running while hidden (ui.keepAlive), so if
+ * the worker's wait was cut short, this one still comes. Same tag, and no
+ * renotify — when the worker's has already been shown it is not repeated.
+ */
 function notify() {
   try {
-    if (!bgNotifyOn || navigator.serviceWorker?.controller) return;
-    if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
-      const n = new Notification('IRONLOG', { body: `${state.label} הסתיימה — לסט הבא`, silent: false, tag: 'rest' });
-      /* Only meaningful while the page/tab is still alive in the background —
-         which is the case this notification fires for in the first place
-         (document.hidden, not fully terminated). A page the OS has actually
-         killed needs a push server to wake back up, which this static site
-         does not have. */
+    if (!noticesOn() || !document.hidden) return;
+    const what = String(state.label || '').replace(/^מנוחה\s*·\s*/, '');
+    const options = {
+      body: what ? `הסט הבא: ${what}` : 'הסט הבא מחכה', tag: 'ironlog-rest', renotify: false, silent: false,
+      vibrate: [500, 200, 500, 200, 500], dir: 'rtl', lang: 'he', icon: './icons/icon-192.png',
+      data: { url: './index.html#/workout', focusOnly: true }
+    };
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.ready.then((reg) => reg.showNotification('המנוחה הסתיימה', options)).catch(() => {});
+    } else {
+      const n = new Notification('המנוחה הסתיימה', options);
       n.onclick = () => { window.focus(); n.close(); };
     }
   } catch { /* not available */ }
@@ -343,7 +356,10 @@ export function restore() {
 }
 
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden || !state.endAt) return;
+  /* hidden mid-rest (screen locked, another app): keep the clock running */
+  if (document.hidden) { if (state.endAt && !state.fired) keepAlive(true); return; }
+  keepAlive(false);
+  if (!state.endAt) return;
   render();
   if (!wakeLock) keepAwake();
 });

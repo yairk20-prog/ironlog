@@ -65,7 +65,7 @@ async function loadSettings() {
   ctx.settings = { ...DEFAULTS, ...stored };
   setHaptics(ctx.settings.vibrate !== false);
   setSoundAlert(ctx.settings.soundAlert !== false);
-  timer.setBgNotify(ctx.settings.bgNotify === true);
+  timer.setBgNotify(ctx.settings.bgNotify !== false);
   applyTheme(ctx.settings.themeColor);
 }
 
@@ -74,7 +74,7 @@ async function saveSetting(key, value) {
   await db.setSetting(key, value);
   if (key === 'vibrate') setHaptics(value !== false);
   if (key === 'soundAlert') setSoundAlert(value !== false);
-  if (key === 'bgNotify') timer.setBgNotify(value === true);
+  if (key === 'bgNotify') timer.setBgNotify(value !== false);
   if (key === 'themeColor') applyTheme(value);
 }
 

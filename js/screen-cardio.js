@@ -7,7 +7,7 @@
    ========================================================================== */
 
 import * as db from './db.js';
-import { el, icon, ICONS, toast, buzz, chime, openSheet, confirmSheet, celebratePR } from './ui.js';
+import { el, icon, ICONS, toast, buzz, chime, keepAlive, openSheet, confirmSheet, celebratePR } from './ui.js';
 import { photoDemo, thumb } from './media.js';
 import { fmtTime, fmtDuration } from './logic.js';
 import { recentWorkouts } from './session.js';
@@ -62,6 +62,7 @@ export function cleanup() {
   if (WATCH != null) navigator.geolocation?.clearWatch(WATCH);
   WATCH = null;
   WAKE?.release?.().catch(() => {}); WAKE = null;
+  keepAlive(false, 'cardio');
   document.removeEventListener('visibilitychange', onVisible);
 }
 
@@ -329,8 +330,14 @@ function timeline(phases, current, fraction) {
 
 let REFRESH = null;
 const onVisible = () => {
-  if (document.hidden) { if (LIVE) saveActiveCardio(LIVE); }
-  else REFRESH?.();
+  if (document.hidden) {
+    if (LIVE) saveActiveCardio(LIVE);
+    /* screen locked mid-run: keep the clock (and the phase sounds) going */
+    keepAlive(!!LIVE && !LIVE.pausedAt && !LIVE.ending, 'cardio');
+  } else {
+    keepAlive(false, 'cardio');
+    REFRESH?.();
+  }
 };
 
 function runView(ctx, run) {
@@ -439,9 +446,8 @@ function runView(ctx, run) {
   }
 
   function announce(phase) {
-    /* With the app hidden the notification (sw.js) has already said it, on
-       time; a chime from a throttled page would only come late. */
-    if (document.hidden) return;
+    /* Also with the screen locked: the page is kept running (keepAlive), and
+       the alarm turns the music down while it plays. */
     chime();
     buzz([0, 120, 80, 120]);
     speak(phase.label);
@@ -451,7 +457,9 @@ function runView(ctx, run) {
   function split(km) {
     const pace = paceOf(cardioElapsed(run), run.distanceM / 1000);
     const text = `קילומטר ${km}${pace ? ` · קצב ממוצע ${pace}` : ''}`;
-    if (!document.hidden) { chime(); buzz([0, 150, 80, 150]); speak(text.replace(' · ', ', ')); }
+    chime();
+    buzz([0, 150, 80, 150]);
+    speak(text.replace(' · ', ', '));
     if (timer.noticesOn()) {
       navigator.serviceWorker?.ready.then((reg) => reg.showNotification(text, {
         body: cardioName(run), tag: 'ironlog-split', renotify: true, silent: false,

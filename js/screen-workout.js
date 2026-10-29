@@ -603,7 +603,7 @@ async function showRest({ slot: s, exercise: ex, allDone }) {
     glassesLeft,
     note,
     /* offered on the first rest of a workout only: the rest screen stays three controls */
-    onNotify: CTX.settings.bgNotify === true || noticeOfferedFor === W.id ? null : (noticeOfferedFor = W.id, enableRestNotice),
+    onNotify: timer.noticesOn() || noticeOfferedFor === W.id ? null : (noticeOfferedFor = W.id, enableRestNotice),
     settings: {
       barWeight: CTX.settings.barWeight,
       plates: CTX.settings.plates,

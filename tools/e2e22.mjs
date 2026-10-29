@@ -92,6 +92,11 @@ async function main() {
   await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 10000 });
   await pause(page, 500);
 
+  /* notifications are on by default since v5.21; this suite starts from off */
+  await page.evaluate(async () => (await import('./js/db.js')).setSetting('bgNotify', false));
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForSelector('.hero .btn.primary');
+  await pause(page, 400);
   await page.locator('.hero .btn.primary', { hasText: 'התחל אימון' }).click();
   await page.waitForFunction(() => location.hash === '#/workout');
   await page.waitForSelector('.set:not(.warmup) .set-go');
