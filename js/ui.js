@@ -134,16 +134,21 @@ export function buzz(pattern = 12) {
 /* ---------- rest-done chime ----------
    A vibration alone is silent through headphones, and at rest's end that is
    exactly when someone has earbuds in with music. Every sound here is
-   generated with Web Audio, which takes no audio focus: it is mixed on top
-   of whatever is playing, and the music is never paused, lowered or
-   changed in any way — people asked for exactly that. To be heard over it
+   generated with Web Audio and mixed on top of whatever is playing — never
+   a media clip, which would pause or lower the music; the music must sound
+   exactly the same, people asked for exactly that. To be heard over it
    anyway, the beeps sit at 1.7–3.1 kHz, where the ear is most sensitive and
    music has least energy, with square-wave overtones, at full level.
 
-   Autoplay policy requires an AudioContext to start from a user gesture. One
-   is created (and kept resumed) on the first tap anywhere in the app, well
-   before any timer can end, so the chime is never the thing trying to
-   unlock audio. */
+   The audio engine itself is switched on only around a sound — a few
+   seconds before the end of a rest, for a chime — and off again right
+   after. On some phones (it was reported on a Samsung) a running audio
+   engine, even a silent one, is enough for the system to turn other apps'
+   music down;
+   left running from the first tap, it lowered the music for as long as
+   the app was open. Starting it later needs no new tap: the page was
+   touched before (the set that started the rest), which is what browsers
+   ask for. */
 let soundOn = true;
 export const setSoundAlert = (on) => { soundOn = !!on; };
 
@@ -153,42 +158,37 @@ function ensureAudio() {
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return null;
   audioCtx = new Ctx();
+  /* created suspended until a sound needs it (some browsers start it running) */
+  if (!tapOnly && audioCtx.state === 'running') audioCtx.suspend().catch(() => {});
   return audioCtx;
 }
-document.addEventListener('pointerdown', () => { ensureAudio()?.resume().catch(() => {}); }, { once: true });
 
-/* ---- staying awake while the screen is locked ----
-   With the screen locked Chrome slows a silent page to a crawl and then
-   freezes it, so a rest that ends then rings late or not at all. A page
-   that is playing sound is left running. While a rest (or a run) is on
-   and the app is hidden, a 25 Hz tone at −60 dBFS plays: far below hearing
-   at that pitch and level, and it takes no audio focus, so the music is
-   untouched — but the page counts as playing and its clock keeps time. */
-let keeper = null;
-const keepers = new Set();   // who wants it: 'rest', 'cardio'
-export function keepAlive(on, who = 'rest') {
-  if (on) keepers.add(who); else keepers.delete(who);
-  on = keepers.size > 0;
-  try {
-    const ctx = ensureAudio();
-    if (!ctx) return;
-    if (on && !keeper) {
-      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.frequency.value = 25;
-      gain.gain.value = 0.001;
-      osc.connect(gain).connect(ctx.destination);
-      osc.start();
-      keeper = osc;
-    } else if (!on && keeper) {
-      keeper.stop();
-      keeper.disconnect();
-      keeper = null;
-    }
-  } catch { /* no audio: the notification still comes */ }
+/* iPhone: Safari starts the engine only from inside a tap, so there it is
+   started on the first tap and left on, as before (a running engine does
+   not turn the music down there). */
+const tapOnly = /iphone|ipad|ipod/i.test(navigator.userAgent);
+if (tapOnly) document.addEventListener('pointerdown', () => { ensureAudio()?.resume().catch(() => {}); }, { once: true });
+
+/* Keep the engine on until `until` (epoch ms), then switch it off again. */
+let releaseAt = 0;
+let releaseTimer = null;
+function hold(until) {
+  const ctx = ensureAudio();
+  if (!ctx) return null;
+  if (ctx.state !== 'running') ctx.resume().catch(() => {});
+  releaseAt = Math.max(releaseAt, until);
+  clearTimeout(releaseTimer);
+  releaseTimer = setTimeout(release, Math.max(0, releaseAt - Date.now()));
+  return ctx;
 }
-export const keepingAlive = () => !!keeper;
+function release() {
+  releaseTimer = null;
+  if (Date.now() < releaseAt - 50) { releaseTimer = setTimeout(release, releaseAt - Date.now()); return; }
+  releaseAt = 0;
+  if (!tapOnly && audioCtx && audioCtx.state === 'running') audioCtx.suspend().catch(() => {});
+}
+/** Whether the audio engine is on right now (for the tests). */
+export const audioRunning = () => !!audioCtx && audioCtx.state === 'running';
 
 /* Everything goes through a limiter set hard, then out at full level: the
    beeps come out as loud as the phone's media volume allows without
@@ -225,13 +225,13 @@ function beep(ctx, at, freq, dur, level = 1) {
   });
 }
 
-function audioReady() {
+/** The engine, on until `until` — or null when sound is off or unavailable. */
+function audioReady(until) {
   if (!soundOn) return null;
-  const ctx = ensureAudio();
-  if (!ctx) return null;
-  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-  return ctx;
+  return hold(until);
 }
+
+const ALARM_LENGTH = 2.3;   // seconds, the alarm below
 
 /* three rising double beeps, twice */
 const ALARM = [0, 1.25].flatMap((round) => [[0, 2093], [0.13, 2093], [0.36, 2637], [0.49, 2637], [0.72, 3136], [0.85, 3136]]
@@ -246,7 +246,7 @@ function alarmAt(ctx, t0) {
 /** Rest is over (or a run changes phase): an alarm, not a ding. */
 export function chime() {
   try {
-    const ctx = audioReady();
+    const ctx = audioReady(Date.now() + (ALARM_LENGTH + 0.5) * 1000);
     if (ctx) alarmAt(ctx, ctx.currentTime + 0.03);
   } catch { /* unsupported or blocked — vibration and the notification still fire */ }
 }
@@ -264,7 +264,7 @@ let endNodes = [];
 export function scheduleRestEnd(endAt) {
   cancelRestEnd();
   try {
-    const ctx = audioReady();
+    const ctx = audioReady(endAt + (ALARM_LENGTH + 0.5) * 1000);
     if (!ctx) return false;
     const at = (ms) => ctx.currentTime + (ms - Date.now()) / 1000;
     const soon = ctx.currentTime + 0.02;
@@ -281,6 +281,7 @@ export function scheduleRestEnd(endAt) {
 
 /** The rest was skipped, lengthened or replaced: silence what was scheduled. */
 export function cancelRestEnd() {
+  if (endNodes.length) { releaseAt = 0; clearTimeout(releaseTimer); releaseTimer = setTimeout(release, 300); }
   endNodes.forEach((osc) => { try { osc.stop(); osc.disconnect(); } catch { /* already done */ } });
   endNodes = [];
 }

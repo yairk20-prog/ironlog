@@ -7,7 +7,7 @@
    ========================================================================== */
 
 import * as db from './db.js';
-import { el, icon, ICONS, toast, buzz, chime, keepAlive, openSheet, confirmSheet, celebratePR } from './ui.js';
+import { el, icon, ICONS, toast, buzz, chime, openSheet, confirmSheet, celebratePR } from './ui.js';
 import { photoDemo, thumb } from './media.js';
 import { fmtTime, fmtDuration } from './logic.js';
 import { recentWorkouts } from './session.js';
@@ -62,7 +62,6 @@ export function cleanup() {
   if (WATCH != null) navigator.geolocation?.clearWatch(WATCH);
   WATCH = null;
   WAKE?.release?.().catch(() => {}); WAKE = null;
-  keepAlive(false, 'cardio');
   document.removeEventListener('visibilitychange', onVisible);
 }
 
@@ -332,10 +331,7 @@ let REFRESH = null;
 const onVisible = () => {
   if (document.hidden) {
     if (LIVE) saveActiveCardio(LIVE);
-    /* screen locked mid-run: keep the clock (and the phase sounds) going */
-    keepAlive(!!LIVE && !LIVE.pausedAt && !LIVE.ending, 'cardio');
   } else {
-    keepAlive(false, 'cardio');
     REFRESH?.();
   }
 };
@@ -446,7 +442,7 @@ function runView(ctx, run) {
   }
 
   function announce(phase) {
-    /* Also with the screen locked: the page is kept running (keepAlive); the
+    /* Also with the screen locked, while the phone still runs the page; the
        alarm is mixed over the music without changing it. */
     chime();
     buzz([0, 120, 80, 120]);

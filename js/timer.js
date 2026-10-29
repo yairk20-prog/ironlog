@@ -5,7 +5,7 @@
    PWA is resumed minutes later. State survives a reload via localStorage.
    ========================================================================== */
 
-import { $, buzz, chime, keepAlive, scheduleRestEnd, cancelRestEnd, COUNTDOWN_LEAD } from './ui.js';
+import { $, buzz, chime, scheduleRestEnd, cancelRestEnd, COUNTDOWN_LEAD } from './ui.js';
 import { fmtTime } from './logic.js';
 
 const KEY = 'ironlog.timer';
@@ -135,7 +135,6 @@ export function start(seconds, label = 'מנוחה') {
   cancelRestEnd();
   persist();
   scheduleNotice();
-  if (document.hidden) keepAlive(true);
   render();
   if (!state.tick) state.tick = setInterval(render, 250);
   dock.hidden = false;
@@ -150,7 +149,6 @@ export function stop() {
   bind();
   state.endAt = 0;
   releaseWake();
-  keepAlive(false);
   cancelRestEnd();
   state.sounded = false;
   state.fired = false;
@@ -218,8 +216,6 @@ function render() {
       dock.classList.add('over');
       labelEl.textContent = 'המנוחה הסתיימה — קדימה';
       notify();
-      /* the alarm has rung: let the page rest again once it has played */
-      setTimeout(() => { if (state.fired || !state.endAt) keepAlive(false); }, 4000);
     }
     read.textContent = `+${fmtTime(-remain)}`;
     fill.style.width = '100%';
@@ -294,8 +290,8 @@ function cancelNotice() {
 /** Without a service worker: the page's own notification, if it is still alive. */
 /**
  * The page's own "rest is over" notification, as a second line behind the
- * worker's: the page is kept running while hidden (ui.keepAlive), so if
- * the worker's wait was cut short, this one still comes. Same tag, and no
+ * worker's: a locked phone's page still runs (slowly) for the first
+ * minutes, so if the worker's wait was cut short, this one still comes. Same tag, and no
  * renotify — when the worker's has already been shown it is not repeated.
  */
 function notify() {
@@ -361,10 +357,7 @@ export function restore() {
 }
 
 document.addEventListener('visibilitychange', () => {
-  /* hidden mid-rest (screen locked, another app): keep the clock running */
-  if (document.hidden) { if (state.endAt && !state.fired) keepAlive(true); return; }
-  keepAlive(false);
-  if (!state.endAt) return;
+  if (document.hidden || !state.endAt) return;
   render();
   if (!wakeLock) keepAwake();
 });
