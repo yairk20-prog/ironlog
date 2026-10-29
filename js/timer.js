@@ -5,7 +5,7 @@
    PWA is resumed minutes later. State survives a reload via localStorage.
    ========================================================================== */
 
-import { $, buzz, chime, pip, keepAlive } from './ui.js';
+import { $, buzz, chime, keepAlive, scheduleRestEnd, cancelRestEnd, COUNTDOWN_LEAD } from './ui.js';
 import { fmtTime } from './logic.js';
 
 const KEY = 'ironlog.timer';
@@ -15,7 +15,7 @@ const state = {
   total: 0,      // seconds originally set
   label: 'מנוחה',
   fired: false,
-  pipped: 0,     // the last countdown second that beeped (3, 2, 1)
+  sounded: false, // the 3-2-1 and the alarm are scheduled on the audio clock
   tick: null
 };
 
@@ -131,7 +131,8 @@ export function start(seconds, label = 'מנוחה') {
   state.endAt = Date.now() + seconds * 1000;
   state.label = label;
   state.fired = false;
-  state.pipped = 0;
+  state.sounded = false;
+  cancelRestEnd();
   persist();
   scheduleNotice();
   if (document.hidden) keepAlive(true);
@@ -150,6 +151,8 @@ export function stop() {
   state.endAt = 0;
   releaseWake();
   keepAlive(false);
+  cancelRestEnd();
+  state.sounded = false;
   state.fired = false;
   persist();
   cancelNotice();
@@ -171,7 +174,8 @@ export function add(seconds) {
   state.total = Math.max(5, state.total + delta);
   buzz(8);
   state.fired = false;
-  state.pipped = 0;
+  state.sounded = false;
+  cancelRestEnd();
   dock.classList.remove('over');
   persist();
   scheduleNotice();
@@ -197,11 +201,11 @@ function render() {
   const remainMs = state.endAt - Date.now();
   const remain = remainMs / 1000;
 
-  /* 3, 2, 1 — only while the app is on screen; a pip that arrives late is noise */
-  if (remain > 0 && remain <= 3 && !document.hidden) {
-    const sec = Math.ceil(remain);
-    if (sec !== state.pipped && (!state.pipped || sec < state.pipped)) { state.pipped = sec; pip(sec); }
-  }
+  /* 3, 2, 1 and the alarm, scheduled once on the audio clock — exact even
+     when this tick came late (screen locked), mixed over the music without
+     touching it. */
+  if (remain > 0 && remain <= COUNTDOWN_LEAD + 1 && !state.sounded) state.sounded = scheduleRestEnd(state.endAt);
+
   /* A long rest outlives the worker's five-minute wait: hand it over again. */
   if (remain > 5 && bgNotifyOn && Date.now() - lastScheduled > 240000) scheduleNotice();
 
@@ -209,7 +213,8 @@ function render() {
     if (!state.fired) {
       state.fired = true;
       buzz([0, 220, 90, 220]);
-      chime();
+      /* already scheduled on the audio clock — ring it here only if it was not */
+      if (!state.sounded) chime();
       dock.classList.add('over');
       labelEl.textContent = 'המנוחה הסתיימה — קדימה';
       notify();

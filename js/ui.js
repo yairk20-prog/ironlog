@@ -133,9 +133,12 @@ export function buzz(pattern = 12) {
 
 /* ---------- rest-done chime ----------
    A vibration alone is silent through headphones, and at rest's end that is
-   exactly when someone has earbuds in with music at full volume. A tone
-   generated here shares the device's one audio output with whatever else is
-   playing, so it comes through mixed in — audible without pausing the music.
+   exactly when someone has earbuds in with music. Every sound here is
+   generated with Web Audio, which takes no audio focus: it is mixed on top
+   of whatever is playing, and the music is never paused, lowered or
+   changed in any way — people asked for exactly that. To be heard over it
+   anyway, the beeps sit at 1.7–3.1 kHz, where the ear is most sensitive and
+   music has least energy, with square-wave overtones, at full level.
 
    Autoplay policy requires an AudioContext to start from a user gesture. One
    is created (and kept resumed) on the first tap anywhere in the app, well
@@ -152,27 +155,7 @@ function ensureAudio() {
   audioCtx = new Ctx();
   return audioCtx;
 }
-document.addEventListener('pointerdown', () => {
-  ensureAudio()?.resume().catch(() => {});
-  if (alarmByMedia()) alarmElement().load();
-}, { once: true });
-
-/* ---- the alarm as a media clip (Android) ----
-   A Web Audio tone gets no audio focus: Android mixes it in at the music's
-   level, and with music in the headphones it is lost. A short media clip
-   (under five seconds) is played by Chrome with "transient, may duck"
-   focus: the music is turned down while it plays and comes back after.
-   sounds/rest-end.wav is the same alarm as below (tools/build-sounds.mjs).
-   Not on iPhone, where a media clip would stop the music instead. */
-const alarmByMedia = () => /android/i.test(navigator.userAgent);
-let alarmEl = null;
-function alarmElement() {
-  if (!alarmEl) {
-    alarmEl = new Audio('sounds/rest-end.wav');
-    alarmEl.preload = 'auto';
-  }
-  return alarmEl;
-}
+document.addEventListener('pointerdown', () => { ensureAudio()?.resume().catch(() => {}); }, { once: true });
 
 /* ---- staying awake while the screen is locked ----
    With the screen locked Chrome slows a silent page to a crawl and then
@@ -208,8 +191,8 @@ export function keepAlive(on, who = 'rest') {
 export const keepingAlive = () => !!keeper;
 
 /* Everything goes through a limiter set hard, then out at full level: the
-   beeps come out as loud as the phone's media volume allows — the same
-   volume the music is at — without clipping into a crackle. */
+   beeps come out as loud as the phone's media volume allows without
+   clipping into a crackle. */
 let master = null;
 function output(ctx) {
   if (master) return master;
@@ -224,9 +207,9 @@ function output(ctx) {
   return master;
 }
 
-/** One beep: a square wave (its overtones cut through bass-heavy music) over a sine for body. */
+/** One beep at audio-clock time `at`: a square wave over a sine. @returns its two oscillators */
 function beep(ctx, at, freq, dur, level = 1) {
-  [['square', 0.32], ['sine', 0.7]].forEach(([type, vol]) => {
+  return [['square', 0.32], ['sine', 0.7]].map(([type, vol]) => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = type;
@@ -238,6 +221,7 @@ function beep(ctx, at, freq, dur, level = 1) {
     osc.connect(gain).connect(output(ctx));
     osc.start(at);
     osc.stop(at + dur + 0.01);
+    return osc;
   });
 }
 
@@ -249,40 +233,56 @@ function audioReady() {
   return ctx;
 }
 
-/** Rest is over: an alarm, not a ding — three rising double beeps, twice. */
-export function chime() {
-  if (!soundOn) return;
-  if (alarmByMedia()) {
-    const a = alarmElement();
-    try {
-      a.currentTime = 0;
-      a.volume = 1;
-      const played = a.play();
-      if (played?.catch) played.catch(() => toneChime());
-      return;
-    } catch { /* fall through to the tone */ }
-  }
-  toneChime();
+/* three rising double beeps, twice */
+const ALARM = [0, 1.25].flatMap((round) => [[0, 2093], [0.13, 2093], [0.36, 2637], [0.49, 2637], [0.72, 3136], [0.85, 3136]]
+  .map(([dt, f]) => [round + dt, f]));
+const PIP = { 3: 1760, 2: 1760, 1: 1976 };
+
+/** The alarm, now. @returns the oscillators it scheduled */
+function alarmAt(ctx, t0) {
+  return ALARM.flatMap(([dt, f]) => beep(ctx, t0 + dt, f, 0.1));
 }
 
-function toneChime() {
+/** Rest is over (or a run changes phase): an alarm, not a ding. */
+export function chime() {
   try {
     const ctx = audioReady();
-    if (!ctx) return;
-    const t0 = ctx.currentTime + 0.03;
-    [0, 1.25].forEach((round) => {
-      [[0, 1568], [0.13, 1568], [0.36, 1976], [0.49, 1976], [0.72, 2349], [0.85, 2349]].forEach(([dt, f]) => beep(ctx, t0 + round + dt, f, 0.1));
-    });
+    if (ctx) alarmAt(ctx, ctx.currentTime + 0.03);
   } catch { /* unsupported or blocked — vibration and the notification still fire */ }
 }
 
-/** The last three seconds: a short pip each, so the end is not a surprise. */
-export function pip(n) {
+/* ---- the end of a rest, on the audio clock ----
+   A pip at 3, 2 and 1 seconds left and the alarm at the end are scheduled
+   ahead on the AudioContext's own clock, which keeps exact time even when
+   the page's timers only wake once a second (screen locked). Scheduled as
+   soon as COUNTDOWN_LEAD (+1) seconds are left — whatever is already past
+   is skipped — and cancelled when the rest is skipped or changed. */
+export const COUNTDOWN_LEAD = 3;
+let endNodes = [];
+
+/** @param {number} endAt when the rest ends (epoch ms) @returns {boolean} whether it is scheduled */
+export function scheduleRestEnd(endAt) {
+  cancelRestEnd();
   try {
     const ctx = audioReady();
-    if (!ctx) return;
-    beep(ctx, ctx.currentTime + 0.02, n === 1 ? 1319 : 988, 0.09, 0.8);
-  } catch { /* unsupported */ }
+    if (!ctx) return false;
+    const at = (ms) => ctx.currentTime + (ms - Date.now()) / 1000;
+    const soon = ctx.currentTime + 0.02;
+    for (const n of [3, 2, 1]) {
+      const t = at(endAt - n * 1000);
+      if (t >= soon) endNodes.push(...beep(ctx, t, PIP[n], 0.1, 0.85));
+    }
+    endNodes.push(...alarmAt(ctx, Math.max(soon, at(endAt))));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The rest was skipped, lengthened or replaced: silence what was scheduled. */
+export function cancelRestEnd() {
+  endNodes.forEach((osc) => { try { osc.stop(); osc.disconnect(); } catch { /* already done */ } });
+  endNodes = [];
 }
 
 /* ---------- number fields typed on a phone ---------- */

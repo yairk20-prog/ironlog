@@ -446,8 +446,8 @@ function runView(ctx, run) {
   }
 
   function announce(phase) {
-    /* Also with the screen locked: the page is kept running (keepAlive), and
-       the alarm turns the music down while it plays. */
+    /* Also with the screen locked: the page is kept running (keepAlive); the
+       alarm is mixed over the music without changing it. */
     chime();
     buzz([0, 120, 80, 120]);
     speak(phase.label);

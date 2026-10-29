@@ -232,8 +232,8 @@ async function main() {
 
   const n = out.start.length;
   const all = (v) => Array.from({ length: n }, () => v);
-  const pips = out.tones.filter((f) => f === 988 || f === 1319).length;
-  const alarm = out.tones.filter((f) => f >= 1500).length;
+  const pips = out.tones.filter((f) => f === 1760 || f === 1976).length;
+  const alarm = out.tones.filter((f) => f >= 2093).length;
   const fatal = [
     n < 4 && `test setup: only ${n} sets`,
     out.placeholders.join(',') !== '–,–' && `placeholders: ${out.placeholders}`,

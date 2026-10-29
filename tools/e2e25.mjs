@@ -1,10 +1,13 @@
-/* v5.21: the end of a rest with the screen locked, and over music.
+/* v5.21–5.22: the end of a rest with the screen locked, over music — and
+   the music itself left exactly as it is.
 
    · rest-end notifications are on by default (with the phone's permission)
-   · on Android the alarm is a short media clip (sounds/rest-end.wav, under
-     five seconds), which Android plays with "may duck" audio focus — the
-     music is turned down while it rings; if the clip cannot play, the
-     Web Audio alarm rings instead
+   · nothing is ever played as media (no <audio>): every sound is Web Audio,
+     which takes no audio focus, so the music is never paused or lowered
+   · the 3-2-1 and the alarm are scheduled on the audio clock — a pip at 3,
+     2 and 1 seconds before the end and the alarm at the end, exactly, also
+     with the screen locked and also when the page woke up late (what has
+     passed is skipped); +30 cancels what was scheduled
    · with the screen locked (the page hidden) during a rest, an inaudible
      25 Hz tone keeps the page running so the alarm rings on time, and the
      page shows its own notification as a second line behind the worker's;
@@ -60,16 +63,25 @@ async function main() {
     window.__hidden = false;
     Object.defineProperty(document, 'hidden', { get: () => window.__hidden, configurable: true });
     Object.defineProperty(document, 'visibilityState', { get: () => (window.__hidden ? 'hidden' : 'visible'), configurable: true });
-    /* what is played, and how */
+    /* anything played as media would take audio focus from the music */
     window.__media = [];
-    window.__mediaFails = false;
     HTMLMediaElement.prototype.play = function () {
       window.__media.push(this.currentSrc || this.src);
-      return window.__mediaFails ? Promise.reject(new Error('blocked')) : Promise.resolve();
+      return Promise.resolve();
     };
+    /* every tone: its pitch, and when it is due on the wall clock */
     window.__tones = [];
+    window.__due = [];
     const start = OscillatorNode.prototype.start;
-    OscillatorNode.prototype.start = function (t) { window.__tones.push(Math.round(this.frequency.value)); return start.call(this, t); };
+    OscillatorNode.prototype.start = function (t) {
+      const f = Math.round(this.frequency.value);
+      window.__tones.push(f);
+      window.__due.push({ f, at: Date.now() + ((t || this.context.currentTime) - this.context.currentTime) * 1000 });
+      return start.call(this, t);
+    };
+    window.__cancelled = 0;
+    const stop = OscillatorNode.prototype.stop;
+    OscillatorNode.prototype.stop = function (t) { if (t === undefined) window.__cancelled += 1; return stop.call(this, t); };
     window.__shown = [];
     const show = ServiceWorkerRegistration.prototype.showNotification;
     ServiceWorkerRegistration.prototype.showNotification = function (title, options) {
@@ -95,22 +107,33 @@ async function main() {
   out.scheduled = (await restStatus(page))?.waiting || 0;
   await page.evaluate(async () => (await import('./js/timer.js')).stop());
 
-  /* ---------- the clip ---------- */
-  out.clip = await page.evaluate(() => new Promise((resolve) => {
-    const a = new Audio('sounds/rest-end.wav');
-    a.addEventListener('loadedmetadata', () => resolve({ duration: a.duration }));
-    a.addEventListener('error', () => resolve({ error: true }));
-  }));
+  /* sine + square per beep: one entry per pitch is enough */
+  const beeps = (list) => list.filter((x, i) => i % 2 === 0);
+  /* woken late, 1.5 s before the end: pip "1" and the alarm, on time; 3 and 2 have passed */
+  out.late = await page.evaluate(async () => {
+    window.__due = [];
+    const ui = await import('./js/ui.js');
+    const endAt = Date.now() + 1500;
+    ui.scheduleRestEnd(endAt);
+    const due = window.__due.map((d) => ({ f: d.f, dt: Math.round(d.at - endAt) }));
+    ui.cancelRestEnd();
+    return due;
+  });
+  out.late = beeps(out.late);
 
   /* ---------- a rest that ends with the screen locked ---------- */
-  await page.evaluate(() => { window.__media = []; window.__tones = []; window.__shown = []; });
-  await page.evaluate(async () => (await import('./js/timer.js')).start(3, 'מנוחה · לחיצת כתפיים'));
+  await page.evaluate(() => { window.__tones = []; window.__due = []; window.__shown = []; });
+  const endAt = await page.evaluate(async () => {
+    (await import('./js/timer.js')).start(5, 'מנוחה · לחיצת כתפיים');
+    return Date.now() + 5000;
+  });
   await setHidden(page, true);
   await pause(page, 400);
   out.aliveWhileLocked = await alive(page);
   out.keeperTone = await page.evaluate(() => window.__tones.includes(25));
-  await pause(page, 3200);
-  out.mediaPlayed = await page.evaluate(() => window.__media.slice());
+  await pause(page, 5000);
+  out.lockedDue = beeps(await page.evaluate((endAt) => window.__due
+    .filter((d) => d.f >= 1000).map((d) => ({ f: d.f, dt: Math.round(d.at - endAt) })), endAt));
   out.pageNotice = await page.evaluate(() => window.__shown.slice());
   await pause(page, 4300);
   out.aliveAfterAlarm = await alive(page);
@@ -127,12 +150,15 @@ async function main() {
   out.lockUnlock = [lockedMid, await alive(page)];
   await page.evaluate(async () => (await import('./js/timer.js')).stop());
 
-  /* the clip is blocked: the tone alarm rings instead */
-  await page.evaluate(() => { window.__mediaFails = true; window.__tones = []; });
-  await page.evaluate(async () => (await import('./js/ui.js')).chime());
-  await pause(page, 300);
-  out.fallbackTones = await page.evaluate(() => window.__tones.filter((f) => f >= 1500).length);
-  await page.evaluate(() => { window.__mediaFails = false; });
+  /* +30 during the countdown: what was scheduled is cancelled */
+  await page.evaluate(() => { window.__cancelled = 0; });
+  await page.evaluate(async () => (await import('./js/timer.js')).start(4, 'מנוחה · ביטול'));
+  await pause(page, 600);
+  await page.evaluate(async () => (await import('./js/timer.js')).add(30));
+  await pause(page, 200);
+  out.cancelledOnAdd = await page.evaluate(() => window.__cancelled);
+  await page.evaluate(async () => (await import('./js/timer.js')).stop());
+  out.media = await page.evaluate(() => window.__media.slice());
 
   /* ---------- a run, locked ---------- */
   await page.goto(`${BASE}#/cardio`, { waitUntil: 'load' });
@@ -157,14 +183,19 @@ async function main() {
   const fatal = [
     out.noticesOn !== true && 'rest-end notifications are not on by default',
     !(out.scheduled > 0) && 'a rest was not handed to the worker',
-    !(out.clip.duration > 1 && out.clip.duration < 5) && `the alarm clip: ${JSON.stringify(out.clip)}`,
     out.aliveWhileLocked !== true && 'the page was not kept running with the screen locked',
     !out.keeperTone && 'no keep-alive tone',
-    !out.mediaPlayed.some((s) => /sounds\/rest-end\.wav$/.test(s)) && `the alarm clip did not play: ${JSON.stringify(out.mediaPlayed)}`,
+    /* locked: pips at −3, −2, −1 s and the alarm (12 beeps) from the end — each within 150 ms */
+    !(out.lockedDue.length === 15
+      && [-3000, -2000, -1000].every((t, i) => Math.abs(out.lockedDue[i].dt - t) < 150)
+      && Math.abs(out.lockedDue[3].dt) < 150) && `locked countdown: ${JSON.stringify(out.lockedDue)}`,
+    /* woken late: only pip "1" (at −1 s) and the alarm at the end */
+    !(out.late.length === 13 && Math.abs(out.late[0].dt + 1000) < 150 && Math.abs(out.late[1].dt) < 150) && `late wake: ${JSON.stringify(out.late)}`,
+    !(out.cancelledOnAdd >= 20) && `+30 did not cancel the scheduled countdown (${out.cancelledOnAdd})`,
+    out.media.length !== 0 && `something was played as media (it would touch the music): ${JSON.stringify(out.media)}`,
     !out.pageNotice.includes('המנוחה הסתיימה') && `no notification from the page: ${JSON.stringify(out.pageNotice)}`,
     out.aliveAfterAlarm !== false && 'the keep-alive tone kept going after the alarm',
     out.lockUnlock.join(',') !== 'true,false' && `lock / unlock mid-rest: ${out.lockUnlock}`,
-    !(out.fallbackTones >= 12) && `no tone alarm when the clip is blocked (${out.fallbackTones})`,
     out.runLockUnlock.join(',') !== 'true,false' && `lock / unlock mid-run: ${out.runLockUnlock}`,
     errors.length && `page errors: ${errors.join(' | ')}`
   ].filter(Boolean);
