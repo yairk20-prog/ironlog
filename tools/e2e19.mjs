@@ -64,6 +64,14 @@ async function main() {
   const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.webmanifest'), 'utf8'));
   out.shortcuts = (manifest.shortcuts || []).map((s) => `${s.short_name}|${s.url}`);
   out.shortcutIconsExist = (manifest.shortcuts || []).every((s) => (s.icons || []).every((i) => fs.existsSync(path.join(ROOT, i.src))));
+  /* v5.24: each button has a 96 and a 192 px icon, and a maskable one (a launcher that crops icons
+     to its own shape keeps the glyph); the files are opaque (RGB), so nothing shows through as an empty square */
+  out.shortcutIconsShaped = (manifest.shortcuts || []).every((s) => {
+    const icons = s.icons || [];
+    const opaque = icons.every((i) => { const b = fs.readFileSync(path.join(ROOT, i.src)); return b.readUInt8(25) === 2; });
+    return ['96x96', '192x192'].every((z) => icons.some((i) => i.sizes === z && (i.purpose || 'any') === 'any'))
+      && icons.some((i) => i.purpose === 'maskable') && opaque;
+  });
 
   const browser = BROWSER = await chromium.launch(LAUNCH);
 
@@ -277,6 +285,7 @@ async function main() {
     !['כוס מים|./index.html?quick=water#/nutrition', 'הוסף מאכל|./index.html?quick=food#/nutrition', 'שמורים|./index.html?quick=saved#/nutrition'].every((s) => out.shortcuts.includes(s))
       && `shortcuts: ${out.shortcuts}`,
     !out.shortcutIconsExist && 'a shortcut icon is missing',
+    !out.shortcutIconsShaped && 'a shortcut lacks a 96/192 px, maskable or opaque icon',
     out.freshWater !== 0 && 'a shortcut before the questionnaire added water',
     out.freshUrl !== '' && 'the shortcut parameter stayed in the address',
     out.qwTitle !== 'כוס מים נוספה' && `quick water sheet: ${out.qwTitle}`,

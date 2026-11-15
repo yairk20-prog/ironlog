@@ -49,9 +49,22 @@
       "url": "./index.html?quick=water#/nutrition",
       "icons": [
         {
-          "src": "icons/sc-water.png",
+          "src": "icons/shortcut-water-v2-96.png",
+          "sizes": "96x96",
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": "icons/shortcut-water-v2-192.png",
           "sizes": "192x192",
-          "type": "image/png"
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": "icons/shortcut-water-v2-192.png",
+          "sizes": "192x192",
+          "type": "image/png",
+          "purpose": "maskable"
         }
       ]
     },
@@ -62,9 +75,22 @@
       "url": "./index.html?quick=food#/nutrition",
       "icons": [
         {
-          "src": "icons/sc-food.png",
+          "src": "icons/shortcut-food-v2-96.png",
+          "sizes": "96x96",
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": "icons/shortcut-food-v2-192.png",
           "sizes": "192x192",
-          "type": "image/png"
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": "icons/shortcut-food-v2-192.png",
+          "sizes": "192x192",
+          "type": "image/png",
+          "purpose": "maskable"
         }
       ]
     },
@@ -75,9 +101,22 @@
       "url": "./index.html?quick=saved#/nutrition",
       "icons": [
         {
-          "src": "icons/sc-saved.png",
+          "src": "icons/shortcut-saved-v2-96.png",
+          "sizes": "96x96",
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": "icons/shortcut-saved-v2-192.png",
           "sizes": "192x192",
-          "type": "image/png"
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": "icons/shortcut-saved-v2-192.png",
+          "sizes": "192x192",
+          "type": "image/png",
+          "purpose": "maskable"
         }
       ]
     },
@@ -88,9 +127,22 @@
       "url": "./index.html#/home",
       "icons": [
         {
-          "src": "icons/sc-workout.png",
+          "src": "icons/shortcut-workout-v2-96.png",
+          "sizes": "96x96",
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": "icons/shortcut-workout-v2-192.png",
           "sizes": "192x192",
-          "type": "image/png"
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": "icons/shortcut-workout-v2-192.png",
+          "sizes": "192x192",
+          "type": "image/png",
+          "purpose": "maskable"
         }
       ]
     }
